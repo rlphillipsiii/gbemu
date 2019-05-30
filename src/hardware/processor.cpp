@@ -49,7 +49,7 @@ Processor::Operation *Processor::lookup(uint8_t opcode)
     // an error out.  Release builds will return the noop handler.
     auto iterator = table.find(opcode);
     if (iterator == table.end()) {
-        std::cout << "Unknown opcode: (" << prefix << " ==> " << opcode << ")" << std::endl;
+        printf("Unknown opcode: (0x%02x ==> 0x%02x)\n", prefix, opcode);
         assert(0);
 
         return &(OPCODES[0x00]);
@@ -363,9 +363,14 @@ void Processor::load(uint8_t & reg, uint8_t value)
     reg = value;
 }
 
-void Processor::load(uint16_t ptr, uint16_t & reg)
+void Processor::load(uint16_t & reg)
 {
-    (void)ptr; (void)reg;
+    uint16_t value = (m_operands[1] << 8) | m_operands[0];
+    load(reg, value);
+}
+void Processor::load(uint16_t & reg, uint16_t value)
+{
+    reg = value;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -487,6 +492,106 @@ Processor::Processor(MemoryController & memory)
         { 0x30, { "JR_NC", [this]() { if (!isCarryFlagSet()) { jumprel(); }}, 2, 2 } },
         { 0x20, { "JR_NZ", [this]() { if (!isZeroFlagSet())  { jumprel(); }}, 2, 2 } },
         { 0x28, { "JR_Z",  [this]() { if (isZeroFlagSet())   { jumprel(); }}, 2, 2 } },
+
+        { 0x7F, { "LD_a_a", [this]() { m_gpr.a = m_gpr.a; }, 1, 1 } },
+        { 0x78, { "LD_a_b", [this]() { m_gpr.a = m_gpr.b; }, 1, 1 } },
+        { 0x79, { "LD_a_c", [this]() { m_gpr.a = m_gpr.c; }, 1, 1 } },
+        { 0x7A, { "LD_a_d", [this]() { m_gpr.a = m_gpr.d; }, 1, 1 } },
+        { 0x7B, { "LD_a_e", [this]() { m_gpr.a = m_gpr.e; }, 1, 1 } },
+        { 0x7C, { "LD_a_h", [this]() { m_gpr.a = m_gpr.h; }, 1, 1 } },
+        { 0x7D, { "LD_a_l", [this]() { m_gpr.a = m_gpr.l; }, 1, 1 } },
+
+        { 0x32, { "LDD_(hl)_n", [this]() { loadMem(m_gpr.hl--, m_gpr.a); }, 1, 2 } },
+
+        { 0x36, { "LD_(hl)_n", [this]() { loadMem(m_gpr.hl, m_operands[0]); }, 2, 3 } },
+        { 0x77, { "LD_(hl)_a", [this]() { loadMem(m_gpr.hl, m_gpr.a);       }, 1, 2 } },
+        { 0x70, { "LD_(hl)_b", [this]() { loadMem(m_gpr.hl, m_gpr.b);       }, 1, 2 } },
+        { 0x71, { "LD_(hl)_c", [this]() { loadMem(m_gpr.hl, m_gpr.c);       }, 1, 2 } },
+        { 0x72, { "LD_(hl)_d", [this]() { loadMem(m_gpr.hl, m_gpr.d);       }, 1, 2 } },
+        { 0x73, { "LD_(hl)_e", [this]() { loadMem(m_gpr.hl, m_gpr.e);       }, 1, 2 } },
+        { 0x74, { "LD_(hl)_h", [this]() { loadMem(m_gpr.hl, m_gpr.h);       }, 1, 2 } },
+        { 0x75, { "LD_(hl)_l", [this]() { loadMem(m_gpr.hl, m_gpr.l);       }, 1, 2 } },
+
+        { 0x21, { "LD_hl_n", [this]() { load(m_gpr.hl); }, 3, 3 } },
+        { 0x31, { "LD_sp_n", [this]() { load(m_sp);     }, 3, 3 } },
+
+        { 0xEE, { "XOR_a_n",  [this]() { xor8(m_operands[0]); }, 2, 2 } },
+        { 0xAF, { "XOR_a_a",  [this]() { xor8(m_gpr.a);       }, 1, 1 } },
+        { 0xA8, { "XOR_a_b",  [this]() { xor8(m_gpr.b);       }, 1, 1 } },
+        { 0xA9, { "XOR_a_c",  [this]() { xor8(m_gpr.c);       }, 1, 1 } },
+        { 0xAA, { "XOR_a_d",  [this]() { xor8(m_gpr.d);       }, 1, 1 } },
+        { 0xAB, { "XOR_a_e",  [this]() { xor8(m_gpr.e);       }, 1, 1 } },
+        { 0xAC, { "XOR_a_h",  [this]() { xor8(m_gpr.h);       }, 1, 1 } },
+        { 0xAD, { "XOR_a_l",  [this]() { xor8(m_gpr.l);       }, 1, 1 } },
+
+        { 0xAE, { "XOR_a_(hl)", [this]() { xor8(m_memory.read(m_gpr.hl)); }, 1, 2 } },
+
+    };
+
+    CB_OPCODES = {
+        { 0x46, { "BIT_0_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 0); }, 2, 3 } },
+        { 0x47, { "BIT_0_a", [this]() { bit(m_gpr.a, 0); }, 2, 2 } },
+        { 0x40, { "BIT_0_b", [this]() { bit(m_gpr.b, 0); }, 2, 2 } },
+        { 0x41, { "BIT_0_c", [this]() { bit(m_gpr.c, 0); }, 2, 2 } },
+        { 0x42, { "BIT_0_d", [this]() { bit(m_gpr.d, 0); }, 2, 2 } },
+        { 0x43, { "BIT_0_e", [this]() { bit(m_gpr.e, 0); }, 2, 2 } },
+        { 0x44, { "BIT_0_h", [this]() { bit(m_gpr.h, 0); }, 2, 2 } },
+        { 0x45, { "BIT_0_l", [this]() { bit(m_gpr.l, 0); }, 2, 2 } },
+        { 0x4E, { "BIT_1_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 1); }, 2, 3 } },
+        { 0x4F, { "BIT_1_a", [this]() { bit(m_gpr.a, 1); }, 2, 2 } },
+        { 0x48, { "BIT_1_b", [this]() { bit(m_gpr.b, 1); }, 2, 2 } },
+        { 0x49, { "BIT_1_c", [this]() { bit(m_gpr.c, 1); }, 2, 2 } },
+        { 0x4A, { "BIT_1_d", [this]() { bit(m_gpr.d, 1); }, 2, 2 } },
+        { 0x4B, { "BIT_1_e", [this]() { bit(m_gpr.e, 1); }, 2, 2 } },
+        { 0x4C, { "BIT_1_h", [this]() { bit(m_gpr.h, 1); }, 2, 2 } },
+        { 0x4D, { "BIT_1_l", [this]() { bit(m_gpr.l, 1); }, 2, 2 } },
+        { 0x56, { "BIT_2_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 2); }, 2, 3 } },
+        { 0x57, { "BIT_2_a", [this]() { bit(m_gpr.a, 2); }, 2, 2 } },
+        { 0x50, { "BIT_2_b", [this]() { bit(m_gpr.b, 2); }, 2, 2 } },
+        { 0x51, { "BIT_2_c", [this]() { bit(m_gpr.c, 2); }, 2, 2 } },
+        { 0x52, { "BIT_2_d", [this]() { bit(m_gpr.d, 2); }, 2, 2 } },
+        { 0x53, { "BIT_2_e", [this]() { bit(m_gpr.e, 2); }, 2, 2 } },
+        { 0x54, { "BIT_2_h", [this]() { bit(m_gpr.h, 2); }, 2, 2 } },
+        { 0x55, { "BIT_2_l", [this]() { bit(m_gpr.l, 2); }, 2, 2 } },
+        { 0x5E, { "BIT_3_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 3); }, 2, 3 } },
+        { 0x5F, { "BIT_3_a", [this]() { bit(m_gpr.a, 3); }, 2, 2 } },
+        { 0x58, { "BIT_3_b", [this]() { bit(m_gpr.b, 3); }, 2, 2 } },
+        { 0x59, { "BIT_3_c", [this]() { bit(m_gpr.c, 3); }, 2, 2 } },
+        { 0x5A, { "BIT_3_d", [this]() { bit(m_gpr.d, 3); }, 2, 2 } },
+        { 0x5B, { "BIT_3_e", [this]() { bit(m_gpr.e, 3); }, 2, 2 } },
+        { 0x5C, { "BIT_3_h", [this]() { bit(m_gpr.h, 3); }, 2, 2 } },
+        { 0x5D, { "BIT_3_l", [this]() { bit(m_gpr.l, 3); }, 2, 2 } },
+        { 0x66, { "BIT_4_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 4); }, 2, 3 } },
+        { 0x67, { "BIT_4_a", [this]() { bit(m_gpr.a, 4); }, 2, 2 } },
+        { 0x60, { "BIT_4_b", [this]() { bit(m_gpr.b, 4); }, 2, 2 } },
+        { 0x61, { "BIT_4_c", [this]() { bit(m_gpr.c, 4); }, 2, 2 } },
+        { 0x62, { "BIT_4_d", [this]() { bit(m_gpr.d, 4); }, 2, 2 } },
+        { 0x63, { "BIT_4_e", [this]() { bit(m_gpr.e, 4); }, 2, 2 } },
+        { 0x64, { "BIT_4_h", [this]() { bit(m_gpr.h, 4); }, 2, 2 } },
+        { 0x65, { "BIT_4_l", [this]() { bit(m_gpr.l, 4); }, 2, 2 } },
+        { 0x6E, { "BIT_5_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 5); }, 2, 3 } },
+        { 0x6F, { "BIT_5_a", [this]() { bit(m_gpr.a, 5); }, 2, 2 } },
+        { 0x68, { "BIT_5_b", [this]() { bit(m_gpr.b, 5); }, 2, 2 } },
+        { 0x69, { "BIT_5_c", [this]() { bit(m_gpr.c, 5); }, 2, 2 } },
+        { 0x6A, { "BIT_5_d", [this]() { bit(m_gpr.d, 5); }, 2, 2 } },
+        { 0x6B, { "BIT_5_e", [this]() { bit(m_gpr.e, 5); }, 2, 2 } },
+        { 0x6C, { "BIT_5_h", [this]() { bit(m_gpr.h, 5); }, 2, 2 } },
+        { 0x6D, { "BIT_5_l", [this]() { bit(m_gpr.l, 5); }, 2, 2 } },
+        { 0x76, { "BIT_6_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 6); }, 2, 3 } },
+        { 0x77, { "BIT_6_a", [this]() { bit(m_gpr.a, 6); }, 2, 2 } },
+        { 0x70, { "BIT_6_b", [this]() { bit(m_gpr.b, 6); }, 2, 2 } },
+        { 0x71, { "BIT_6_c", [this]() { bit(m_gpr.c, 6); }, 2, 2 } },
+        { 0x72, { "BIT_6_d", [this]() { bit(m_gpr.d, 6); }, 2, 2 } },
+        { 0x73, { "BIT_6_e", [this]() { bit(m_gpr.e, 6); }, 2, 2 } },
+        { 0x74, { "BIT_6_h", [this]() { bit(m_gpr.h, 6); }, 2, 2 } },
+        { 0x75, { "BIT_6_l", [this]() { bit(m_gpr.l, 6); }, 2, 2 } },
+        { 0x7D, { "BIT_7_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 7); }, 2, 3 } },
+        { 0x7F, { "BIT_7_a", [this]() { bit(m_gpr.a, 7); }, 2, 2 } },
+        { 0x78, { "BIT_7_b", [this]() { bit(m_gpr.b, 7); }, 2, 2 } },
+        { 0x79, { "BIT_7_c", [this]() { bit(m_gpr.c, 7); }, 2, 2 } },
+        { 0x7A, { "BIT_7_d", [this]() { bit(m_gpr.d, 7); }, 2, 2 } },
+        { 0x7B, { "BIT_7_e", [this]() { bit(m_gpr.e, 7); }, 2, 2 } },
+        { 0x7C, { "BIT_7_h", [this]() { bit(m_gpr.h, 7); }, 2, 2 } },
     };
 }
 

@@ -11,9 +11,20 @@
 #include <QQmlApplicationEngine>
 #include <QLoggingCategory>
 
+#include "gameboy.h"
+
 int main(int argc, char **argv)
 {
-	QGuiApplication app(argc, argv);
+    std::cout << "Starting the hardware emulation" << std::endl;
+
+    GameBoy console;
+    console.start();
+
+    while (1);
+
+    return 0;
+
+	// QGuiApplication app(argc, argv);
 
 #if 0
 	qmlRegisterType<Auth>("PassMan.Auth", 1, 0, "Auth");
@@ -28,5 +39,7 @@ int main(int argc, char **argv)
 	QLoggingCategory::setFilterRules("default.debug=true");
 #endif
 
-	return app.exec();
+
+
+	//return app.exec();
 }

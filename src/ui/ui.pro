@@ -1,7 +1,10 @@
 include(../build.pri)
 
 CONFIG += qt
-CONFIG -= console
+
+CONFIG (release, debug|release) {
+    CONFIG -= console
+}
 
 TEMPLATE = app
 

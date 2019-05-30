@@ -60,7 +60,7 @@ private:
 
     bool m_halted;
 
-    std::array<uint8_t, 2>m_operands;
+    std::array<uint8_t, 2> m_operands;
 
     struct {
         union { struct { uint8_t f, a; }; uint16_t af; };
@@ -123,12 +123,8 @@ private:
     void loadMem(uint16_t ptr, uint8_t value);
     void load(uint8_t & reg, uint8_t value);
     //void load(uint16_t ptr, uint8_t & reg);
-    void load(uint16_t ptr, uint16_t & reg);
-
-    // operations
-    void DI() { m_interrupts = false; }
-    void EI() { m_interrupts = true;  }
-    void HALT() { m_halted = true; }
+    void load(uint16_t & reg);
+    void load(uint16_t & reg, uint16_t value);
 };
 
 

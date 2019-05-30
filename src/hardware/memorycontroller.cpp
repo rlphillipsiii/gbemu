@@ -174,7 +174,7 @@ uint8_t & MemoryController::read(uint16_t address)
 {
     Region *region = nullptr;
     for (Region *r : m_memory) {
-        if (region->isAddressed(address)) {
+        if (r->isAddressed(address)) {
             region = r;
             break;
         }
