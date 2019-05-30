@@ -15,10 +15,10 @@ class MemoryController;
 
 typedef std::vector<uint8_t> Tile;
 
-class Gpu {
+class GPU {
 public:
-    Gpu(MemoryController & memory);
-    ~Gpu() = default;
+    GPU(MemoryController & memory);
+    ~GPU() = default;
 
 private:
     static const uint16_t TILE_SIZE;

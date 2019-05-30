@@ -12,6 +12,9 @@
 #include <array>
 #include <vector>
 #include <list>
+#include <algorithm>
+
+class GPU;
 
 class MemoryController {
 public:
@@ -23,10 +26,15 @@ public:
     uint8_t & read(uint16_t address);
     uint16_t readWord(uint16_t address);
 
+    void reset();
+
     void unlockBiosRegion();
+
+    inline void setGPU(GPU *gpu) { m_gpu = gpu; }
 
 private:
     static uint8_t DUMMY;
+    static const std::vector<uint8_t> BIOS_REGION;
 
     ////////////////////////////////////////////////////////////////////////////////
     class Region {
@@ -41,6 +49,10 @@ private:
 
         virtual void write(uint16_t address, uint8_t value);
         virtual uint8_t & read(uint16_t address);
+
+        virtual uint16_t size() const { return uint16_t(m_memory.size()); }
+
+        virtual void reset() { std::fill(m_memory.begin(), m_memory.end(), 0); }
 
     protected:
         uint16_t m_offset;
@@ -81,15 +93,15 @@ private:
     Region m_bios;
     Region m_rom_0;
     Region m_rom_1;
-    Region m_gpu;
+    Region m_gram;
     Region m_ext;
     WorkingRam m_working;
     MemoryMappedIO m_io;
     Region m_zero;
 
-    std::list<Region*> m_memory;
+    GPU *m_gpu;
 
-    void reset();
+    std::list<Region*> m_memory;
 };
 
 #endif /* SRC_MEMORYCONTROLLER_H_ */

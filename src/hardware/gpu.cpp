@@ -10,33 +10,33 @@
 #include "memmap.h"
 
 /** 16 byte tile size (8x8 bit tile w/ 2 bytes per pixel) */
-const uint16_t Gpu::TILE_SIZE = 16;
+const uint16_t GPU::TILE_SIZE = 16;
 
-const uint16_t Gpu::TILES_PER_SET = 256;
+const uint16_t GPU::TILES_PER_SET = 256;
 
 /** Tile set 0 starts at the beginning of the GPU ram area of the memory controller */
-const uint16_t Gpu::TILE_SET_0_OFFSET = GPU_RAM_OFFSET;
+const uint16_t GPU::TILE_SET_0_OFFSET = GPU_RAM_OFFSET;
 
 /** Tile set 1 shares the second 128 tiles of tile set 0 */
-const uint16_t Gpu::TILE_SET_1_OFFSET = TILE_SET_0_OFFSET + ((TILES_PER_SET * TILE_SIZE) / 2);
+const uint16_t GPU::TILE_SET_1_OFFSET = TILE_SET_0_OFFSET + ((TILES_PER_SET * TILE_SIZE) / 2);
 
 /** Each tile map is 32x32 tiles, which equates to 256x256 pixels */
-const uint16_t Gpu::TILE_MAP_ROWS    = 32;
-const uint16_t Gpu::TILE_MAP_COLUMNS = 32;
+const uint16_t GPU::TILE_MAP_ROWS    = 32;
+const uint16_t GPU::TILE_MAP_COLUMNS = 32;
 
 /** Tile map 0 comes directly after the end of tile set 1 */
-const uint16_t Gpu::TILE_MAP_0_OFFSET = TILE_SET_1_OFFSET + (TILES_PER_SET * TILE_SIZE);
+const uint16_t GPU::TILE_MAP_0_OFFSET = TILE_SET_1_OFFSET + (TILES_PER_SET * TILE_SIZE);
 
 /** Tile map 1 come directly after the end of tile map 0 */
-const uint16_t Gpu::TILE_MAP_1_OFFSET = TILE_MAP_1_OFFSET + (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
+const uint16_t GPU::TILE_MAP_1_OFFSET = TILE_MAP_1_OFFSET + (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
 
-Gpu::Gpu(MemoryController & memory)
+GPU::GPU(MemoryController & memory)
     : m_memory(memory)
 {
 
 }
 
-Tile Gpu::lookup(uint16_t address)
+Tile GPU::lookup(uint16_t address)
 {
     Tile tile(TILE_SIZE);
     for (size_t i = 0; i < tile.size(); i++) {
@@ -46,7 +46,7 @@ Tile Gpu::lookup(uint16_t address)
     return tile;
 }
 
-Tile Gpu::lookup(MapIndex index, uint16_t x, uint16_t y)
+Tile GPU::lookup(MapIndex index, uint16_t x, uint16_t y)
 {
     // We have two maps, so figure out which offset we need to use for our address
     uint16_t offset = (MAP_0 == index) ? TILE_MAP_0_OFFSET : TILE_MAP_1_OFFSET;
