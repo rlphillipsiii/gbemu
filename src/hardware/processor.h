@@ -99,7 +99,7 @@ private:
     void xor8(uint8_t value);
     void add8(uint8_t value, bool carry);
     void sub8(uint8_t value, bool carry);
-    void add16(uint16_t value);
+    void add16(uint16_t & reg, uint16_t value);
     void compare(uint8_t value);
     void swap(uint8_t & reg);
     void inc(uint8_t & reg);
@@ -120,11 +120,15 @@ private:
     void rotater(uint8_t & reg, bool wrap);
     void rst(uint8_t address);
     void loadMem(uint8_t value);
+    void loadMem(uint16_t value);
     void loadMem(uint16_t ptr, uint8_t value);
+    void loadMem(uint16_t ptr, uint16_t value);
     void load(uint8_t & reg, uint8_t value);
     //void load(uint16_t ptr, uint8_t & reg);
     void load(uint16_t & reg);
     void load(uint16_t & reg, uint16_t value);
+
+    inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
 };
 
 

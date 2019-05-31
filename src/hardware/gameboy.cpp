@@ -72,7 +72,7 @@ void GameBoy::run()
         if (useconds >= 25) {
             m_cpu.cycle();
 
-            std::cout << useconds << std::endl;
+            // std::cout << useconds << std::endl;
         }
 
         start = high_resolution_clock::now();
