@@ -8,12 +8,16 @@
 #include <cstdio>
 #include <cassert>
 #include <vector>
+#include <string>
+#include <fstream>
 
 #include "memorycontroller.h"
 #include "memmap.h"
 #include "gpu.h"
 
 using std::vector;
+using std::string;
+using std::ofstream;
 
 uint8_t MemoryController::DUMMY = 0xFF;
 
@@ -104,18 +108,33 @@ bool MemoryController::WorkingRam::isShadowAddressed(uint16_t address) const
 ////////////////////////////////////////////////////////////////////////////////
 void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 {
-#if 0
-    switch (address) {
+    assert(m_gpu);
 
+    switch (address) {
+    case GPU_CONTROL_ADDRESS:  break;
+    case GPU_SCROLLX_ADDRESS:  break;
+    case GPU_SCROLLY_ADDRESS:  break;
+    case GPU_SCANLINE_ADDRESS: break;
+    default: assert(0);
     }
-#endif
-    (void)address; (void)value;
+
+    (void)value;
 }
 
 uint8_t & MemoryController::MemoryMappedIO::read(uint16_t address)
 {
+    assert(m_gpu);
+
     static uint8_t temp = 0x00;
-    (void)address;
+
+    switch (address) {
+    case GPU_CONTROL_ADDRESS:  break;
+    case GPU_SCROLLX_ADDRESS:  break;
+    case GPU_SCROLLY_ADDRESS:  break;
+    case GPU_SCANLINE_ADDRESS: temp = m_gpu->scanline(); break;
+    default: assert(0);
+    }
+
     return temp;
 }
 ////////////////////////////////////////////////////////////////////////////////
@@ -142,7 +161,11 @@ MemoryController::MemoryController()
 
 void MemoryController::reset()
 {
+#if 0
     m_memory = { &m_bios, &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_io, &m_zero };
+#endif
+    
+    m_memory = { &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_io, &m_zero };
 
     for (Region *region : m_memory) {
         if (&m_bios == region) {
@@ -212,3 +235,11 @@ void MemoryController::unlockBiosRegion()
     m_memory.pop_front();
 }
 
+void MemoryController::saveBIOS(const string & filename)
+{
+    ofstream out;
+    out.open(filename, std::ios::out | std::ios::binary);
+
+    out.write(reinterpret_cast<const char*>(BIOS_REGION.data()), BIOS_REGION.size());
+    out.close();
+}

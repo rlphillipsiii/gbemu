@@ -3,11 +3,15 @@ CONFIG (release, debug|release) {
     TARGET_SPEC = release
     
     DEFINES += NDEBUG
+    DEFINES += RELEASE
+    
     QMAKE_CXXFLAGS += -O3
 }
 
 CONFIG (debug, debug|release) {
     TARGET_SPEC = debug
+
+    DEFINES += DEBUG
     
     QMAKE_CXXFLAGS += -g
     QMAKE_CXXFLAGS += -O0

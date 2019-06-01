@@ -20,6 +20,8 @@ public:
     GPU(MemoryController & memory);
     ~GPU() = default;
 
+    inline uint8_t scanline() const { return m_scanline; }
+    
 private:
     static const uint16_t TILE_SIZE;
     static const uint16_t TILES_PER_SET;
@@ -50,7 +52,8 @@ private:
     uint8_t m_pallete;
     uint8_t m_x;
     uint8_t m_y;
-
+    uint8_t m_scanline;
+    
     Tile lookup(uint16_t address);
     Tile lookup(MapIndex index, uint16_t x, uint16_t y);
 };

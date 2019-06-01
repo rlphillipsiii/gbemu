@@ -18,6 +18,8 @@ int main(int argc, char **argv)
     std::cout << "Starting the hardware emulation" << std::endl;
 
     GameBoy console;
+    console.load("bgbtest.gb");
+    
     console.start();
 
     while (1);

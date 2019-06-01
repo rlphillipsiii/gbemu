@@ -12,6 +12,7 @@
 #include <array>
 #include <vector>
 #include <list>
+#include <string>
 #include <algorithm>
 
 class GPU;
@@ -31,6 +32,8 @@ public:
     void unlockBiosRegion();
 
     inline void setGPU(GPU *gpu) { m_gpu = gpu; }
+
+    void saveBIOS(const std::string & filename);
 
 private:
     static uint8_t DUMMY;

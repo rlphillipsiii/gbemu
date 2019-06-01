@@ -14,6 +14,7 @@
 #include <functional>
 #include <utility>
 #include <string>
+#include <mutex>
 
 class MemoryController;
 
@@ -25,9 +26,27 @@ public:
     void reset();
     void cycle();
 
+    void setTimerInterrupt();
+    
 private:
     static const uint8_t CB_PREFIX;
 
+    enum InterruptVector {
+        ISR_VBLANK = 0x40,
+        ISR_LCD    = 0x48,
+        ISR_TIMER  = 0x50,
+        ISR_SERIAL = 0x58,
+        ISR_JOYPAD = 0x60,
+    };
+
+    enum InterruptMask {
+        MASK_VBLANK = 0x01,
+        MASK_LCD    = 0x02,
+        MASK_TIMER  = 0x04,
+        MASK_SERIAL = 0x08,
+        MASK_JOYPAD = 0x10,
+    };
+    
     enum FlagMask {
         ZERO_FLAG_MASK       = 0x80,
         NEG_FLAG_MASK        = 0x40,
@@ -55,18 +74,40 @@ private:
     /** Stack pointer that holds the next available address in the stack memory space */
     uint16_t m_sp;
 
-    /** Global interrupt flag that gates all interrupt handlers being called */
-    bool m_interrupts;
+    /** Interrupt enable, mask, and status register */
+    struct Interrupts {
+        Interrupts(uint8_t & m, uint8_t & s)
+            : mask(m), status(s) { }
+        ~Interrupts() = default;
 
+        bool enable;
+        
+        uint8_t & mask;
+        uint8_t & status;
+    };
+
+    Interrupts m_interrupts;
+    
+    std::mutex m_iLock;
+    
     bool m_halted;
 
     std::array<uint8_t, 2> m_operands;
 
+#if 0
     struct {
         union { struct { uint8_t f, a; }; uint16_t af; };
         union { struct { uint8_t c, b; }; uint16_t bc; };
         union { struct { uint8_t e, d; }; uint16_t de; };
         union { struct { uint8_t l, h; }; uint16_t hl; };
+    } m_gpr;
+#endif
+
+    struct {
+        union { struct { uint8_t a, f; }; uint16_t af; };
+        union { struct { uint8_t b, c; }; uint16_t bc; };
+        union { struct { uint8_t d, e; }; uint16_t de; };
+        union { struct { uint8_t h, l; }; uint16_t hl; };
     } m_gpr;
 
     /** 8 bit flags register */
@@ -124,9 +165,10 @@ private:
     void loadMem(uint16_t ptr, uint8_t value);
     void loadMem(uint16_t ptr, uint16_t value);
     void load(uint8_t & reg, uint8_t value);
-    //void load(uint16_t ptr, uint8_t & reg);
     void load(uint16_t & reg);
     void load(uint16_t & reg, uint16_t value);
+
+    bool interrupt();
 
     inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
 };

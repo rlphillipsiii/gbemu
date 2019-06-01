@@ -12,13 +12,23 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
+#include <fstream>
 
 #include "gameboy.h"
 #include "memmap.h"
 
 using std::string;
 using std::vector;
+using std::ifstream;
 using std::chrono::high_resolution_clock;
+
+const uint16_t GameBoy::ROM_HEADER_LENGTH   = 0x0180;
+const uint16_t GameBoy::ROM_NAME_OFFSET     = 0x0134;
+const uint16_t GameBoy::ROM_TYPE_OFFSET     = 0x0147;
+const uint16_t GameBoy::ROM_SIZE_OFFSET     = 0x0148;
+const uint16_t GameBoy::ROM_RAM_SIZE_OFFSET = 0x0149;
+
+const uint8_t GameBoy::ROM_NAME_MAX_LENGTH = 0x10;
 
 GameBoy::GameBoy()
     : m_cpu(m_memory),
@@ -30,26 +40,48 @@ GameBoy::GameBoy()
 
 bool GameBoy::load(const string & filename)
 {
-    FILE *file = fopen(filename.c_str(), "rb");
-    if (!file) { return false; }
+    ifstream input(filename, std::ios::in | std::ios::binary);
+    if (!input.is_open()) { return false; }
 
-#if 0
-    uint16_t address = ROM_0_OFFSET;
+    input.seekg(0, input.end);
+    size_t length = input.tellg();
+    input.seekg(0, input.beg);
 
-    ssize_t result;
-    while (true) {
-        uint8_t & memory = m_memory.read(address++);
-
-        result = fread(&memory, 1, 1, file);
-        if (0 >= result) {
-            break;
-        }
+    if (length < ROM_HEADER_LENGTH) {
+        return false;
     }
-#endif
+    
+    vector<uint8_t> data(length);
+    input.read(reinterpret_cast<char*>(data.data()), data.size());
 
-    fclose(file);
+    RomHeader info = parseHeader(data);
+    printf("ROM name: %s\n", info.name.c_str());
+
+    for (size_t i = 0; i < data.size(); i++) {
+        m_memory.write(ROM_0_OFFSET + i, data.at(i));
+    }
+
     // return (0 == result);
     return true;
+}
+
+GameBoy::RomHeader GameBoy::parseHeader(const vector<uint8_t> & header)
+{
+    RomHeader info;
+
+    for (uint8_t i = 0; i < ROM_NAME_MAX_LENGTH; i++) {
+        uint8_t entry = header.at(ROM_NAME_OFFSET + i);
+
+        if ((0x80 == entry) || (0xC0 == entry)) {
+            break;
+        }
+
+        info.name += char(entry);
+    }
+
+    uint8_t size = header.at(ROM_SIZE_OFFSET);
+    
+    return info;
 }
 
 void GameBoy::start()
