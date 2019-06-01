@@ -35,7 +35,9 @@ GameBoy::GameBoy()
       m_gpu(m_memory),
       m_run(false)
 {
-    m_memory.setGPU(&m_gpu);
+    m_memory.setGPU(m_gpu);
+
+    m_gpu.setCPU(m_cpu);
 }
 
 bool GameBoy::load(const string & filename)
@@ -61,7 +63,6 @@ bool GameBoy::load(const string & filename)
         m_memory.write(ROM_0_OFFSET + i, data.at(i));
     }
 
-    // return (0 == result);
     return true;
 }
 
@@ -95,19 +96,10 @@ void GameBoy::start()
 
 void GameBoy::run()
 {
-    auto start = high_resolution_clock::now();
-
     while (m_run.load()) {
-        auto end = high_resolution_clock::now();
+        m_cpu.cycle();
 
-        int useconds = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        if (useconds >= 25) {
-            m_cpu.cycle();
-
-            // std::cout << useconds << std::endl;
-        }
-
-        start = high_resolution_clock::now();
+        m_gpu.cycle();
     }
 }
 

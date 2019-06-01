@@ -18,6 +18,7 @@ PUBLIC_HEADERS += gpu.h
 PUBLIC_HEADERS += gameboy.h
 
 HEADERS += $$PUBLIC_HEADERS
+HEADERS += logging.h
 
 SOURCES += gpu.cpp
 SOURCES += memorycontroller.cpp

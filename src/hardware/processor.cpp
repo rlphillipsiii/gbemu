@@ -11,12 +11,7 @@
 #include "processor.h"
 #include "memorycontroller.h"
 #include "memmap.h"
-
-#ifdef DEBUG
-#define LOG(format, ...) printf(format, __VA_ARGS__)
-#else
-#define LOG(format, ...)
-#endif
+#include "logging.h"
 
 using std::string;
 using std::lock_guard;

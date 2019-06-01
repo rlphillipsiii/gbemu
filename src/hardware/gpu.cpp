@@ -5,9 +5,13 @@
  *      Author: Robert Phillips III
  */
 
+#include <cassert>
+
 #include "gpu.h"
+#include "processor.h"
 #include "memorycontroller.h"
 #include "memmap.h"
+#include "logging.h"
 
 /** 16 byte tile size (8x8 bit tile w/ 2 bytes per pixel) */
 const uint16_t GPU::TILE_SIZE = 16;
@@ -33,7 +37,39 @@ const uint16_t GPU::TILE_MAP_1_OFFSET = TILE_MAP_1_OFFSET + (TILE_MAP_ROWS * TIL
 GPU::GPU(MemoryController & memory)
     : m_memory(memory)
 {
+    reset();
+}
 
+void GPU::reset()
+{
+    m_state = HBLANK;
+    
+    m_x = m_y = 0;
+    
+    m_ticks = 0;
+}
+
+GPU::RenderState GPU::next()
+{
+    switch (m_state) {
+    case HBLANK:
+    case VBLANK:
+    case OAM:
+    case VRAM:
+    default: break;
+    }
+
+    LOG("GPU::next() : Unknown render state %d\n", m_state);
+    
+    assert(0);
+    return HBLANK;
+}
+
+void GPU::cycle()
+{
+    m_ticks++;
+
+    m_state = next();
 }
 
 Tile GPU::lookup(uint16_t address)

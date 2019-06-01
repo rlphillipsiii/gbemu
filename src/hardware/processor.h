@@ -26,7 +26,8 @@ public:
     void reset();
     void cycle();
 
-    void setTimerInterrupt();
+    inline void setVBlankInterrupt() { setInterrupt(MASK_VBLANK); }
+    inline void setSerialInterrupt() { setInterrupt(MASK_SERIAL); }
     
 private:
     static const uint8_t CB_PREFIX;
@@ -171,6 +172,8 @@ private:
     bool interrupt();
 
     inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
+    inline void setInterrupt(uint8_t mask)
+        { if (m_interrupts.mask & mask) { m_interrupts.status |= mask; } }
 };
 
 

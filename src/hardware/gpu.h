@@ -15,11 +15,18 @@ class MemoryController;
 
 typedef std::vector<uint8_t> Tile;
 
+class Processor;
+
 class GPU {
 public:
     GPU(MemoryController & memory);
     ~GPU() = default;
 
+    void cycle();
+    void reset();
+
+    inline void setCPU(Processor & cpu) { m_cpu = &cpu; }
+    
     inline uint8_t scanline() const { return m_scanline; }
     
 private:
@@ -43,6 +50,13 @@ private:
         MAP_1 = 1,
     };
 
+    enum RenderState {
+        HBLANK,
+        VBLANK,
+        OAM,
+        VRAM,
+    };
+    
     struct TilePtr {
         union { uint8_t tile0; int8_t tile1; };
     };
@@ -53,9 +67,17 @@ private:
     uint8_t m_x;
     uint8_t m_y;
     uint8_t m_scanline;
+
+    RenderState m_state;
+    
+    uint32_t m_ticks;
+
+    Processor *m_cpu;
     
     Tile lookup(uint16_t address);
     Tile lookup(MapIndex index, uint16_t x, uint16_t y);
+
+    RenderState next();
 };
 
 #endif /* SRC_GPU_H_ */
