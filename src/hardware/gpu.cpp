@@ -34,15 +34,24 @@ const uint16_t GPU::TILE_MAP_0_OFFSET = TILE_SET_1_OFFSET + (TILES_PER_SET * TIL
 /** Tile map 1 come directly after the end of tile map 0 */
 const uint16_t GPU::TILE_MAP_1_OFFSET = TILE_MAP_1_OFFSET + (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
 
+const uint16_t GPU::OAM_TICKS    = 80;
+const uint16_t GPU::VRAM_TICKS   = 172;
+const uint16_t GPU::HBLANK_TICKS = 204;
+const uint16_t GPU::VBLANK_TICKS = 456;
+
+const uint16_t GPU::ROW_COUNT = 144;
+const uint16_t GPU::COL_COUNT = 160;
+
 GPU::GPU(MemoryController & memory)
-    : m_memory(memory)
+    : m_memory(memory),
+      m_cpu(nullptr)
 {
     reset();
 }
 
 void GPU::reset()
 {
-    m_state = HBLANK;
+    m_state = OAM;
     
     m_x = m_y = 0;
     
@@ -52,24 +61,93 @@ void GPU::reset()
 GPU::RenderState GPU::next()
 {
     switch (m_state) {
-    case HBLANK:
-    case VBLANK:
-    case OAM:
-    case VRAM:
-    default: break;
+    case HBLANK: {
+        if (HBLANK_TICKS == m_ticks) {
+            return (ROW_COUNT == m_scanline) ? VBLANK : OAM;
+        }
+        break;
     }
-
-    LOG("GPU::next() : Unknown render state %d\n", m_state);
+    case VBLANK: {
+        if (VBLANK_TICKS == m_ticks) {
+            return HBLANK;
+        }
+        break;
+    }
+    case OAM: {
+        if (OAM_TICKS == m_ticks) {
+            return VRAM;
+        }
+        break;
+    }
+    case VRAM: {
+        if (VRAM_TICKS == m_ticks) {
+            return HBLANK;
+        }
+        break;
+    }
+    default: {
+        LOG("GPU::next() : Unknown render state %d\n", m_state);
     
-    assert(0);
-    return HBLANK;
+        assert(0);
+        break;
+    }
+    }
+    
+    return m_state;
 }
 
 void GPU::cycle()
 {
     m_ticks++;
 
+    switch (m_state) {
+    case HBLANK: handleHBlank(); break;
+    case VBLANK: handleVBlank(); break;
+    case OAM:    handleOAM();    break;
+    case VRAM:   handleVRAM();   break;
+    default:
+        LOG("GPU::cycle : Unknown GPU state %d\n", m_state);
+        assert(0);
+        return;
+    }
+    
+    RenderState current = m_state;
     m_state = next();
+
+    if (current != m_state) {
+        m_ticks = 0;
+    }
+}
+
+void GPU::handleHBlank()
+{
+    if (m_ticks < HBLANK_TICKS) {
+        return;
+    }
+
+    m_scanline++;
+    if (ROW_COUNT == m_scanline) {
+        m_cpu->setVBlankInterrupt();
+    }
+}
+
+void GPU::handleVBlank()
+{
+    if (m_ticks < VBLANK_TICKS) {
+        return;
+    }
+
+    m_scanline = 0;
+}
+
+void GPU::handleOAM()
+{
+
+}
+
+void GPU::handleVRAM()
+{
+
 }
 
 Tile GPU::lookup(uint16_t address)

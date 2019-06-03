@@ -17,11 +17,11 @@ TARGET = gbc
 
 LIBS += -lhardware
 
-#RESOURCES += resources.qrc
+RESOURCES += resources.qrc
 
-HEADERS += cpuclock.h
+HEADERS += screen.h
 
-SOURCES += cpuclock.cpp
+SOURCES += screen.cpp
 SOURCES += main.cpp
 
 publishTarget()

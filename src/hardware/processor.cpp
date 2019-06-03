@@ -122,7 +122,7 @@ void Processor::cycle()
         return;
     }
 
-    // If we've gotten to this point, then we were either never halted int the first
+    // If we've gotten to this point, then we were either never halted in the first
     // place, or we just executed an interrupt and were woken up.
     m_halted = false;
     

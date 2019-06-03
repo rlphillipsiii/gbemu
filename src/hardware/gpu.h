@@ -45,6 +45,14 @@ private:
     static const uint16_t SCREEN_ROWS;
     static const uint16_t SCREEN_COLUMNS;
 
+    static const uint16_t OAM_TICKS;
+    static const uint16_t VRAM_TICKS;
+    static const uint16_t HBLANK_TICKS;
+    static const uint16_t VBLANK_TICKS;
+
+    static const uint16_t ROW_COUNT;
+    static const uint16_t COL_COUNT;
+    
     enum MapIndex {
         MAP_0 = 0,
         MAP_1 = 1,
@@ -77,6 +85,11 @@ private:
     Tile lookup(uint16_t address);
     Tile lookup(MapIndex index, uint16_t x, uint16_t y);
 
+    void handleHBlank();
+    void handleVBlank();
+    void handleOAM();
+    void handleVRAM();
+    
     RenderState next();
 };
 

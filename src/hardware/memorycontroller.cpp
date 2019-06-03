@@ -14,6 +14,7 @@
 #include "memorycontroller.h"
 #include "memmap.h"
 #include "gpu.h"
+#include "logging.h"
 
 using std::vector;
 using std::string;
@@ -128,11 +129,17 @@ uint8_t & MemoryController::MemoryMappedIO::read(uint16_t address)
     static uint8_t temp = 0x00;
 
     switch (address) {
+    case CPU_INTERRUPT_MASK:  return m_interruptMask;
+    case CPU_INTERRUPT_FLAGS: return m_interruptFlags;
+            
     case GPU_CONTROL_ADDRESS:  break;
     case GPU_SCROLLX_ADDRESS:  break;
     case GPU_SCROLLY_ADDRESS:  break;
     case GPU_SCANLINE_ADDRESS: temp = m_gpu->scanline(); break;
-    default: assert(0);
+    default: {
+        LOG("MemoryController::MemoryMappedIO::read : unhandled IO address 0x%04x\n", address);
+        assert(0);
+    }
     }
 
     return temp;

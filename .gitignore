@@ -2,3 +2,8 @@ src/public/*
 Makefile*
 *.o
 .qmake*
+*~
+debug/
+release/
+moc_*
+qrc_*
