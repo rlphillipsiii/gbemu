@@ -19,12 +19,26 @@ class Processor;
 
 class GPU {
 public:
+    struct RGB {
+        uint8_t red;
+        uint8_t green;
+        uint8_t blue;
+        uint8_t alpha;
+    };
+
+    enum MapIndex {
+        MAP_0 = 0,
+        MAP_1 = 1,
+    };
+
     GPU(MemoryController & memory);
     ~GPU() = default;
 
     void cycle();
     void reset();
 
+    std::vector<RGB> lookup(MapIndex index);
+    
     inline void setCPU(Processor & cpu) { m_cpu = &cpu; }
     
     inline uint8_t scanline() const { return m_scanline; }
@@ -33,6 +47,9 @@ private:
     static const uint16_t TILE_SIZE;
     static const uint16_t TILES_PER_SET;
 
+    static const uint16_t TILE_PIXELS_PER_ROW;
+    static const uint16_t TILE_PIXELS_PER_COL;
+    
     static const uint16_t TILE_SET_0_OFFSET;
     static const uint16_t TILE_SET_1_OFFSET;
 
@@ -50,13 +67,8 @@ private:
     static const uint16_t HBLANK_TICKS;
     static const uint16_t VBLANK_TICKS;
 
-    static const uint16_t ROW_COUNT;
-    static const uint16_t COL_COUNT;
-    
-    enum MapIndex {
-        MAP_0 = 0,
-        MAP_1 = 1,
-    };
+    static const uint16_t PIXELS_PER_ROW;
+    static const uint16_t PIXELS_PER_COL;
 
     enum RenderState {
         HBLANK,
@@ -65,10 +77,6 @@ private:
         VRAM,
     };
     
-    struct TilePtr {
-        union { uint8_t tile0; int8_t tile1; };
-    };
-
     MemoryController & m_memory;
 
     uint8_t m_pallete;
@@ -85,6 +93,8 @@ private:
     Tile lookup(uint16_t address);
     Tile lookup(MapIndex index, uint16_t x, uint16_t y);
 
+    std::vector<RGB> toRGB(const Tile & tile);
+    
     void handleHBlank();
     void handleVBlank();
     void handleOAM();

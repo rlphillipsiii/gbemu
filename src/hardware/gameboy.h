@@ -28,6 +28,8 @@ public:
     void start();
     void stop();
 
+    std::vector<GPU::RGB> getRGB() { return m_gpu.lookup(GPU::MAP_0); }
+    
 private:
     static const uint16_t ROM_HEADER_LENGTH;
     static const uint16_t ROM_NAME_OFFSET;
