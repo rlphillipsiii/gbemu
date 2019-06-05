@@ -474,7 +474,7 @@ void Processor::load(uint16_t & reg, uint16_t value)
 Processor::Processor(MemoryController & memory)
     : m_memory(memory),
       m_ticks(1),
-      m_interrupts(m_memory.read(INTERRUPT_ENABLE_ADDRESS), m_memory.read(INTERRUPT_FLAGS_ADDRESS)),
+      m_interrupts(m_memory.read(INTERRUPT_MASK_ADDRESS), m_memory.read(INTERRUPT_FLAGS_ADDRESS)),
       m_halted(false),
       m_flags(m_gpr.f)
 {

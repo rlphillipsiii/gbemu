@@ -71,19 +71,21 @@ private:
     static const uint16_t PIXELS_PER_COL;
 
     enum RenderState {
-        HBLANK,
-        VBLANK,
-        OAM,
-        VRAM,
+        HBLANK = 0,
+        VBLANK = 1,
+        OAM    = 2,
+        VRAM   = 3,
     };
     
     MemoryController & m_memory;
 
+    uint8_t & m_control;
+    uint8_t & m_status;
     uint8_t m_pallete;
-    uint8_t m_x;
-    uint8_t m_y;
-    uint8_t m_scanline;
-
+    uint8_t & m_x;
+    uint8_t & m_y;
+    uint8_t & m_scanline;
+    
     RenderState m_state;
     
     uint32_t m_ticks;
@@ -101,6 +103,9 @@ private:
     void handleVRAM();
     
     RenderState next();
+
+    inline void updateRenderStateStatus(RenderState state)
+        { m_status &= 0xFC; m_status |= uint8_t(state); }
 };
 
 #endif /* SRC_GPU_H_ */

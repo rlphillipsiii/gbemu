@@ -1,28 +1,34 @@
+#include <QImage>
+#include <QColor>
+#include <QPainter>
+
 #include <vector>
 
 #include "screen.h"
 
 using std::vector;
 
-Screen::Screen(QObject *parent)
-    : QObject(parent),
+Screen::Screen(QQuickItem *parent)
+    : QQuickPaintedItem(parent),
       m_width(160),
       m_height(144)
 {
-    // RGB8888 = 4 bytes per pixel
-    m_pixels.resize(4 * m_width * m_height);
+
+}
+
+void Screen::paint(QPainter *painter)
+{
+    QImage canvas(m_width, m_height, QImage::Format_RGBA8888);
 
     vector<GPU::RGB> rgb = m_console.getRGB();
+    for (size_t i = 0; i < rgb.size(); i++) {
+        const GPU::RGB & color = rgb.at(i);
 
-    int index = 0;
-    for (int64_t i = 0; i < m_pixels.size(); i += 4) {
-        GPU::RGB & pixel = rgb[index++];
+        int x = i % m_width;
+        int y = i / m_width;
 
-        m_pixels[i]     = pixel.red;
-        m_pixels[i + 1] = pixel.green;
-        m_pixels[i + 2] = pixel.blue;
-        
-        // Initialize all of the alpha values to 255
-        m_pixels[i + 3] = 0xFF;
+        canvas.setPixel(x, y, qRgba(color.red, color.green, color.blue, color.alpha));
     }
+
+    painter->drawImage(20, 20, canvas);
 }

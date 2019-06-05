@@ -1,6 +1,7 @@
 #ifndef _SCREEN_H
 #define _SCREEN_H
 
+#include <QtQuick/QQuickPaintedItem>
 #include <QObject>
 #include <QVector>
 
@@ -8,17 +9,17 @@
 
 #include "gameboy.h"
 
-class Screen : public QObject {
+class Screen : public QQuickPaintedItem {
     Q_OBJECT
 
 public:
-    explicit Screen(QObject *parent = nullptr);
+    explicit Screen(QQuickItem *parent = nullptr);
     ~Screen() = default;
-
-    Q_INVOKABLE QVector<uint8_t> *pixels() { return &m_pixels; }
 
     Q_INVOKABLE inline int length() const      { return int(m_pixels.size());    }
     Q_INVOKABLE inline int at(int index) const { return int(m_pixels.at(index)); }
+
+    void paint(QPainter *painter) override;
 
 private:    
     Screen(const Screen &) = delete;

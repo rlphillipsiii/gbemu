@@ -6,6 +6,7 @@
  */
 
 #include <cassert>
+#include <vector>
 
 #include "gpu.h"
 #include "processor.h"
@@ -49,6 +50,11 @@ const uint16_t GPU::TILE_PIXELS_PER_COL = 8;
 
 GPU::GPU(MemoryController & memory)
     : m_memory(memory),
+      m_control(m_memory.read(GPU_CONTROL_ADDRESS)),
+      m_status(m_memory.read(GPU_STATUS_ADDRESS)),
+      m_x(m_memory.read(GPU_SCROLLX_ADDRESS)),
+      m_y(m_memory.read(GPU_SCROLLY_ADDRESS)),
+      m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
       m_cpu(nullptr)
 {
     reset();
@@ -56,11 +62,12 @@ GPU::GPU(MemoryController & memory)
 
 void GPU::reset()
 {
+    m_status = 0x00;
+    updateRenderStateStatus(OAM);
+    
     m_state = OAM;
     
-    m_x = m_y = 0;
-    
-    m_ticks = 0;
+    m_x = m_y = m_scanline = m_ticks = 0;
 }
 
 GPU::RenderState GPU::next()
@@ -126,6 +133,8 @@ void GPU::cycle()
 
 void GPU::handleHBlank()
 {
+    updateRenderStateStatus(HBLANK);
+
     if (m_ticks < HBLANK_TICKS) {
         return;
     }
@@ -138,6 +147,8 @@ void GPU::handleHBlank()
 
 void GPU::handleVBlank()
 {
+    updateRenderStateStatus(VBLANK);
+
     if (m_ticks < VBLANK_TICKS) {
         return;
     }
@@ -147,12 +158,20 @@ void GPU::handleVBlank()
 
 void GPU::handleOAM()
 {
+    updateRenderStateStatus(OAM);
 
+    if (m_ticks < OAM_TICKS) {
+        return;
+    }
 }
 
 void GPU::handleVRAM()
 {
+    updateRenderStateStatus(VRAM);
 
+    if (m_ticks < VRAM_TICKS) {
+        return;
+    }
 }
 
 Tile GPU::lookup(uint16_t address)
@@ -230,9 +249,14 @@ vector<GPU::RGB> GPU::toRGB(const Tile & tile)
 
 vector<GPU::RGB> GPU::lookup(MapIndex index)
 {
+    // TODO: need to properly handle shifting by the scroll x and scroll y controls
+    
     vector<RGB> colors;
     colors.resize(PIXELS_PER_ROW * PIXELS_PER_COL);
 
+    uint8_t xTileOffset = m_x / TILE_PIXELS_PER_ROW;
+    uint8_t yTileOffset = m_y / TILE_PIXELS_PER_COL;
+    
     // Loop through our map.  The map is 32x32 tiles, but we only can display 20x18 
     // tiles on the screen at one time, so we only need to loop through a portion of
     // our map in order to build the screen.
@@ -242,7 +266,7 @@ vector<GPU::RGB> GPU::lookup(MapIndex index)
             // registers determine the top left corner of the portion of the map that
             // we are drawing, so make sure we offset our row and column by y and x
             // respectively.
-            vector<RGB> rgb = toRGB(lookup(index, m_x + j, m_y + i));
+            vector<RGB> rgb = toRGB(lookup(index, xTileOffset + j, yTileOffset + i));
 
             // Each tile is 8x8, so we first need to figure out the coordinates
             // of the top left corner of the tile we are translating.
@@ -262,6 +286,6 @@ vector<GPU::RGB> GPU::lookup(MapIndex index)
             }
         }
     }
-    
+
     return colors;
 }

@@ -71,14 +71,22 @@ private:
     ////////////////////////////////////////////////////////////////////////////////
     class MemoryMappedIO : public Region {
     public:
-        MemoryMappedIO(uint16_t address, uint16_t offset) : Region(address, offset) { }
+        MemoryMappedIO(uint16_t address, uint16_t offset);
 
         void write(uint16_t address, uint8_t value) override;
         uint8_t & read(uint16_t address) override;
 
+        void reset() override;
+        
     private:
         uint8_t m_interruptFlags;
         uint8_t m_interruptMask;
+
+        uint8_t m_gpuControl;
+        uint8_t m_gpuStatus;
+        uint8_t m_gpuScrollX;
+        uint8_t m_gpuScrollY;
+        uint8_t m_gpuScanline;
     };
     ////////////////////////////////////////////////////////////////////////////////
 

@@ -107,14 +107,24 @@ bool MemoryController::WorkingRam::isShadowAddressed(uint16_t address) const
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
+MemoryController::MemoryMappedIO::MemoryMappedIO(uint16_t address, uint16_t offset)
+    : Region(address, offset)
+{ }
+
+void MemoryController::MemoryMappedIO::reset()
+{
+
+}
+
 void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 {
     assert(m_gpu);
 
     switch (address) {
-    case GPU_CONTROL_ADDRESS:  break;
-    case GPU_SCROLLX_ADDRESS:  break;
-    case GPU_SCROLLY_ADDRESS:  break;
+    case GPU_CONTROL_ADDRESS:  m_gpuControl = value; break;
+    case GPU_STATUS_ADDRESS:   m_gpuStatus  = value; break;
+    case GPU_SCROLLX_ADDRESS:  m_gpuScrollX = value; break;
+    case GPU_SCROLLY_ADDRESS:  m_gpuScrollY = value; break;
     case GPU_SCANLINE_ADDRESS: break;
     default: assert(0);
     }
@@ -129,13 +139,14 @@ uint8_t & MemoryController::MemoryMappedIO::read(uint16_t address)
     static uint8_t temp = 0x00;
 
     switch (address) {
-    case CPU_INTERRUPT_MASK:  return m_interruptMask;
-    case CPU_INTERRUPT_FLAGS: return m_interruptFlags;
+    case INTERRUPT_MASK_ADDRESS:  return m_interruptMask;
+    case INTERRUPT_FLAGS_ADDRESS: return m_interruptFlags;
             
-    case GPU_CONTROL_ADDRESS:  break;
-    case GPU_SCROLLX_ADDRESS:  break;
-    case GPU_SCROLLY_ADDRESS:  break;
-    case GPU_SCANLINE_ADDRESS: temp = m_gpu->scanline(); break;
+    case GPU_CONTROL_ADDRESS:  return m_gpuControl;
+    case GPU_STATUS_ADDRESS:   return m_gpuStatus;
+    case GPU_SCROLLX_ADDRESS:  return m_gpuScrollX;
+    case GPU_SCROLLY_ADDRESS:  return m_gpuScrollY;
+    case GPU_SCANLINE_ADDRESS: return m_gpuScanline;
     default: {
         LOG("MemoryController::MemoryMappedIO::read : unhandled IO address 0x%04x\n", address);
         assert(0);
