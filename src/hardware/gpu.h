@@ -96,6 +96,7 @@ private:
     Tile lookup(MapIndex index, uint16_t x, uint16_t y);
 
     std::vector<RGB> toRGB(const Tile & tile);
+    std::vector<RGB> constrain(const std::vector<std::vector<RGB>> & display);
     
     void handleHBlank();
     void handleVBlank();

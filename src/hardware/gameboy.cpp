@@ -35,8 +35,6 @@ GameBoy::GameBoy()
       m_gpu(m_memory),
       m_run(false)
 {
-    m_memory.setGPU(m_gpu);
-
     m_gpu.setCPU(m_cpu);
 
     ifstream vram("vram.bin", std::ios::in | std::ios::binary);

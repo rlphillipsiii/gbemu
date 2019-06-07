@@ -249,24 +249,20 @@ vector<GPU::RGB> GPU::toRGB(const Tile & tile)
 
 vector<GPU::RGB> GPU::lookup(MapIndex index)
 {
-    // TODO: need to properly handle shifting by the scroll x and scroll y controls
-    
-    vector<RGB> colors;
-    colors.resize(PIXELS_PER_ROW * PIXELS_PER_COL);
+    vector<vector<RGB>> colors;
 
-    uint8_t xTileOffset = m_x / TILE_PIXELS_PER_ROW;
-    uint8_t yTileOffset = m_y / TILE_PIXELS_PER_COL;
-    
-    // Loop through our map.  The map is 32x32 tiles, but we only can display 20x18 
-    // tiles on the screen at one time, so we only need to loop through a portion of
-    // our map in order to build the screen.
-    for (uint16_t i = 0; i < (PIXELS_PER_COL / TILE_PIXELS_PER_COL); i++) {
-        for (uint16_t j = 0; j < (PIXELS_PER_ROW / TILE_PIXELS_PER_ROW); j++) {
-            // Lookup the tile that we want and translate it to RGB.  The x and y
-            // registers determine the top left corner of the portion of the map that
-            // we are drawing, so make sure we offset our row and column by y and x
-            // respectively.
-            vector<RGB> rgb = toRGB(lookup(index, xTileOffset + j, yTileOffset + i));
+    // Reserve enough space to fit our 32x32 RGBA pixel matrix.
+    colors.resize(TILE_MAP_COLUMNS * TILE_PIXELS_PER_COL);
+    for (vector<RGB> & row : colors) {
+        row.resize(TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
+    }
+
+    // Loop through our map.  We can't display the whole screen, but we are going to
+    // build the whole map anyway and shift around the screen portion later.
+    for (uint16_t i = 0; i < TILE_MAP_ROWS; i++) {
+        for (uint16_t j = 0; j < TILE_MAP_COLUMNS; j++) {
+            // Lookup the tile that we want and translate it to RGB.
+            vector<RGB> rgb = toRGB(lookup(index, j, i));
 
             // Each tile is 8x8, so we first need to figure out the coordinates
             // of the top left corner of the tile we are translating.
@@ -281,11 +277,27 @@ vector<GPU::RGB> GPU::lookup(MapIndex index)
                 uint16_t x = xOffset + (k % TILE_PIXELS_PER_ROW);
                 uint16_t y = yOffset + (k / TILE_PIXELS_PER_ROW);
 
-                uint64_t index = (y * PIXELS_PER_ROW) + x;
-                colors[index] = rgb[k];
+                colors[y][x] = rgb[k];
             }
         }
     }
 
-    return colors;
+    return constrain(colors);
+}
+
+vector<GPU::RGB> GPU::constrain(const vector<vector<RGB>> & display)
+{
+    uint16_t index = 0;
+
+    // We have an array of the whole map, so now we need to build a flat array of the
+    // pixels that we need to display on screen.  The x and y scroll registers determine
+    // where in the 32x32 map that we should place the top left corner.
+    vector<RGB> screen(PIXELS_PER_ROW * PIXELS_PER_COL);
+    for (uint16_t y = m_y; y < m_y + PIXELS_PER_COL; y++) {
+        for (uint16_t x = m_x; x < m_x + PIXELS_PER_ROW; x++) {
+            screen[index++] = display[y][x];
+        }
+    }
+
+    return screen;
 }

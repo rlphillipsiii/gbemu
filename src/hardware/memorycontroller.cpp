@@ -118,8 +118,6 @@ void MemoryController::MemoryMappedIO::reset()
 
 void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 {
-    assert(m_gpu);
-
     switch (address) {
     case GPU_CONTROL_ADDRESS:  m_gpuControl = value; break;
     case GPU_STATUS_ADDRESS:   m_gpuStatus  = value; break;
@@ -134,8 +132,6 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 
 uint8_t & MemoryController::MemoryMappedIO::read(uint16_t address)
 {
-    assert(m_gpu);
-
     static uint8_t temp = 0x00;
 
     switch (address) {

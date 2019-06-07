@@ -3,7 +3,7 @@
 
 #include <QtQuick/QQuickPaintedItem>
 #include <QObject>
-#include <QVector>
+#include <QImage>
 
 #include <cstdint>
 
@@ -16,9 +16,6 @@ public:
     explicit Screen(QQuickItem *parent = nullptr);
     ~Screen() = default;
 
-    Q_INVOKABLE inline int length() const      { return int(m_pixels.size());    }
-    Q_INVOKABLE inline int at(int index) const { return int(m_pixels.at(index)); }
-
     void paint(QPainter *painter) override;
 
 private:    
@@ -28,7 +25,7 @@ private:
     int m_width;
     int m_height;
 
-    QVector<uint8_t> m_pixels;
+    QImage m_canvas;
 
     GameBoy m_console;
 };

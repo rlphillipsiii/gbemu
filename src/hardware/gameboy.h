@@ -18,6 +18,9 @@
 #include "memorycontroller.h"
 #include "processor.h"
 
+#define LCD_SCREEN_WIDTH  160
+#define LCD_SCREEN_HEIGHT 144
+
 class GameBoy {
 public:
     GameBoy();

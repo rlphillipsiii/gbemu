@@ -31,8 +31,6 @@ public:
 
     void unlockBiosRegion();
 
-    inline void setGPU(GPU & gpu) { for (Region *region : m_memory) { region->setGPU(gpu); } }
-
     void saveBIOS(const std::string & filename);
 
 private:
@@ -48,8 +46,6 @@ private:
         Region & operator=(const Region &) = delete;
         Region(const Region &) = delete;
 
-        inline void setGPU(GPU & gpu) { m_gpu = &gpu; }
-            
         virtual bool isAddressed(uint16_t address) const;
 
         virtual void write(uint16_t address, uint8_t value);
@@ -63,8 +59,6 @@ private:
         uint16_t m_offset;
 
         std::vector<uint8_t> m_memory;
-
-        GPU *m_gpu;
     };
     ////////////////////////////////////////////////////////////////////////////////
 
