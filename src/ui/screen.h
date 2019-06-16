@@ -4,6 +4,7 @@
 #include <QtQuick/QQuickPaintedItem>
 #include <QObject>
 #include <QImage>
+#include <QTimer>
 
 #include <cstdint>
 
@@ -17,7 +18,11 @@ public:
     ~Screen() = default;
 
     void paint(QPainter *painter) override;
+    // QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *updatePaintNodeData) override;
 
+public slots:
+    void onTimeout();
+    
 private:    
     Screen(const Screen &) = delete;
     Screen & operator=(const Screen &) = delete;
@@ -28,6 +33,8 @@ private:
     QImage m_canvas;
 
     GameBoy m_console;
+
+    QTimer m_timer;
 };
 
 #endif
