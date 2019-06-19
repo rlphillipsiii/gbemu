@@ -47,12 +47,6 @@ int main(int argc, char **argv)
 
     qmlRegisterType<Screen>("GameBoy.Screen", 1, 0, "Screen");
     
-#if 0
-    console.load("bgbtest.gb");
-    
-    console.start();
-#endif
-    
     QQmlApplicationEngine engine;
     engine.load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
 

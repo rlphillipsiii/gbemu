@@ -21,8 +21,11 @@ Screen::Screen(QQuickItem *parent)
 
     QObject::connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
 
-    m_timer.setInterval(1000);
+    m_timer.setInterval(30);
     m_timer.start();
+
+    m_console.load("bgbtest.gb");
+    m_console.start();
 }
 
 void Screen::paint(QPainter *painter)

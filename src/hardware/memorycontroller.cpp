@@ -124,10 +124,15 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
     case GPU_SCROLLX_ADDRESS:  m_gpuScrollX = value; break;
     case GPU_SCROLLY_ADDRESS:  m_gpuScrollY = value; break;
     case GPU_SCANLINE_ADDRESS: break;
-    default: assert(0);
-    }
 
-    (void)value;
+    case SOUND_CONTROLLER_CHANNEL: break;
+    case SOUND_CONTROLLER_OUTPUT: break;
+    case SOUND_CONTROLLER_ENABLE: m_soundEnable = value; break;
+
+    default:
+        LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
+        assert(0);
+    }
 }
 
 uint8_t & MemoryController::MemoryMappedIO::read(uint16_t address)
@@ -143,6 +148,10 @@ uint8_t & MemoryController::MemoryMappedIO::read(uint16_t address)
     case GPU_SCROLLX_ADDRESS:  return m_gpuScrollX;
     case GPU_SCROLLY_ADDRESS:  return m_gpuScrollY;
     case GPU_SCANLINE_ADDRESS: return m_gpuScanline;
+
+    case SOUND_CONTROLLER_CHANNEL: break;
+    case SOUND_CONTROLLER_OUTPUT: break;
+    case SOUND_CONTROLLER_ENABLE: return m_soundEnable;
     default: {
         LOG("MemoryController::MemoryMappedIO::read : unhandled IO address 0x%04x\n", address);
         assert(0);

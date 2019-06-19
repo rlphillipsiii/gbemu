@@ -35,8 +35,7 @@ GameBoy::GameBoy()
       m_gpu(m_memory),
       m_run(false)
 {
-    m_gpu.setCPU(m_cpu);
-
+#if 0
     ifstream vram("vram.bin", std::ios::in | std::ios::binary);
     for (int i = 0; i < GPU_RAM_SIZE; i++) {
         uint8_t b;
@@ -44,6 +43,7 @@ GameBoy::GameBoy()
         
         m_memory.write(GPU_RAM_OFFSET + i, b);
     }
+#endif
 }
 
 bool GameBoy::load(const string & filename)

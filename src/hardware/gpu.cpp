@@ -34,8 +34,8 @@ const uint16_t GPU::TILE_MAP_COLUMNS = 32;
 /** Tile map 0 comes directly after the end of tile set 1 */
 const uint16_t GPU::TILE_MAP_0_OFFSET = TILE_SET_1_OFFSET + (TILES_PER_SET * TILE_SIZE);
 
-/** Tile map 1 come directly after the end of tile map 0 */
-const uint16_t GPU::TILE_MAP_1_OFFSET = TILE_MAP_1_OFFSET + (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
+/** Tile map 1 comes directly after the end of tile map 0 */
+const uint16_t GPU::TILE_MAP_1_OFFSET = TILE_MAP_0_OFFSET + (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
 
 const uint16_t GPU::OAM_TICKS    = 80;
 const uint16_t GPU::VRAM_TICKS   = 172;
@@ -54,10 +54,14 @@ GPU::GPU(MemoryController & memory)
       m_status(m_memory.read(GPU_STATUS_ADDRESS)),
       m_x(m_memory.read(GPU_SCROLLX_ADDRESS)),
       m_y(m_memory.read(GPU_SCROLLY_ADDRESS)),
-      m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
-      m_cpu(nullptr)
+      m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS))
 {
     reset();
+
+    LOG("TILE SET 0: 0x%04x\n", TILE_SET_0_OFFSET);
+    LOG("TILE SET 1: 0x%04x\n", TILE_SET_1_OFFSET);
+    LOG("TILE MAP 0: 0x%04x\n", TILE_MAP_0_OFFSET);
+    LOG("TILE_MAP 1: 0x%04x\n", TILE_MAP_1_OFFSET);
 }
 
 void GPU::reset()
@@ -70,30 +74,43 @@ void GPU::reset()
     m_x = m_y = m_scanline = m_ticks = 0;
 }
 
+void GPU::setInterrupt(InterruptMask interrupt)
+{
+    uint8_t & current = m_memory.read(INTERRUPT_FLAGS_ADDRESS);
+
+    uint8_t enabled = m_memory.read(INTERRUPT_MASK_ADDRESS);
+    if (enabled & uint8_t(interrupt)) {
+        current |= uint8_t(interrupt);
+    }
+}
+
 GPU::RenderState GPU::next()
 {
     switch (m_state) {
     case HBLANK: {
         if (HBLANK_TICKS == m_ticks) {
+            if (!isDisplayEnabled()) {
+                return VBLANK;
+            }
             return (PIXELS_PER_COL == m_scanline) ? VBLANK : OAM;
         }
         break;
     }
     case VBLANK: {
         if (VBLANK_TICKS == m_ticks) {
-            return HBLANK;
+            return (isDisplayEnabled()) ? HBLANK : VBLANK;
         }
         break;
     }
     case OAM: {
         if (OAM_TICKS == m_ticks) {
-            return VRAM;
+            return (isDisplayEnabled()) ? VRAM : VBLANK;
         }
         break;
     }
     case VRAM: {
         if (VRAM_TICKS == m_ticks) {
-            return HBLANK;
+            return (isDisplayEnabled()) ? HBLANK : VBLANK;
         }
         break;
     }
@@ -126,28 +143,37 @@ void GPU::cycle()
     RenderState current = m_state;
     m_state = next();
 
-    if (current != m_state) {
+    // If the display is turned off or we just changed states, then we need to
+    // reset the tick counter back to 0.
+    if (!isDisplayEnabled() || (current != m_state)) {
         m_ticks = 0;
     }
 }
 
 void GPU::handleHBlank()
 {
-    updateRenderStateStatus(HBLANK);
+    if (HBLANK != (m_status & RENDER_MODE)) {
+        if (isHBlankInterruptEnabled()) {
+            setInterrupt(InterruptMask::LCD);
+        }
+        updateRenderStateStatus(HBLANK);
+    }
 
     if (m_ticks < HBLANK_TICKS) {
         return;
     }
 
     m_scanline++;
-    if (PIXELS_PER_COL == m_scanline) {
-        m_cpu->setVBlankInterrupt();
-    }
 }
 
 void GPU::handleVBlank()
 {
-    updateRenderStateStatus(VBLANK);
+    if (VBLANK != (m_status & RENDER_MODE)) {
+        if (isVBlankInterruptEnabled()) {
+            setInterrupt(InterruptMask::VBLANK);
+        }
+        updateRenderStateStatus(VBLANK);
+    }
 
     if (m_ticks < VBLANK_TICKS) {
         return;
@@ -158,7 +184,12 @@ void GPU::handleVBlank()
 
 void GPU::handleOAM()
 {
-    updateRenderStateStatus(OAM);
+    if (OAM != (m_status & RENDER_MODE)) {
+        if (isOAMInterruptEnabled()) {
+            setInterrupt(InterruptMask::LCD);
+        }
+        updateRenderStateStatus(OAM);
+    }
 
     if (m_ticks < OAM_TICKS) {
         return;
@@ -167,7 +198,9 @@ void GPU::handleOAM()
 
 void GPU::handleVRAM()
 {
-    updateRenderStateStatus(VRAM);
+    if (VRAM != (m_status & RENDER_MODE)) {
+        updateRenderStateStatus(VRAM);
+    }
 
     if (m_ticks < VRAM_TICKS) {
         return;
@@ -182,6 +215,19 @@ Tile GPU::lookup(uint16_t address)
     }
 
     return tile;
+}
+
+vector<GPU::RGB> GPU::getColorMap()
+{
+    if (isWindowEnabled()) {
+
+    } else {
+
+    }
+
+    MapIndex index = (m_control & (1 << TILE_SET_SELECT)) ? MAP_0 : MAP_1;
+
+    return lookup(index);
 }
 
 Tile GPU::lookup(MapIndex index, uint16_t x, uint16_t y)
@@ -215,7 +261,20 @@ Tile GPU::lookup(MapIndex index, uint16_t x, uint16_t y)
     return lookup(location);
 }
 
-vector<GPU::RGB> GPU::toRGB(const Tile & tile)
+GPU::RGB GPU::pallette(uint8_t pixel) const
+{
+    switch (pixel) {
+    case 0x03: return { 0,   0,   0,   0xFF };
+    case 0x02: return { 96,  96,  96,  0xFF };
+    case 0x01: return { 192, 192, 192, 0xFF };
+    case 0x00: return { 255, 255, 255, 0xFF };
+    default: assert(0); break;
+    }
+
+    return { 0, 0, 0, 0xFF };
+}
+
+vector<GPU::RGB> GPU::toRGB(const Tile & tile) const
 {
     vector<RGB> colors;
 
@@ -234,13 +293,7 @@ vector<GPU::RGB> GPU::toRGB(const Tile & tile)
             uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
 
             // Each pixel needs to be run through a pallette to get the actual color.
-            switch (pixel) {
-            case 0x03: colors.push_back({ 0, 0, 0, 0xFF }); break;
-            case 0x02: colors.push_back({ 96, 96, 96, 0xFF }); break;
-            case 0x01: colors.push_back({ 192, 192, 192, 0xFF }); break;
-            case 0x00: colors.push_back({ 255, 255, 255, 0xFF }); break;
-            default: assert(0); break;
-            }
+            colors.push_back(pallette(pixel));
         }
     }
 
@@ -285,7 +338,7 @@ vector<GPU::RGB> GPU::lookup(MapIndex index)
     return constrain(colors);
 }
 
-vector<GPU::RGB> GPU::constrain(const vector<vector<RGB>> & display)
+vector<GPU::RGB> GPU::constrain(const vector<vector<RGB>> & display) const
 {
     uint16_t index = 0;
 

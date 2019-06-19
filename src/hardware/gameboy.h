@@ -31,7 +31,7 @@ public:
     void start();
     void stop();
 
-    std::vector<GPU::RGB> getRGB() { return m_gpu.lookup(GPU::MAP_0); }
+    std::vector<GPU::RGB> getRGB() { return m_gpu.getColorMap(); }
     
 private:
     static const uint16_t ROM_HEADER_LENGTH;

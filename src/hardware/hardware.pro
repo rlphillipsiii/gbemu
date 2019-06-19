@@ -16,6 +16,8 @@ PUBLIC_HEADERS += processor.h
 PUBLIC_HEADERS += memorycontroller.h
 PUBLIC_HEADERS += gpu.h
 PUBLIC_HEADERS += gameboy.h
+PUBLIC_HEADERS += interrupt.h
+PUBLIC_HEADERS += memmap.h
 
 HEADERS += $$PUBLIC_HEADERS
 HEADERS += logging.h

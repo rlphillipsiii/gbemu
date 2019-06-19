@@ -11,20 +11,16 @@
 #include <cstdint>
 #include <vector>
 
+#include "interrupt.h"
+#include "memmap.h"
+
 class MemoryController;
 
 typedef std::vector<uint8_t> Tile;
 
-class Processor;
-
 class GPU {
 public:
-    struct RGB {
-        uint8_t red;
-        uint8_t green;
-        uint8_t blue;
-        uint8_t alpha;
-    };
+    struct RGB { uint8_t red; uint8_t green; uint8_t blue; uint8_t alpha; };
 
     enum MapIndex {
         MAP_0 = 0,
@@ -37,10 +33,8 @@ public:
     void cycle();
     void reset();
 
-    std::vector<RGB> lookup(MapIndex index);
-    
-    inline void setCPU(Processor & cpu) { m_cpu = &cpu; }
-    
+    std::vector<RGB> getColorMap();
+
     inline uint8_t scanline() const { return m_scanline; }
     
 private:
@@ -76,7 +70,37 @@ private:
         OAM    = 2,
         VRAM   = 3,
     };
-    
+
+    enum ControlBitMask {
+        BACKGROUND_ENABLE = 0x00,
+        SPRITE_ENABLE     = 0x01,
+        SPRITE_SIZE       = 0x02,
+        BACKGROUND_MAP    = 0x04,
+        TILE_SET_SELECT   = 0x10,
+        WINDOW_ENABLE     = 0x20,
+        WINDOW_TILE_SET   = 0x40,
+        DISPLAY_ENABLE    = 0x80,
+    };
+
+    inline bool isBackgroundEnabled() const { return (m_control & BACKGROUND_ENABLE); }
+    inline bool isSpriteEnabled()     const { return (m_control & SPRITE_ENABLE);     }
+    inline bool isWindowEnabled()     const { return (m_control & WINDOW_ENABLE);     }
+    inline bool isDisplayEnabled()    const { return (m_control & DISPLAY_ENABLE);    }
+
+    enum StatusBitMask {
+        RENDER_MODE           = 0x03,
+        COINCIDENCE_FLAG      = 0x02,
+        HBLANK_INTERRUPT      = 0x04,
+        VBLANK_INTERRUPT      = 0x10,
+        OAM_INTERRUPT         = 0x20,
+        COINCIDENCE_INTERRUPT = 0x40,
+    };
+
+    inline bool isHBlankInterruptEnabled()      const { return (m_status & HBLANK_INTERRUPT);      }
+    inline bool isVBlankInterruptEnabled()      const { return (m_status & VBLANK_INTERRUPT);      }
+    inline bool isOAMInterruptEnabled()         const { return (m_status & OAM_INTERRUPT);         }
+    inline bool isCoincidenceInterruptEnabled() const { return (m_status & COINCIDENCE_INTERRUPT); }
+
     MemoryController & m_memory;
 
     uint8_t & m_control;
@@ -89,15 +113,16 @@ private:
     RenderState m_state;
     
     uint32_t m_ticks;
-
-    Processor *m_cpu;
     
+    std::vector<RGB> lookup(MapIndex index);
     Tile lookup(uint16_t address);
     Tile lookup(MapIndex index, uint16_t x, uint16_t y);
 
-    std::vector<RGB> toRGB(const Tile & tile);
-    std::vector<RGB> constrain(const std::vector<std::vector<RGB>> & display);
+    std::vector<RGB> toRGB(const Tile & tile) const;
+    std::vector<RGB> constrain(const std::vector<std::vector<RGB>> & display) const;
     
+    RGB pallette(uint8_t pixel) const;
+
     void handleHBlank();
     void handleVBlank();
     void handleOAM();
@@ -106,7 +131,9 @@ private:
     RenderState next();
 
     inline void updateRenderStateStatus(RenderState state)
-        { m_status &= 0xFC; m_status |= uint8_t(state); }
+        { m_status = ((m_status & 0xFC) | uint8_t(state)); }
+
+    void setInterrupt(InterruptMask interrupt);
 };
 
 #endif /* SRC_GPU_H_ */

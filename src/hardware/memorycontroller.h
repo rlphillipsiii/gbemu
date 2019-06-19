@@ -81,6 +81,8 @@ private:
         uint8_t m_gpuScrollX;
         uint8_t m_gpuScrollY;
         uint8_t m_gpuScanline;
+
+        uint8_t m_soundEnable;
     };
     ////////////////////////////////////////////////////////////////////////////////
 

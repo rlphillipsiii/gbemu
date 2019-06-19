@@ -15,6 +15,9 @@
 #include <utility>
 #include <string>
 #include <mutex>
+#include <list>
+
+#include "interrupt.h"
 
 class MemoryController;
 
@@ -26,27 +29,13 @@ public:
     void reset();
     void cycle();
 
-    inline void setVBlankInterrupt() { setInterrupt(MASK_VBLANK); }
-    inline void setSerialInterrupt() { setInterrupt(MASK_SERIAL); }
+    inline void setVBlankInterrupt() { setInterrupt(InterruptMask::VBLANK); }
+    inline void setSerialInterrupt() { setInterrupt(InterruptMask::SERIAL); }
+    inline void setLCDInterrupt()    { setInterrupt(InterruptMask::LCD);    }
+    inline void setJoypadInterrupt() { setInterrupt(InterruptMask::JOYPAD); }
     
 private:
     static const uint8_t CB_PREFIX;
-
-    enum InterruptVector {
-        ISR_VBLANK = 0x40,
-        ISR_LCD    = 0x48,
-        ISR_TIMER  = 0x50,
-        ISR_SERIAL = 0x58,
-        ISR_JOYPAD = 0x60,
-    };
-
-    enum InterruptMask {
-        MASK_VBLANK = 0x01,
-        MASK_LCD    = 0x02,
-        MASK_TIMER  = 0x04,
-        MASK_SERIAL = 0x08,
-        MASK_JOYPAD = 0x10,
-    };
     
     enum FlagMask {
         ZERO_FLAG_MASK       = 0x80,
@@ -75,18 +64,7 @@ private:
     /** Stack pointer that holds the next available address in the stack memory space */
     uint16_t m_sp;
 
-    /** Interrupt enable, mask, and status register */
-    struct Interrupts {
-        Interrupts(uint8_t & m, uint8_t & s)
-            : mask(m), status(s) { }
-        ~Interrupts() = default;
-
-        bool enable;
-        
-        uint8_t & mask;
-        uint8_t & status;
-    };
-
+    /** Interrupt enable, mask, and status registers */
     Interrupts m_interrupts;
     
     std::mutex m_iLock;
@@ -95,21 +73,29 @@ private:
 
     std::array<uint8_t, 2> m_operands;
 
-#if 0
+    struct Command {
+        uint16_t pc;
+        uint8_t opcode;
+        std::array<uint8_t, 2> operands;
+        Operation *operation;
+    };
+    std::list<Command> m_executed;
+
     struct {
         union { struct { uint8_t f, a; }; uint16_t af; };
         union { struct { uint8_t c, b; }; uint16_t bc; };
         union { struct { uint8_t e, d; }; uint16_t de; };
         union { struct { uint8_t l, h; }; uint16_t hl; };
     } m_gpr;
-#endif
 
+#if 0
     struct {
         union { struct { uint8_t a, f; }; uint16_t af; };
         union { struct { uint8_t b, c; }; uint16_t bc; };
         union { struct { uint8_t d, e; }; uint16_t de; };
         union { struct { uint8_t h, l; }; uint16_t hl; };
     } m_gpr;
+#endif
 
     /** 8 bit flags register */
     uint8_t m_flags;
@@ -172,8 +158,8 @@ private:
     bool interrupt();
 
     inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
-    inline void setInterrupt(uint8_t mask)
-        { if (m_interrupts.mask & mask) { m_interrupts.status |= mask; } }
+    inline void setInterrupt(InterruptMask mask)
+        { if (m_interrupts.mask & uint8_t(mask)) { m_interrupts.status |= uint8_t(mask); } }
 };
 
 

@@ -73,37 +73,37 @@ bool Processor::interrupt()
 {
     if (!m_interrupts.enable) { return false; }
 
-    uint16_t address = 0x00;
+    InterruptVector vector = InterruptVector::INVALID;
 
     lock_guard<mutex> lock(m_iLock);
     uint8_t status = m_interrupts.mask & m_interrupts.status;
     
-    if (status & MASK_VBLANK) {
-        address = ISR_VBLANK;
+    if (status & uint8_t(InterruptMask::VBLANK)) {
+        vector = InterruptVector::VBLANK;
 
-        m_interrupts.mask &= ~MASK_VBLANK;
-    } else if (status & MASK_LCD) {
-        address = ISR_LCD;
+        m_interrupts.mask &= ~uint8_t(InterruptMask::VBLANK);
+    } else if (status & uint8_t(InterruptMask::LCD)) {
+        vector = InterruptVector::LCD;
 
-        m_interrupts.mask &= ~MASK_LCD;
-    } else if (status & MASK_TIMER) {
-        address = ISR_TIMER;
+        m_interrupts.mask &= ~uint8_t(InterruptMask::LCD);
+    } else if (status & uint8_t(InterruptMask::TIMER)) {
+        vector = InterruptVector::TIMER;
 
-        m_interrupts.mask &= ~MASK_TIMER;
-    } else if (status & MASK_SERIAL) {
-        address = ISR_SERIAL;
+        m_interrupts.mask &= ~uint8_t(InterruptMask::TIMER);
+    } else if (status & uint8_t(InterruptMask::SERIAL)) {
+        vector = InterruptVector::SERIAL;
 
-        m_interrupts.mask &= ~MASK_SERIAL;
-    } else if (status & MASK_JOYPAD) {
-        address = ISR_JOYPAD;
+        m_interrupts.mask &= ~uint8_t(InterruptMask::SERIAL);
+    } else if (status & uint8_t(InterruptMask::JOYPAD)) {
+        vector = InterruptVector::JOYPAD;
 
-        m_interrupts.mask &= ~MASK_JOYPAD;
+        m_interrupts.mask &= ~uint8_t(InterruptMask::JOYPAD);
     }
 
-    if (0x00 != address) {
+    if (InterruptVector::INVALID != vector) {
         push(m_pc);
 
-        m_pc = address;
+        m_pc = uint16_t(vector);
         return true;
     }
 
@@ -133,17 +133,35 @@ void Processor::cycle()
     // The program counter points to our next opcode.
     uint8_t opcode = m_memory.read(m_pc++);
 
+#ifdef DEBUG
+    bool loop = true;
+    if ((opcode == 0x40) && (0x0101 != m_pc)) {
+        for (Command & c : m_executed) {
+            LOG("0x%04x | 0x%02x (%d): %s ", c.pc, c.opcode, c.operation->length, c.operation->name.c_str());
+            for (uint8_t i = 0; i < c.operation->length - 1; i++) {
+                LOG("0x%04x ", c.operands[i]);
+            }
+            LOG("%s", "\n");
+        }
+        while (loop);
+    }
+#endif
+
     // Look up the handler in our opcode table.  If the length of our command is greater
     // than 1, then we also need to grab the next length - 1 bytes as they are the
     // arguments to the next operation that we are going to execute.
     Operation *operation = lookup(opcode);
 
-    LOG("0x%04x | 0x%02x (%d): %s ", m_pc - 1, opcode, operation->length, operation->name.c_str());
     for (uint8_t i = 0; i < operation->length - 1; i++) {
         m_operands[i] = m_memory.read(m_pc++);
-        LOG("0x%04x ", m_operands[i]);
     }
-    LOG("%s", "\n");
+
+#ifdef DEBUG
+    if (m_executed.size() == 100) {
+        m_executed.pop_front();
+    }
+    m_executed.push_back({ uint16_t(m_pc - operation->length), opcode, m_operands, operation });
+#endif
 
     // Call the function pointer in our Operation struct.  Any arguments to the function
     // will have already been put in to the operands array.
@@ -369,8 +387,10 @@ void Processor::set(uint8_t & reg, uint8_t which)
 
 void Processor::pop(uint16_t & reg)
 {
-    uint8_t lower = m_memory.read(m_sp++);
-    uint8_t upper = m_memory.read(m_sp++);
+    uint8_t lower = m_memory.read(m_sp + 1);
+    uint8_t upper = m_memory.read(m_sp + 2);
+
+    m_sp += 2;
 
     reg = (upper << 8) | lower;
 }
@@ -597,9 +617,9 @@ Processor::Processor(MemoryController & memory)
         ///////////
         { 0xEA, { "LD_(nn)_a",  [this]() { loadMem(m_gpr.a); }, 3, 1 } },
         { 0x08, { "LD_(nn)_sp", [this]() { loadMem(m_sp);    }, 3, 1 } },
-        { 0xE0, { "LD_(n)_a",   [this]() { loadMem(uint16_t(m_operands[0]), m_gpr.a); }, 2, 1 } },
+        { 0xE0, { "LD_(n)_a",   [this]() { loadMem(0xFF00 + uint16_t(m_operands[0]), m_gpr.a); }, 2, 1 } },
         { 0x02, { "LD_(bc)_a",  [this]() { loadMem(m_gpr.bc, m_gpr.a); }, 1, 1 } },
-        { 0xE2, { "LD_(c)_a",   [this]() { loadMem(uint16_t(m_gpr.c), m_gpr.a); }, 1, 1 } },
+        { 0xE2, { "LD_(c)_a",   [this]() { loadMem(0xFF00 + uint16_t(m_gpr.c), m_gpr.a); }, 1, 1 } },
         { 0x12, { "LD_(de)_a",  [this]() { loadMem(m_gpr.de, m_gpr.a); }, 1, 1 } },
 
         { 0x3E, { "LD_a_n",     [this]() { m_gpr.a = m_operands[0];                }, 2, 1 } },
@@ -674,21 +694,21 @@ Processor::Processor(MemoryController & memory)
         { 0xB4, { "OR_h",    [this]() { or8(m_gpr.h);                 }, 1, 1 } },
         { 0xB5, { "OR_l",    [this]() { or8(m_gpr.l);                 }, 1, 1 } },
 
-        { 0xF1, { "POP_af", [this]() { pop(m_gpr.af); }, 3, 3 } },
-        { 0xC1, { "POP_bc", [this]() { pop(m_gpr.bc); }, 3, 3 } },
-        { 0xD1, { "POP_de", [this]() { pop(m_gpr.de); }, 3, 3 } },
-        { 0xE1, { "POP_hl", [this]() { pop(m_gpr.hl); }, 3, 3 } },
+        { 0xF1, { "POP_af", [this]() { pop(m_gpr.af); }, 1, 3 } },
+        { 0xC1, { "POP_bc", [this]() { pop(m_gpr.bc); }, 1, 3 } },
+        { 0xD1, { "POP_de", [this]() { pop(m_gpr.de); }, 1, 3 } },
+        { 0xE1, { "POP_hl", [this]() { pop(m_gpr.hl); }, 1, 3 } },
 
-        { 0xF5, { "PUSH_af", [this]() { push(m_gpr.af); }, 3, 4 } },
-        { 0xC5, { "PUSH_bc", [this]() { push(m_gpr.bc); }, 3, 4 } },
-        { 0xD5, { "PUSH_de", [this]() { push(m_gpr.de); }, 3, 4 } },
-        { 0xE5, { "PUSH_hl", [this]() { push(m_gpr.hl); }, 3, 4 } },
+        { 0xF5, { "PUSH_af", [this]() { push(m_gpr.af); }, 1, 4 } },
+        { 0xC5, { "PUSH_bc", [this]() { push(m_gpr.bc); }, 1, 4 } },
+        { 0xD5, { "PUSH_de", [this]() { push(m_gpr.de); }, 1, 4 } },
+        { 0xE5, { "PUSH_hl", [this]() { push(m_gpr.hl); }, 1, 4 } },
 
         { 0xC9, { "RET",    [this]() { ret(false);                           }, 1, 1 } },
-        { 0xD8, { "RET_C",  [this]() { if (isCarryFlagSet())  { ret(false); }}, 2, 1 } },
-        { 0xD0, { "RET_NC", [this]() { if (!isCarryFlagSet()) { ret(false); }}, 2, 1 } },
-        { 0xC0, { "RET_NZ", [this]() { if (!isZeroFlagSet())  { ret(false); }}, 2, 1 } },
-        { 0xC8, { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 2, 1 } },
+        { 0xD8, { "RET_C",  [this]() { if (isCarryFlagSet())  { ret(false); }}, 1, 2 } },
+        { 0xD0, { "RET_NC", [this]() { if (!isCarryFlagSet()) { ret(false); }}, 1, 2 } },
+        { 0xC0, { "RET_NZ", [this]() { if (!isZeroFlagSet())  { ret(false); }}, 1, 2 } },
+        { 0xC8, { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 1, 2 } },
         { 0xD9, { "RETI",   [this]() { ret(true);                            }, 1, 1 } },
 
         { 0x17, { "RLA", [this]() { rotatel(m_gpr.a, false); }, 1, 1 } },
