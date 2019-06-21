@@ -14,24 +14,22 @@
 #include <thread>
 #include <vector>
 
+#include "gameboyinterface.h"
 #include "gpu.h"
 #include "memorycontroller.h"
 #include "processor.h"
 
-#define LCD_SCREEN_WIDTH  160
-#define LCD_SCREEN_HEIGHT 144
-
-class GameBoy {
+class GameBoy : public GameBoyInterface {
 public:
     GameBoy();
     ~GameBoy() = default;
 
-    bool load(const std::string & filename);
+    bool load(const std::string & filename) override;
 
-    void start();
-    void stop();
+    void start() override;
+    void stop() override;
 
-    std::vector<GPU::RGB> getRGB() { return m_gpu.getColorMap(); }
+    std::vector<GB::RGB> getRGB() override { return m_gpu.getColorMap(); }
     
 private:
     static const uint16_t ROM_HEADER_LENGTH;

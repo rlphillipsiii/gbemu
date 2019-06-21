@@ -104,6 +104,8 @@ LIBS += $$combine(-L, $$PUBLIC_BIN)
 CONFIG += c++11
 CONFIG += console
 
+QMAKE_CXXFLAGS += -Wall 
+  
 win32: DEFINES += WIN32
 unix:  DEFINES += LINUX
 

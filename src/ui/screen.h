@@ -7,8 +7,9 @@
 #include <QTimer>
 
 #include <cstdint>
+#include <memory>
 
-#include "gameboy.h"
+class GameBoyInterface;
 
 class Screen : public QQuickPaintedItem {
     Q_OBJECT
@@ -32,7 +33,7 @@ private:
 
     QImage m_canvas;
 
-    GameBoy m_console;
+    std::shared_ptr<GameBoyInterface> m_console;
 
     QTimer m_timer;
 };

@@ -87,6 +87,7 @@ GameBoy::RomHeader GameBoy::parseHeader(const vector<uint8_t> & header)
     }
 
     uint8_t size = header.at(ROM_SIZE_OFFSET);
+    (void)size;
     
     return info;
 }

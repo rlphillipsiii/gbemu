@@ -12,20 +12,22 @@ DEFINES += HARDWARE_EXPORT
 
 TARGET = hardware
 
-PUBLIC_HEADERS += processor.h
-PUBLIC_HEADERS += memorycontroller.h
-PUBLIC_HEADERS += gpu.h
-PUBLIC_HEADERS += gameboy.h
-PUBLIC_HEADERS += interrupt.h
-PUBLIC_HEADERS += memmap.h
+PUBLIC_HEADERS += gameboyinterface.h
 
-HEADERS += $$PUBLIC_HEADERS
+HEADERS += processor.h
+HEADERS += memorycontroller.h
+HEADERS += gpu.h
+HEADERS += gameboy.h
+HEADERS += interrupt.h
+HEADERS += memmap.h
 HEADERS += logging.h
+HEADERS += $$PUBLIC_HEADERS
 
 SOURCES += gpu.cpp
 SOURCES += memorycontroller.cpp
 SOURCES += processor.cpp
 SOURCES += gameboy.cpp
+SOURCES += gameboyinterface.cpp
 
 publishHeaders($$PUBLIC_HEADERS)
 publishTarget()

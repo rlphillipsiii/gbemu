@@ -10,34 +10,36 @@
 
 #include <cstdint>
 #include <vector>
+#include <array>
 
 #include "interrupt.h"
 #include "memmap.h"
 
 class MemoryController;
 
+namespace GB { struct RGB; };
+
 typedef std::vector<uint8_t> Tile;
+typedef std::array<GB::RGB, 4> BWPalette;
 
 class GPU {
 public:
-    struct RGB { uint8_t red; uint8_t green; uint8_t blue; uint8_t alpha; };
-
-    enum MapIndex {
-        MAP_0 = 0,
-        MAP_1 = 1,
-    };
-
     GPU(MemoryController & memory);
     ~GPU() = default;
 
     void cycle();
     void reset();
 
-    std::vector<RGB> getColorMap();
+    std::vector<GB::RGB> getColorMap();
 
     inline uint8_t scanline() const { return m_scanline; }
     
+    inline void enableCGB()  { m_cgb = true;  }
+    inline void disableCGB() { m_cgb = false; }
+
 private:
+    static const BWPalette NON_CGB_PALETTE;
+
     static const uint16_t TILE_SIZE;
     static const uint16_t TILES_PER_SET;
 
@@ -64,6 +66,9 @@ private:
     static const uint16_t PIXELS_PER_ROW;
     static const uint16_t PIXELS_PER_COL;
 
+    enum TileMapIndex { TILEMAP_0 = 0, TILEMAP_1 = 1, };
+    enum TileSetIndex { TILESET_0 = 0, TILESET_1 = 1, };
+
     enum RenderState {
         HBLANK = 0,
         VBLANK = 1,
@@ -72,10 +77,10 @@ private:
     };
 
     enum ControlBitMask {
-        BACKGROUND_ENABLE = 0x00,
-        SPRITE_ENABLE     = 0x01,
-        SPRITE_SIZE       = 0x02,
-        BACKGROUND_MAP    = 0x04,
+        BACKGROUND_ENABLE = 0x01,
+        SPRITE_ENABLE     = 0x02,
+        SPRITE_SIZE       = 0x04,
+        BACKGROUND_MAP    = 0x08,
         TILE_SET_SELECT   = 0x10,
         WINDOW_ENABLE     = 0x20,
         WINDOW_TILE_SET   = 0x40,
@@ -89,8 +94,8 @@ private:
 
     enum StatusBitMask {
         RENDER_MODE           = 0x03,
-        COINCIDENCE_FLAG      = 0x02,
-        HBLANK_INTERRUPT      = 0x04,
+        COINCIDENCE_FLAG      = 0x04,
+        HBLANK_INTERRUPT      = 0x08,
         VBLANK_INTERRUPT      = 0x10,
         OAM_INTERRUPT         = 0x20,
         COINCIDENCE_INTERRUPT = 0x40,
@@ -105,7 +110,7 @@ private:
 
     uint8_t & m_control;
     uint8_t & m_status;
-    uint8_t m_pallete;
+    uint8_t & m_palette;
     uint8_t & m_x;
     uint8_t & m_y;
     uint8_t & m_scanline;
@@ -114,14 +119,16 @@ private:
     
     uint32_t m_ticks;
     
-    std::vector<RGB> lookup(MapIndex index);
-    Tile lookup(uint16_t address);
-    Tile lookup(MapIndex index, uint16_t x, uint16_t y);
+    bool m_cgb;
 
-    std::vector<RGB> toRGB(const Tile & tile) const;
-    std::vector<RGB> constrain(const std::vector<std::vector<RGB>> & display) const;
+    std::vector<GB::RGB> lookup(TileMapIndex mIndex, TileSetIndex sIndex);
+    Tile lookup(uint16_t address);
+    Tile lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
+
+    std::vector<GB::RGB> toRGB(const Tile & tile) const;
+    std::vector<GB::RGB> constrain(const std::vector<std::vector<GB::RGB>> & display) const;
     
-    RGB pallette(uint8_t pixel) const;
+    GB::RGB palette(uint8_t pixel) const;
 
     void handleHBlank();
     void handleVBlank();

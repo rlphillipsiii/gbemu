@@ -7,14 +7,24 @@
 
 #include <cassert>
 #include <vector>
+#include <array>
 
 #include "gpu.h"
 #include "processor.h"
 #include "memorycontroller.h"
 #include "memmap.h"
 #include "logging.h"
+#include "gameboyinterface.h"
 
 using std::vector;
+using std::array;
+
+const BWPalette GPU::NON_CGB_PALETTE = {{
+    { 255, 255, 255, 0xFF }, // white
+    { 192, 192, 192, 0xFF }, // light grey
+    { 96,  96,  96,  0xFF }, // grey
+    { 0,   0,   0,   0xFF }, // black
+}};
 
 /** 16 byte tile size (8x8 bit tile w/ 2 bytes per pixel) */
 const uint16_t GPU::TILE_SIZE = 16;
@@ -52,9 +62,11 @@ GPU::GPU(MemoryController & memory)
     : m_memory(memory),
       m_control(m_memory.read(GPU_CONTROL_ADDRESS)),
       m_status(m_memory.read(GPU_STATUS_ADDRESS)),
+      m_palette(m_memory.read(GPU_PALETTE_ADDRESS)),
       m_x(m_memory.read(GPU_SCROLLX_ADDRESS)),
       m_y(m_memory.read(GPU_SCROLLY_ADDRESS)),
-      m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS))
+      m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
+      m_cgb(false)
 {
     reset();
 
@@ -217,7 +229,7 @@ Tile GPU::lookup(uint16_t address)
     return tile;
 }
 
-vector<GPU::RGB> GPU::getColorMap()
+vector<GB::RGB> GPU::getColorMap()
 {
     if (isWindowEnabled()) {
 
@@ -225,15 +237,16 @@ vector<GPU::RGB> GPU::getColorMap()
 
     }
 
-    MapIndex index = (m_control & (1 << TILE_SET_SELECT)) ? MAP_0 : MAP_1;
+    TileMapIndex mIndex = (m_control & TILE_SET_SELECT) ? TILEMAP_0 : TILEMAP_1;
+    TileSetIndex sIndex = (m_control & BACKGROUND_MAP) ? TILESET_1 : TILESET_0;
 
-    return lookup(index);
+    return lookup(mIndex, sIndex);
 }
 
-Tile GPU::lookup(MapIndex index, uint16_t x, uint16_t y)
+Tile GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
 {
     // We have two maps, so figure out which offset we need to use for our address
-    uint16_t offset = (MAP_0 == index) ? TILE_MAP_0_OFFSET : TILE_MAP_1_OFFSET;
+    uint16_t offset = (TILEMAP_0 == mIndex) ? TILE_MAP_0_OFFSET : TILE_MAP_1_OFFSET;
 
     // Now that we know our offset, figure out the address of the tile that we are
     // needing to look up.
@@ -248,35 +261,34 @@ Tile GPU::lookup(MapIndex index, uint16_t x, uint16_t y)
 
     // Now that we have our union initialized, we need to figure out the offset we
     // need to use in order to figure out the location of our tile in memory.
-    int16_t toffset = (MAP_0 == index) ?
+    int16_t toffset = (TILESET_0 == sIndex) ?
         int16_t(tptr.tile0) * TILE_SIZE : int16_t(tptr.tile1) * TILE_SIZE;
     
     // Actually figure out the location of the tile that we want.  If we are after a
     // tile in the second set, then we need to set our offset to the end of the 1st
     // set and use our signed number to index in to the second set because the 2nd
     // half of the 1st set is also the 1st half the second set.
-    uint16_t location = (MAP_0 == index) ?
+    uint16_t location = (TILESET_0 == sIndex) ?
             TILE_SET_0_OFFSET + toffset : TILE_SET_0_OFFSET + toffset + (TILES_PER_SET * TILE_SIZE);
 
     return lookup(location);
 }
 
-GPU::RGB GPU::pallette(uint8_t pixel) const
+GB::RGB GPU::palette(uint8_t pixel) const
 {
-    switch (pixel) {
-    case 0x03: return { 0,   0,   0,   0xFF };
-    case 0x02: return { 96,  96,  96,  0xFF };
-    case 0x01: return { 192, 192, 192, 0xFF };
-    case 0x00: return { 255, 255, 255, 0xFF };
-    default: assert(0); break;
+    if (m_cgb) {
+
     }
 
-    return { 0, 0, 0, 0xFF };
+    uint8_t index = pixel & 0x03;
+
+    uint8_t color = (m_palette >> (index * 2)) & 0x03;
+    return NON_CGB_PALETTE[color];
 }
 
-vector<GPU::RGB> GPU::toRGB(const Tile & tile) const
+vector<GB::RGB> GPU::toRGB(const Tile & tile) const
 {
-    vector<RGB> colors;
+    vector<GB::RGB> colors;
 
     for (size_t i = 0; i < tile.size(); i += 2) {
         uint8_t lower = tile.at(i);
@@ -292,21 +304,21 @@ vector<GPU::RGB> GPU::toRGB(const Tile & tile) const
             // significant bit of the second byte.
             uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
 
-            // Each pixel needs to be run through a pallette to get the actual color.
-            colors.push_back(pallette(pixel));
+            // Each pixel needs to be run through a palette to get the actual color.
+            colors.push_back(palette(pixel));
         }
     }
 
     return colors;
 }
 
-vector<GPU::RGB> GPU::lookup(MapIndex index)
+vector<GB::RGB> GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
 {
-    vector<vector<RGB>> colors;
+    vector<vector<GB::RGB>> colors;
 
     // Reserve enough space to fit our 32x32 RGBA pixel matrix.
     colors.resize(TILE_MAP_COLUMNS * TILE_PIXELS_PER_COL);
-    for (vector<RGB> & row : colors) {
+    for (vector<GB::RGB> & row : colors) {
         row.resize(TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
     }
 
@@ -315,7 +327,7 @@ vector<GPU::RGB> GPU::lookup(MapIndex index)
     for (uint16_t i = 0; i < TILE_MAP_ROWS; i++) {
         for (uint16_t j = 0; j < TILE_MAP_COLUMNS; j++) {
             // Lookup the tile that we want and translate it to RGB.
-            vector<RGB> rgb = toRGB(lookup(index, j, i));
+            vector<GB::RGB> rgb = toRGB(lookup(mIndex, sIndex, j, i));
 
             // Each tile is 8x8, so we first need to figure out the coordinates
             // of the top left corner of the tile we are translating.
@@ -338,14 +350,14 @@ vector<GPU::RGB> GPU::lookup(MapIndex index)
     return constrain(colors);
 }
 
-vector<GPU::RGB> GPU::constrain(const vector<vector<RGB>> & display) const
+vector<GB::RGB> GPU::constrain(const vector<vector<GB::RGB>> & display) const
 {
     uint16_t index = 0;
 
     // We have an array of the whole map, so now we need to build a flat array of the
     // pixels that we need to display on screen.  The x and y scroll registers determine
     // where in the 32x32 map that we should place the top left corner.
-    vector<RGB> screen(PIXELS_PER_ROW * PIXELS_PER_COL);
+    vector<GB::RGB> screen(PIXELS_PER_ROW * PIXELS_PER_COL);
     for (uint16_t y = m_y; y < m_y + PIXELS_PER_COL; y++) {
         for (uint16_t x = m_x; x < m_x + PIXELS_PER_ROW; x++) {
             screen[index++] = display[y][x];

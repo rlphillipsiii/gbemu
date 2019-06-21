@@ -5,9 +5,11 @@
 #include <QSGGeometry>
 #include <QSGVertexColorMaterial>
 
+#include <cassert>
 #include <vector>
 
 #include "screen.h"
+#include "gameboyinterface.h"
 
 using std::vector;
 
@@ -15,8 +17,11 @@ Screen::Screen(QQuickItem *parent)
     : QQuickPaintedItem(parent),
       m_width(LCD_SCREEN_WIDTH),
       m_height(LCD_SCREEN_HEIGHT),
-      m_canvas(m_width, m_height, QImage::Format_RGBA8888)
+      m_canvas(m_width, m_height, QImage::Format_RGBA8888),
+      m_console(GameBoyInterface::Instance())
 {
+    assert(m_console);
+
     setFlag(ItemHasContents, true);
 
     QObject::connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
@@ -24,15 +29,15 @@ Screen::Screen(QQuickItem *parent)
     m_timer.setInterval(30);
     m_timer.start();
 
-    m_console.load("bgbtest.gb");
-    m_console.start();
+    m_console->load("bgbtest.gb");
+    m_console->start();
 }
 
 void Screen::paint(QPainter *painter)
 {
-    vector<GPU::RGB> rgb = m_console.getRGB();
+    vector<GB::RGB> rgb = m_console->getRGB();
     for (size_t i = 0; i < rgb.size(); i++) {
-        const GPU::RGB & color = rgb.at(i);
+        const GB::RGB & color = rgb.at(i);
 
         int x = i % m_width;
         int y = i / m_width;

@@ -157,6 +157,8 @@ private:
 
     bool interrupt();
 
+    void history() const;
+
     inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
     inline void setInterrupt(InterruptMask mask)
         { if (m_interrupts.mask & uint8_t(mask)) { m_interrupts.status |= uint8_t(mask); } }

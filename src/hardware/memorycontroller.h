@@ -72,6 +72,9 @@ private:
 
         void reset() override;
         
+        inline void writeBytes(uint8_t & reg, uint8_t value, uint8_t mask)
+            { reg = ((reg & ~mask) | (value & mask)); }
+
     private:
         uint8_t m_interruptFlags;
         uint8_t m_interruptMask;
@@ -81,6 +84,9 @@ private:
         uint8_t m_gpuScrollX;
         uint8_t m_gpuScrollY;
         uint8_t m_gpuScanline;
+        uint8_t m_gpuPalette;
+        uint8_t m_gpuOBP1;
+        uint8_t m_gpuOBP2;
 
         uint8_t m_soundEnable;
     };

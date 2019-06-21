@@ -14,7 +14,6 @@
 
 #include <cstdint>
 
-#include "gameboy.h"
 #include "screen.h"
 
 #if 0
