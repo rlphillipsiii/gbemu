@@ -18,7 +18,8 @@ Screen::Screen(QQuickItem *parent)
       m_width(LCD_SCREEN_WIDTH),
       m_height(LCD_SCREEN_HEIGHT),
       m_canvas(m_width, m_height, QImage::Format_RGBA8888),
-      m_console(GameBoyInterface::Instance())
+      m_console(GameBoyInterface::Instance()),
+      m_stopped(false)
 {
     assert(m_console);
 
@@ -31,6 +32,20 @@ Screen::Screen(QQuickItem *parent)
 
     m_console->load("bgbtest.gb");
     m_console->start();
+}
+
+Screen::~Screen()
+{
+    stop();
+}
+
+void Screen::stop()
+{
+    if (m_stopped) { return; }
+
+    m_timer.stop();
+
+    m_console->stop();
 }
 
 void Screen::paint(QPainter *painter)

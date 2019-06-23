@@ -22,6 +22,8 @@ public:
     MemoryController();
     ~MemoryController() = default;
 
+    void initialize(uint16_t address, uint8_t value);
+
     void write(uint16_t address, uint8_t value);
     void writeWord(uint16_t address, uint16_t value);
     uint8_t & read(uint16_t address);
@@ -55,8 +57,12 @@ private:
 
         virtual void reset() { std::fill(m_memory.begin(), m_memory.end(), 0); }
 
+        void enableInit()  { m_initializing = true;  }
+        void disableInit() { m_initializing = false; }
+
     protected:
         uint16_t m_offset;
+        uint16_t m_initializing;
 
         std::vector<uint8_t> m_memory;
     };
@@ -117,10 +123,13 @@ private:
     Region m_gram;
     Region m_ext;
     WorkingRam m_working;
+    Region m_graphics;
     MemoryMappedIO m_io;
     Region m_zero;
 
     std::list<Region*> m_memory;
+
+    Region *find(uint16_t address) const;
 };
 
 #endif /* SRC_MEMORYCONTROLLER_H_ */

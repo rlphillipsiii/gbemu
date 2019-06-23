@@ -44,6 +44,7 @@ const vector<uint8_t> MemoryController::BIOS_REGION = {
 ////////////////////////////////////////////////////////////////////////////////
 MemoryController::Region::Region(uint16_t size, uint16_t offset)
     : m_offset(offset),
+      m_initializing(false),
       m_memory(size)
 {
 
@@ -156,8 +157,10 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
             break;
         }
 
-        LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
-        assert(0);
+        if (!m_initializing) {
+            LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
+            assert(0);
+        }
     }
     }
 }
@@ -219,6 +222,7 @@ MemoryController::MemoryController()
       m_gram(GPU_RAM_SIZE, GPU_RAM_OFFSET),
       m_ext(EXT_RAM_SIZE, EXT_RAM_OFFSET),
       m_working(WORKING_RAM_SIZE, WORKING_RAM_OFFSET),
+      m_graphics(GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
       m_io(IO_SIZE, IO_OFFSET),
       m_zero(ZRAM_SIZE, ZRAM_OFFSET)
 {
@@ -238,7 +242,7 @@ void MemoryController::reset()
     m_memory = { &m_bios, &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_io, &m_zero };
 #endif
     
-    m_memory = { &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_io, &m_zero };
+    m_memory = { &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_graphics, &m_io, &m_zero };
 
     for (Region *region : m_memory) {
         if (&m_bios == region) {
@@ -248,15 +252,31 @@ void MemoryController::reset()
     }
 }
 
-void MemoryController::write(uint16_t address, uint8_t value)
+MemoryController::Region *MemoryController::find(uint16_t address) const
 {
-    Region *region = nullptr;
-    for (Region *r : m_memory) {
-        if (r->isAddressed(address)) {
-            region = r;
-            break;
+    for (Region *region : m_memory) {
+        if (region->isAddressed(address)) {
+            return region;
         }
     }
+
+    return nullptr;
+}
+
+void MemoryController::initialize(uint16_t address, uint8_t value)
+{
+    Region *region = find(address);
+
+    if (region) {
+        region->enableInit();
+        region->write(address, value);
+        region->disableInit();
+    }
+}
+
+void MemoryController::write(uint16_t address, uint8_t value)
+{
+    Region *region = find(address);
 
     if (region) {
         region->write(address, value);
@@ -268,13 +288,7 @@ void MemoryController::write(uint16_t address, uint8_t value)
 
 uint8_t & MemoryController::read(uint16_t address)
 {
-    Region *region = nullptr;
-    for (Region *r : m_memory) {
-        if (r->isAddressed(address)) {
-            region = r;
-            break;
-        }
-    }
+    Region *region = find(address);
 
     if (region) {
         return region->read(address);

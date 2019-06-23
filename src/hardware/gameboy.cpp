@@ -16,6 +16,7 @@
 
 #include "gameboy.h"
 #include "memmap.h"
+#include "logging.h"
 
 using std::string;
 using std::vector;
@@ -30,18 +31,20 @@ const uint16_t GameBoy::ROM_RAM_SIZE_OFFSET = 0x0149;
 
 const uint8_t GameBoy::ROM_NAME_MAX_LENGTH = 0x10;
 
+// #define STATIC_MEMORY
+
 GameBoy::GameBoy()
     : m_cpu(m_memory),
       m_gpu(m_memory),
       m_run(false)
 {
-#if 0
-    ifstream vram("vram.bin", std::ios::in | std::ios::binary);
-    for (int i = 0; i < GPU_RAM_SIZE; i++) {
+#ifdef STATIC_MEMORY
+    ifstream ram("memory.bin", std::ios::in | std::ios::binary);
+    for (int i = GPU_RAM_OFFSET; i <= 0xFFFF; i++) {
         uint8_t b;
-        vram.read(reinterpret_cast<char*>(&b), 1);
+        ram.read(reinterpret_cast<char*>(&b), 1);
         
-        m_memory.write(GPU_RAM_OFFSET + i, b);
+        m_memory.initialize(i, b);
     }
 #endif
 }
@@ -96,13 +99,17 @@ void GameBoy::start()
 {
     m_run = true;
 
+#ifndef STATIC_MEMORY
     m_thread = std::thread([this]() {
         this->run();
     });
+#endif
 }
 
 void GameBoy::run()
 {
+    LOG("%s\n", "Gameboy thread running");
+
     while (m_run.load()) {
         m_cpu.cycle();
 

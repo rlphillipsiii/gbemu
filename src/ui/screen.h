@@ -16,13 +16,14 @@ class Screen : public QQuickPaintedItem {
 
 public:
     explicit Screen(QQuickItem *parent = nullptr);
-    ~Screen() = default;
+    ~Screen();
 
     void paint(QPainter *painter) override;
     // QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *updatePaintNodeData) override;
 
 public slots:
     void onTimeout();
+    void stop();
     
 private:    
     Screen(const Screen &) = delete;
@@ -34,6 +35,8 @@ private:
     QImage m_canvas;
 
     std::shared_ptr<GameBoyInterface> m_console;
+
+    bool m_stopped;
 
     QTimer m_timer;
 };

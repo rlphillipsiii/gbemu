@@ -12,6 +12,7 @@
 #include <vector>
 #include <array>
 
+// #include "gameboyinterface.h"
 #include "interrupt.h"
 #include "memmap.h"
 
@@ -55,6 +56,13 @@ private:
     static const uint16_t TILE_MAP_0_OFFSET;
     static const uint16_t TILE_MAP_1_OFFSET;
 
+    static const uint16_t SPRITE_ATTRIBUTES_TABLE;
+    static const uint8_t SPRITE_COUNT;
+    static const uint8_t SPRITE_BYTES_PER_ATTRIBUTE;
+    static const uint8_t SPRITE_WIDTH;
+    static const uint8_t SPRITE_HEIGHT_NORMAL;
+    static const uint8_t SPRITE_HEIGHT_EXTENDED;
+
     static const uint16_t SCREEN_ROWS;
     static const uint16_t SCREEN_COLUMNS;
 
@@ -65,6 +73,21 @@ private:
 
     static const uint16_t PIXELS_PER_ROW;
     static const uint16_t PIXELS_PER_COL;
+
+    static const uint8_t ALPHA_TRANSPARENT;
+
+    struct SpriteData {
+        uint8_t x;
+        uint8_t y;
+
+        uint8_t height;
+        uint8_t flags;
+
+        uint16_t address;
+        uint16_t pointer;
+
+        std::vector<GB::RGB> colors;
+    };
 
     enum TileMapIndex { TILEMAP_0 = 0, TILEMAP_1 = 1, };
     enum TileSetIndex { TILESET_0 = 0, TILESET_1 = 1, };
@@ -101,6 +124,15 @@ private:
         COINCIDENCE_INTERRUPT = 0x40,
     };
 
+    enum SpriteAttributesMask {
+        PALETTE_NUMBER_CGB     = 0x07,
+        TILE_BANK_CGB          = 0x08,
+        PALETTE_NUMBER_NON_CGB = 0x10,
+        FLIP_X                 = 0x20,
+        FLIP_Y                 = 0x40,
+        OBJECT_PRIORITY        = 0x80,
+    };
+
     inline bool isHBlankInterruptEnabled()      const { return (m_status & HBLANK_INTERRUPT);      }
     inline bool isVBlankInterruptEnabled()      const { return (m_status & VBLANK_INTERRUPT);      }
     inline bool isOAMInterruptEnabled()         const { return (m_status & OAM_INTERRUPT);         }
@@ -125,10 +157,10 @@ private:
     Tile lookup(uint16_t address);
     Tile lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
-    std::vector<GB::RGB> toRGB(const Tile & tile) const;
+    std::vector<GB::RGB> toRGB(const Tile & tile, bool white) const;
     std::vector<GB::RGB> constrain(const std::vector<std::vector<GB::RGB>> & display) const;
     
-    GB::RGB palette(uint8_t pixel) const;
+    GB::RGB palette(uint8_t pixel, bool white) const;
 
     void handleHBlank();
     void handleVBlank();
@@ -141,6 +173,9 @@ private:
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
 
     void setInterrupt(InterruptMask interrupt);
+    void drawSprites(std::vector<GB::RGB> & display);
+    void readSprite(SpriteData & data);
+    bool isSpriteVisible(const SpriteData & data) const;
 };
 
 #endif /* SRC_GPU_H_ */

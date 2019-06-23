@@ -69,4 +69,6 @@
 #define GPU_OBP1_ADDRESS     0xFF48
 #define GPU_OBP2_ADDRESS     0xFF49
 
+#define GPU_SPRITE_TABLE_ADDRESS 0xFE00
+
 #endif /* MEMMAP_H_ */
