@@ -8,6 +8,9 @@
 #ifndef MEMMAP_H_
 #define MEMMAP_H_
 
+////////////////////////////////////////////////////////////////////////////////
+// Memory Map Addresses and Sizes
+////////////////////////////////////////////////////////////////////////////////
 #define BIOS_SIZE   256
 #define BIOS_OFFSET 0x0000
 
@@ -35,6 +38,9 @@
 #define ZRAM_SIZE   128
 #define ZRAM_OFFSET 0xFF80
 
+////////////////////////////////////////////////////////////////////////////////
+// Memory Mapped IO Addresses
+////////////////////////////////////////////////////////////////////////////////
 #define INTERRUPT_FLAGS_ADDRESS 0xFF0F
 #define INTERRUPT_MASK_ADDRESS  0xFFFF
 
@@ -62,13 +68,21 @@
 
 #define GPU_CONTROL_ADDRESS  0xFF40
 #define GPU_STATUS_ADDRESS   0xFF41
-#define GPU_SCROLLX_ADDRESS  0xFF42
-#define GPU_SCROLLY_ADDRESS  0xFF43
+#define GPU_SCROLLY_ADDRESS  0xFF42
+#define GPU_SCROLLX_ADDRESS  0xFF43
 #define GPU_SCANLINE_ADDRESS 0xFF44
+#define GPU_OAM_DMA          0xFF46
 #define GPU_PALETTE_ADDRESS  0xFF47
 #define GPU_OBP1_ADDRESS     0xFF48
 #define GPU_OBP2_ADDRESS     0xFF49
 
 #define GPU_SPRITE_TABLE_ADDRESS 0xFE00
+
+#define CPU_TIMER_DIV_ADDRESS     0xFF04
+#define CPU_TIMER_COUNTER_ADDRESS 0xFF05
+#define CPU_TIMER_MODULO_ADDRESS  0xFF06
+#define CPU_TIMER_CONTROL_ADDRESS 0xFF07
+
+#define JOYPAD_INPUT_ADDRESS 0xFF00
 
 #endif /* MEMMAP_H_ */

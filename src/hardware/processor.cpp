@@ -14,8 +14,6 @@
 #include "logging.h"
 
 using std::string;
-using std::lock_guard;
-using std::mutex;
 
 const uint8_t Processor::CB_PREFIX = 0xCB;
 
@@ -35,9 +33,8 @@ void Processor::reset()
     m_gpr.h = 0x01;
     m_gpr.l = 0x4D;
 
-    m_interrupts.enable = true;
-    m_interrupts.mask   = 0x00;
-    m_interrupts.status = 0x00;
+    m_interrupts.reset();
+    m_timer.reset();
 }
 
 void Processor::history() const
@@ -88,7 +85,6 @@ bool Processor::interrupt()
 
     InterruptVector vector = InterruptVector::INVALID;
 
-    lock_guard<mutex> lock(m_iLock);
     uint8_t status = m_interrupts.mask & m_interrupts.status;
     
     if (status & uint8_t(InterruptMask::VBLANK)) {
@@ -150,11 +146,9 @@ void Processor::cycle()
 
 #ifdef DEBUG
     bool loop = true;
-    if (((opcode == 0x76) || (opcode == 0x00))
-            && (/*0x0101*/m_pc != m_pc)) {
-        history();
+    if (m_pc - 1 == 0x01AD) {
 
-        while (loop);
+        // while (loop);
     }
 #endif
 
@@ -507,6 +501,7 @@ Processor::Processor(MemoryController & memory)
       m_ticks(1),
       m_interrupts(m_memory.read(INTERRUPT_MASK_ADDRESS), m_memory.read(INTERRUPT_FLAGS_ADDRESS)),
       m_halted(false),
+      m_timer(memory),
       m_flags(m_gpr.f)
 {
     reset();
@@ -913,6 +908,7 @@ Processor::Processor(MemoryController & memory)
         { 0x14, { "RL_h",    [this]() { rotatel(m_gpr.h, false);                 }, 1, 2 } },
         { 0x15, { "RL_l",    [this]() { rotatel(m_gpr.l, false);                 }, 1, 2 } },
 
+        { 0x37, { "SWAP_a", [this]() { swap(m_gpr.a); }, 1, 2 } },
     };
 }
 

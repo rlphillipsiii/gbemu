@@ -14,10 +14,10 @@
 #include <functional>
 #include <utility>
 #include <string>
-#include <mutex>
 #include <list>
 
 #include "interrupt.h"
+#include "timermodule.h"
 
 class MemoryController;
 
@@ -66,9 +66,7 @@ private:
 
     /** Interrupt enable, mask, and status registers */
     Interrupts m_interrupts;
-    
-    std::mutex m_iLock;
-    
+
     bool m_halted;
 
     std::array<uint8_t, 2> m_operands;
@@ -87,6 +85,8 @@ private:
         union { struct { uint8_t e, d; }; uint16_t de; };
         union { struct { uint8_t l, h; }; uint16_t hl; };
     } m_gpr;
+
+    TimerModule m_timer;
 
 #if 0
     struct {
@@ -154,6 +154,7 @@ private:
     void load(uint8_t & reg, uint8_t value);
     void load(uint16_t & reg);
     void load(uint16_t & reg, uint16_t value);
+    void sla(uint8_t & reg);
 
     bool interrupt();
 

@@ -31,7 +31,7 @@ const uint16_t GameBoy::ROM_RAM_SIZE_OFFSET = 0x0149;
 
 const uint8_t GameBoy::ROM_NAME_MAX_LENGTH = 0x10;
 
-// #define STATIC_MEMORY
+//#define STATIC_MEMORY
 
 GameBoy::GameBoy()
     : m_cpu(m_memory),
@@ -66,10 +66,10 @@ bool GameBoy::load(const string & filename)
     input.read(reinterpret_cast<char*>(data.data()), data.size());
 
     RomHeader info = parseHeader(data);
-    printf("ROM name: %s\n", info.name.c_str());
+    LOG("ROM name: %s\n", info.name.c_str());
 
     for (size_t i = 0; i < data.size(); i++) {
-        m_memory.write(ROM_0_OFFSET + i, data.at(i));
+        m_memory.initialize(ROM_0_OFFSET + i, data.at(i));
     }
 
     return true;

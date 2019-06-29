@@ -172,7 +172,6 @@ private:
     inline void updateRenderStateStatus(RenderState state)
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
 
-    void setInterrupt(InterruptMask interrupt);
     void drawSprites(std::vector<GB::RGB> & display);
     void readSprite(SpriteData & data);
     bool isSpriteVisible(const SpriteData & data) const;

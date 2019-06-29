@@ -9,6 +9,8 @@
 #define INTERRUPT_H_
 
 #include <cstdint>
+#include "memmap.h"
+#include "memorycontroller.h"
 
 enum class InterruptVector : uint16_t {
     VBLANK = 0x40,
@@ -37,6 +39,25 @@ struct Interrupts {
 
     uint8_t & mask;
     uint8_t & status;
+
+    inline void reset() { enable = true; mask = status = 0x00; }
+
+    static void set(MemoryController & memory, InterruptMask interrupt)
+    {
+        uint8_t & current = memory.read(INTERRUPT_FLAGS_ADDRESS);
+
+        uint8_t enabled = memory.read(INTERRUPT_MASK_ADDRESS);
+        if (enabled & uint8_t(interrupt)) {
+            current |= uint8_t(interrupt);
+        }
+    }
+
+    static void clear(MemoryController & memory, InterruptMask interrupt)
+    {
+        uint8_t & current = memory.read(INTERRUPT_FLAGS_ADDRESS);
+
+        current &= uint8_t(interrupt);
+    }
 };
 
 #endif /* INTERRUPT_H_ */

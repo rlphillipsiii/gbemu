@@ -74,27 +74,11 @@ private:
         MemoryMappedIO(uint16_t address, uint16_t offset);
 
         void write(uint16_t address, uint8_t value) override;
-        uint8_t & read(uint16_t address) override;
 
         void reset() override;
         
         inline void writeBytes(uint8_t & reg, uint8_t value, uint8_t mask)
-            { reg = ((reg & ~mask) | (value & mask)); }
-
-    private:
-        uint8_t m_interruptFlags;
-        uint8_t m_interruptMask;
-
-        uint8_t m_gpuControl;
-        uint8_t m_gpuStatus;
-        uint8_t m_gpuScrollX;
-        uint8_t m_gpuScrollY;
-        uint8_t m_gpuScanline;
-        uint8_t m_gpuPalette;
-        uint8_t m_gpuOBP1;
-        uint8_t m_gpuOBP2;
-
-        uint8_t m_soundEnable;
+            { reg = m_initializing ? value : ((reg & ~mask) | (value & mask)); }
     };
     ////////////////////////////////////////////////////////////////////////////////
 

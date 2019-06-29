@@ -134,22 +134,14 @@ GPU::GPU(MemoryController & memory)
 
 void GPU::reset()
 {
-    m_status = 0x00;
+    m_control = 0x91;
+    m_status  = 0x85;
+
     updateRenderStateStatus(OAM);
     
     m_state = OAM;
     
     m_x = m_y = m_scanline = m_ticks = 0;
-}
-
-void GPU::setInterrupt(InterruptMask interrupt)
-{
-    uint8_t & current = m_memory.read(INTERRUPT_FLAGS_ADDRESS);
-
-    uint8_t enabled = m_memory.read(INTERRUPT_MASK_ADDRESS);
-    if (enabled & uint8_t(interrupt)) {
-        current |= uint8_t(interrupt);
-    }
 }
 
 GPU::RenderState GPU::next()
@@ -190,7 +182,7 @@ GPU::RenderState GPU::next()
     }
     }
     
-    return m_state;
+    return (isDisplayEnabled()) ? m_state : VBLANK;
 }
 
 void GPU::cycle()
@@ -222,7 +214,7 @@ void GPU::handleHBlank()
 {
     if (HBLANK != (m_status & RENDER_MODE)) {
         if (isHBlankInterruptEnabled()) {
-            setInterrupt(InterruptMask::LCD);
+            Interrupts::set(m_memory, InterruptMask::LCD);
         }
         updateRenderStateStatus(HBLANK);
     }
@@ -238,8 +230,10 @@ void GPU::handleVBlank()
 {
     if (VBLANK != (m_status & RENDER_MODE)) {
         if (isVBlankInterruptEnabled()) {
-            setInterrupt(InterruptMask::VBLANK);
+            Interrupts::set(m_memory, InterruptMask::LCD);
         }
+
+        Interrupts::set(m_memory, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
     }
 
@@ -254,7 +248,7 @@ void GPU::handleOAM()
 {
     if (OAM != (m_status & RENDER_MODE)) {
         if (isOAMInterruptEnabled()) {
-            setInterrupt(InterruptMask::LCD);
+            Interrupts::set(m_memory, InterruptMask::LCD);
         }
         updateRenderStateStatus(OAM);
     }
@@ -427,7 +421,10 @@ vector<GB::RGB> GPU::constrain(const vector<vector<GB::RGB>> & display) const
     vector<GB::RGB> screen(PIXELS_PER_ROW * PIXELS_PER_COL);
     for (uint16_t y = m_y; y < m_y + PIXELS_PER_COL; y++) {
         for (uint16_t x = m_x; x < m_x + PIXELS_PER_ROW; x++) {
-            screen[index++] = display[y][x];
+            uint16_t yIndex = y % (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
+            uint16_t xIndex = x % (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
+
+            screen[index++] = display[yIndex][xIndex];
         }
     }
 

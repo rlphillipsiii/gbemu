@@ -108,8 +108,8 @@ bool MemoryController::WorkingRam::isShadowAddressed(uint16_t address) const
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-MemoryController::MemoryMappedIO::MemoryMappedIO(uint16_t address, uint16_t offset)
-    : Region(address, offset)
+MemoryController::MemoryMappedIO::MemoryMappedIO(uint16_t size, uint16_t offset)
+    : Region(size, offset)
 { }
 
 void MemoryController::MemoryMappedIO::reset()
@@ -120,40 +120,63 @@ void MemoryController::MemoryMappedIO::reset()
 void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 {
     switch (address) {
-    case INTERRUPT_MASK_ADDRESS:  m_interruptMask = value;  break;
-    case INTERRUPT_FLAGS_ADDRESS: m_interruptFlags = value; break;
+    case GPU_STATUS_ADDRESS:
+        writeBytes(Region::read(address), value, 0x78);
+        break;
 
-    case GPU_CONTROL_ADDRESS:  m_gpuControl = value; break;
-    case GPU_STATUS_ADDRESS:   writeBytes(m_gpuStatus, value, 0x78); break;
-    case GPU_SCROLLX_ADDRESS:  m_gpuScrollX = value; break;
-    case GPU_SCROLLY_ADDRESS:  m_gpuScrollY = value; break;
-    case GPU_PALETTE_ADDRESS:  m_gpuPalette = value; break;
-    case GPU_OBP1_ADDRESS:     m_gpuOBP1 = value;    break;
-    case GPU_OBP2_ADDRESS:     m_gpuOBP2 = value;    break;
-    case GPU_SCANLINE_ADDRESS: break;
+    case GPU_OAM_DMA: {
+        uint16_t source = uint16_t(value) * 0x0100;
+        for (uint16_t i = 0; i < GRAPHICS_RAM_SIZE; i++) {
+            Region::write(GRAPHICS_RAM_OFFSET + i, Region::read(source + i));
+        }
 
-    case SOUND_CONTROLLER_CHANNEL: break;
-    case SOUND_CONTROLLER_OUTPUT: break;
-    case SOUND_CONTROLLER_CH1_SWEEP: break;
-    case SOUND_CONTROLLER_CH1_PATTERN: break;
-    case SOUND_CONTROLLER_CH1_ENVELOPE: break;
-    case SOUND_CONTROLLER_CH1_FREQ_LO: break;
-    case SOUND_CONTROLLER_CH1_FREQ_HI: break;
-    case SOUND_CONTROLLER_CH2_PATTERN: break;
-    case SOUND_CONTROLLER_CH2_ENVELOPE: break;
-    case SOUND_CONTROLLER_CH2_FREQ_LO: break;
-    case SOUND_CONTROLLER_CH2_FREQ_HI: break;
-    case SOUND_CONTROLLER_CH3_ENABLE: break;
-    case SOUND_CONTROLLER_CH3_LENGTH: break;
-    case SOUND_CONTROLLER_CH3_LEVEL: break;
-    case SOUND_CONTROLLER_CH3_FREQ_LO: break;
-    case SOUND_CONTROLLER_CH3_FREQ_HI: break;
+        break;
+    }
 
-    case SOUND_CONTROLLER_ENABLE: m_soundEnable = value; break;
+    case JOYPAD_INPUT_ADDRESS:
+        writeBytes(Region::read(address), value, 0x30);
+        break;
+
+    case INTERRUPT_MASK_ADDRESS:
+    case INTERRUPT_FLAGS_ADDRESS:
+
+    case GPU_CONTROL_ADDRESS:
+    case GPU_SCROLLX_ADDRESS:
+    case GPU_SCROLLY_ADDRESS:
+    case GPU_PALETTE_ADDRESS:
+    case GPU_OBP1_ADDRESS:
+    case GPU_OBP2_ADDRESS:
+    case GPU_SCANLINE_ADDRESS:
+
+    case CPU_TIMER_DIV_ADDRESS:
+    case CPU_TIMER_COUNTER_ADDRESS:
+    case CPU_TIMER_MODULO_ADDRESS:
+    case CPU_TIMER_CONTROL_ADDRESS:
+
+    case SOUND_CONTROLLER_CHANNEL:
+    case SOUND_CONTROLLER_OUTPUT:
+    case SOUND_CONTROLLER_CH1_SWEEP:
+    case SOUND_CONTROLLER_CH1_PATTERN:
+    case SOUND_CONTROLLER_CH1_ENVELOPE:
+    case SOUND_CONTROLLER_CH1_FREQ_LO:
+    case SOUND_CONTROLLER_CH1_FREQ_HI:
+    case SOUND_CONTROLLER_CH2_PATTERN:
+    case SOUND_CONTROLLER_CH2_ENVELOPE:
+    case SOUND_CONTROLLER_CH2_FREQ_LO:
+    case SOUND_CONTROLLER_CH2_FREQ_HI:
+    case SOUND_CONTROLLER_CH3_ENABLE:
+    case SOUND_CONTROLLER_CH3_LENGTH:
+    case SOUND_CONTROLLER_CH3_LEVEL:
+    case SOUND_CONTROLLER_CH3_FREQ_LO:
+    case SOUND_CONTROLLER_CH3_FREQ_HI:
+    case SOUND_CONTROLLER_ENABLE:
+        Region::write(address, value);
+        break;
 
     default: {
         if ((address >= SOUND_CONTROLLER_CH3_ARB) &&
             (address < SOUND_CONTROLLER_CH3_ARB + SOUND_CONTROLLER_ARB_BYTES)) {
+            Region::write(address, value);
             break;
         }
 
@@ -163,55 +186,6 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
         }
     }
     }
-}
-
-uint8_t & MemoryController::MemoryMappedIO::read(uint16_t address)
-{
-    static uint8_t temp = 0x00;
-
-    switch (address) {
-    case INTERRUPT_MASK_ADDRESS:  return m_interruptMask;
-    case INTERRUPT_FLAGS_ADDRESS: return m_interruptFlags;
-            
-    case GPU_CONTROL_ADDRESS:  return m_gpuControl;
-    case GPU_STATUS_ADDRESS:   return m_gpuStatus;
-    case GPU_SCROLLX_ADDRESS:  return m_gpuScrollX;
-    case GPU_SCROLLY_ADDRESS:  return m_gpuScrollY;
-    case GPU_SCANLINE_ADDRESS: return m_gpuScanline;
-    case GPU_PALETTE_ADDRESS:  return m_gpuPalette;
-    case GPU_OBP1_ADDRESS:     return m_gpuOBP1;
-    case GPU_OBP2_ADDRESS:     return m_gpuOBP2;
-
-    case SOUND_CONTROLLER_CHANNEL: break;
-    case SOUND_CONTROLLER_OUTPUT: break;
-    case SOUND_CONTROLLER_CH1_SWEEP: break;
-    case SOUND_CONTROLLER_CH1_PATTERN: break;
-    case SOUND_CONTROLLER_CH1_ENVELOPE: break;
-    case SOUND_CONTROLLER_CH1_FREQ_LO: break;
-    case SOUND_CONTROLLER_CH1_FREQ_HI: break;
-    case SOUND_CONTROLLER_CH2_PATTERN: break;
-    case SOUND_CONTROLLER_CH2_ENVELOPE: break;
-    case SOUND_CONTROLLER_CH2_FREQ_LO: break;
-    case SOUND_CONTROLLER_CH2_FREQ_HI: break;
-    case SOUND_CONTROLLER_CH3_ENABLE: break;
-    case SOUND_CONTROLLER_CH3_LENGTH: break;
-    case SOUND_CONTROLLER_CH3_LEVEL: break;
-    case SOUND_CONTROLLER_CH3_FREQ_LO: break;
-    case SOUND_CONTROLLER_CH3_FREQ_HI: break;
-
-    case SOUND_CONTROLLER_ENABLE: return m_soundEnable;
-    default: {
-        if ((address >= SOUND_CONTROLLER_CH3_ARB) &&
-            (address < SOUND_CONTROLLER_CH3_ARB + SOUND_CONTROLLER_ARB_BYTES)) {
-            break;
-        }
-
-        LOG("MemoryController::MemoryMappedIO::read : unhandled IO address 0x%04x\n", address);
-        assert(0);
-    }
-    }
-
-    return temp;
 }
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -281,7 +255,7 @@ void MemoryController::write(uint16_t address, uint8_t value)
     if (region) {
         region->write(address, value);
     } else {
-        printf("MemoryController::write - Unhandled address 0x%04x\n", address);
+        LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
         assert(0);
     }
 }
@@ -294,7 +268,7 @@ uint8_t & MemoryController::read(uint16_t address)
         return region->read(address);
     }
 
-    printf("MemoryController::read - Unhandled address 0x%04x\n", address);
+    LOG("MemoryController::read - Unhandled address 0x%04x\n", address);
     assert(0);
 
     return DUMMY;
