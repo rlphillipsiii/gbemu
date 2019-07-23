@@ -23,7 +23,7 @@ class MemoryController;
 
 class Processor {
 public:
-    Processor(MemoryController & memory);
+    explicit Processor(MemoryController & memory);
     ~Processor() = default;
 
     void reset();

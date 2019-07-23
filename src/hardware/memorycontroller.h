@@ -78,7 +78,7 @@ private:
         void reset() override;
         
         inline void writeBytes(uint8_t & reg, uint8_t value, uint8_t mask)
-            { reg = m_initializing ? value : ((reg & ~mask) | (value & mask)); }
+            { reg = ((reg & ~mask) | (value & mask)); }
     };
     ////////////////////////////////////////////////////////////////////////////////
 

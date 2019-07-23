@@ -11,27 +11,30 @@
 #include <cstdint>
 #include <vector>
 #include <array>
+#include <memory>
 
-// #include "gameboyinterface.h"
 #include "interrupt.h"
 #include "memmap.h"
+
+#define GPU_SPRITE_COUNT 40
 
 class MemoryController;
 
 namespace GB { struct RGB; };
 
+typedef std::vector<std::shared_ptr<GB::RGB>> ColorArray;
 typedef std::vector<uint8_t> Tile;
 typedef std::array<GB::RGB, 4> BWPalette;
 
 class GPU {
 public:
-    GPU(MemoryController & memory);
+    explicit GPU(MemoryController & memory);
     ~GPU() = default;
 
     void cycle();
     void reset();
 
-    std::vector<GB::RGB> getColorMap();
+    ColorArray getColorMap();
 
     inline uint8_t scanline() const { return m_scanline; }
     
@@ -77,16 +80,35 @@ private:
     static const uint8_t ALPHA_TRANSPARENT;
 
     struct SpriteData {
-        uint8_t x;
-        uint8_t y;
+        const uint8_t & x;
+        const uint8_t & y;
 
+        const uint8_t & flags;
+
+        const uint8_t & palette0;
+        const uint8_t & palette1;
+        
         uint8_t height;
-        uint8_t flags;
 
         uint16_t address;
         uint16_t pointer;
 
-        std::vector<GB::RGB> colors;
+        ColorArray colors;
+
+        SpriteData(
+            const uint8_t & col,
+            const uint8_t & row,
+            const uint8_t & atts,
+            const uint8_t & pal0,
+            const uint8_t & pal1);
+
+        ~SpriteData() = default;
+        
+        std::string toString() const;
+        bool isVisible() const;
+        void render(ColorArray & display, uint8_t dPalette) const;
+
+        uint8_t palette() const;
     };
 
     enum TileMapIndex { TILEMAP_0 = 0, TILEMAP_1 = 1, };
@@ -143,6 +165,8 @@ private:
     uint8_t & m_control;
     uint8_t & m_status;
     uint8_t & m_palette;
+    uint8_t & m_sPalette0;
+    uint8_t & m_sPalette1;
     uint8_t & m_x;
     uint8_t & m_y;
     uint8_t & m_scanline;
@@ -153,14 +177,16 @@ private:
     
     bool m_cgb;
 
-    std::vector<GB::RGB> lookup(TileMapIndex mIndex, TileSetIndex sIndex);
+    std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
+    
+    ColorArray lookup(TileMapIndex mIndex, TileSetIndex sIndex);
     Tile lookup(uint16_t address);
     Tile lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
-    std::vector<GB::RGB> toRGB(const Tile & tile, bool white) const;
-    std::vector<GB::RGB> constrain(const std::vector<std::vector<GB::RGB>> & display) const;
+    ColorArray toRGB(const uint8_t & pal, const Tile & tile, bool white) const;
+    ColorArray constrain(const std::vector<ColorArray> & display) const;
     
-    GB::RGB palette(uint8_t pixel, bool white) const;
+    std::shared_ptr<GB::RGB> palette(const uint8_t & pal, uint8_t pixel, bool white) const;
 
     void handleHBlank();
     void handleVBlank();
@@ -172,9 +198,8 @@ private:
     inline void updateRenderStateStatus(RenderState state)
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
 
-    void drawSprites(std::vector<GB::RGB> & display);
+    void drawSprites(ColorArray & display);
     void readSprite(SpriteData & data);
-    bool isSpriteVisible(const SpriteData & data) const;
 };
 
 #endif /* SRC_GPU_H_ */

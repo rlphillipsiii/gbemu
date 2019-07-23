@@ -12,13 +12,48 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <sstream>
+#include <iomanip>
 
 #define LCD_SCREEN_WIDTH  160
 #define LCD_SCREEN_HEIGHT 144
 
 namespace GB {
-    struct RGB { uint8_t red; uint8_t green; uint8_t blue; uint8_t alpha; };
+    struct RGB {
+        uint8_t red;
+        uint8_t green;
+        uint8_t blue;
+        uint8_t alpha;
+
+        RGB(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+            : red(r), green(g), blue(b), alpha(a) { }
+              
+        RGB() : RGB(0, 0, 0, 0) { }
+
+        RGB(const RGB & other)
+            : RGB(other.red, other.blue, other.green, other.alpha) { }
+
+        bool operator==(const RGB & other)
+        {
+            return ((this->red == other.red) && (this->green == other.green)
+                    && (this->blue == other.blue) && (this->alpha == other.alpha));
+        }
+
+        std::string toString() const
+        {
+            std::stringstream stream;
+            stream << std::hex << std::setw(2) <<
+                "r:0x" << int(this->red) << " " <<
+                "g:0x" << int(this->green) << " " <<
+                "b:0x" << int(this->blue) << " " <<
+                "a:0x" << int(this->alpha) << std::endl;
+            
+            return stream.str();
+        }
+    };
 };
+
+typedef std::vector<std::shared_ptr<GB::RGB>> ColorArray;
 
 class GameBoyInterface {
 public:
@@ -33,7 +68,9 @@ public:
     virtual void start() = 0;
     virtual void stop() = 0;
 
-    virtual std::vector<GB::RGB> getRGB() = 0;
+    virtual ColorArray getRGB() = 0;
+
+    virtual void advance() = 0;
 };
 
 #endif /* GAMEBOYINTERFACE_H_ */

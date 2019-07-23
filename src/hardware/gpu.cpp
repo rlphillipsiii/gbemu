@@ -11,6 +11,10 @@
 #include <utility>
 #include <algorithm>
 #include <memory>
+#include <sstream>
+#include <iomanip>
+#include <string>
+#include <iostream>
 
 #include "gpu.h"
 #include "processor.h"
@@ -18,11 +22,14 @@
 #include "memmap.h"
 #include "logging.h"
 #include "gameboyinterface.h"
+#include "iiterator.h"
 
 using std::vector;
 using std::array;
 using std::pair;
 using std::shared_ptr;
+using std::stringstream;
+using std::string;
 
 const BWPalette GPU::NON_CGB_PALETTE = {{
     { 255, 255, 255, 0xFF }, // white
@@ -76,49 +83,13 @@ const uint16_t GPU::TILE_PIXELS_PER_COL = 8;
 
 const uint8_t GPU::ALPHA_TRANSPARENT = 0x00;
 
-////////////////////////////////////////////////////////////////////////////////
-class IndexIterator {
-public:
-    IndexIterator(int lower, int upper, bool reverse)
-        : m_current((reverse) ? upper : lower),
-          m_lower(lower),
-          m_upper(upper),
-          m_reverse(reverse)
-    {
-
-    }
-    ~IndexIterator() = default;
-
-    inline void reset() { m_current = (m_reverse) ? m_upper : m_lower; }
-
-    inline bool hasNext() const
-    {
-        return (m_reverse) ? (m_current >= m_lower) : (m_current <= m_upper);
-    }
-
-    inline int next()
-    {
-        int index = m_current;
-        m_current = (m_reverse) ? (m_current - 1) : (m_current + 1);
-
-        return index;
-    }
-
-private:
-    int m_current;
-
-    int m_lower;
-    int m_upper;
-
-    int m_reverse;
-};
-////////////////////////////////////////////////////////////////////////////////
-
 GPU::GPU(MemoryController & memory)
     : m_memory(memory),
       m_control(m_memory.read(GPU_CONTROL_ADDRESS)),
       m_status(m_memory.read(GPU_STATUS_ADDRESS)),
       m_palette(m_memory.read(GPU_PALETTE_ADDRESS)),
+      m_sPalette0(m_memory.read(GPU_OBP1_ADDRESS)),
+      m_sPalette1(m_memory.read(GPU_OBP2_ADDRESS)),
       m_x(m_memory.read(GPU_SCROLLX_ADDRESS)),
       m_y(m_memory.read(GPU_SCROLLY_ADDRESS)),
       m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
@@ -126,10 +97,22 @@ GPU::GPU(MemoryController & memory)
 {
     reset();
 
-    LOG("TILE SET 0: 0x%04x\n", TILE_SET_0_OFFSET);
-    LOG("TILE SET 1: 0x%04x\n", TILE_SET_1_OFFSET);
-    LOG("TILE MAP 0: 0x%04x\n", TILE_MAP_0_OFFSET);
-    LOG("TILE_MAP 1: 0x%04x\n", TILE_MAP_1_OFFSET);
+    for (size_t i = 0; i < m_sprites.size(); i++) {
+        uint16_t address = SPRITE_ATTRIBUTES_TABLE + (i * SPRITE_BYTES_PER_ATTRIBUTE);
+
+        uint8_t & y     = m_memory.read(address);
+        uint8_t & x     = m_memory.read(address + 1);
+        uint8_t & flags = m_memory.read(address + 3);
+
+        shared_ptr<SpriteData> data(new SpriteData(x, y, flags, m_sPalette0, m_sPalette1));
+        if (!data) { assert(0); }
+
+        data->address = address;
+        data->pointer = GPU_RAM_OFFSET;
+        data->height  = SPRITE_HEIGHT_NORMAL;
+        
+        m_sprites[i] = data;
+    }
 }
 
 void GPU::reset()
@@ -279,7 +262,7 @@ Tile GPU::lookup(uint16_t address)
     return tile;
 }
 
-vector<GB::RGB> GPU::getColorMap()
+ColorArray GPU::getColorMap()
 {
     if (isWindowEnabled()) {
 
@@ -324,37 +307,37 @@ Tile GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t 
     return lookup(location);
 }
 
-GB::RGB GPU::palette(uint8_t pixel, bool white) const
+shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
 {
     if (m_cgb) {
-
+        assert(0);
     }
 
     uint8_t index = pixel & 0x03;
 
-    uint8_t color = (m_palette >> (index * 2)) & 0x03;
-    GB::RGB rgb = NON_CGB_PALETTE[color];
+    uint8_t color = (pal >> (index * 2)) & 0x03;
+    shared_ptr<GB::RGB> rgb(new GB::RGB(NON_CGB_PALETTE[color]));;
 
     // If the color palette entry is 0, and we are not allowing the color white, then we
     // need to set our alpha blend entry to transparent so that this pixel won't show up
     // on the display when we go to draw the screen.
     if ((0 == color) && !white) {
-        rgb.alpha = ALPHA_TRANSPARENT;
+        rgb->alpha = ALPHA_TRANSPARENT;
     }
     return rgb;
 }
 
-vector<GB::RGB> GPU::toRGB(const Tile & tile, bool white) const
+ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
 {
-    vector<GB::RGB> colors;
+    ColorArray colors;
 
     for (size_t i = 0; i < tile.size(); i += 2) {
         uint8_t lower = tile.at(i);
         uint8_t upper = tile.at(i + 1);
 
-        for (uint8_t i = 0; i < 8; i++) {
+        for (uint8_t j = 0; j < 8; j++) {
             // The left most pixel starts at the most significant bit.
-            uint8_t shift = 7 - i;
+            uint8_t shift = 7 - j;
 
             // Each pixel is spread across two bytes i.e. the least significant bit of
             // the left most pixel is at the most significant bit of the first byte and
@@ -363,20 +346,20 @@ vector<GB::RGB> GPU::toRGB(const Tile & tile, bool white) const
             uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
 
             // Each pixel needs to be run through a palette to get the actual color.
-            colors.push_back(palette(pixel, white));
+            colors.push_back(palette(pal, pixel, white));
         }
     }
 
     return colors;
 }
 
-vector<GB::RGB> GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
+ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
 {
-    vector<vector<GB::RGB>> colors;
+    vector<ColorArray> colors;
 
     // Reserve enough space to fit our 32x32 RGBA pixel matrix.
     colors.resize(TILE_MAP_COLUMNS * TILE_PIXELS_PER_COL);
-    for (vector<GB::RGB> & row : colors) {
+    for (ColorArray & row : colors) {
         row.resize(TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
     }
 
@@ -385,7 +368,7 @@ vector<GB::RGB> GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
     for (uint16_t i = 0; i < TILE_MAP_ROWS; i++) {
         for (uint16_t j = 0; j < TILE_MAP_COLUMNS; j++) {
             // Lookup the tile that we want and translate it to RGB.
-            vector<GB::RGB> rgb = toRGB(lookup(mIndex, sIndex, j, i), true);
+            ColorArray rgb = toRGB(m_palette, lookup(mIndex, sIndex, j, i), true);
 
             // Each tile is 8x8, so we first need to figure out the coordinates
             // of the top left corner of the tile we are translating.
@@ -405,41 +388,30 @@ vector<GB::RGB> GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
         }
     }
 
-    vector<GB::RGB> screen = constrain(colors);
+    ColorArray screen = constrain(colors);
     drawSprites(screen);
 
     return screen;
 }
 
-vector<GB::RGB> GPU::constrain(const vector<vector<GB::RGB>> & display) const
+ColorArray GPU::constrain(const vector<ColorArray> & display) const
 {
     uint16_t index = 0;
 
     // We have an array of the whole map, so now we need to build a flat array of the
     // pixels that we need to display on screen.  The x and y scroll registers determine
     // where in the 32x32 map that we should place the top left corner.
-    vector<GB::RGB> screen(PIXELS_PER_ROW * PIXELS_PER_COL);
+    ColorArray screen(PIXELS_PER_ROW * PIXELS_PER_COL);
     for (uint16_t y = m_y; y < m_y + PIXELS_PER_COL; y++) {
         for (uint16_t x = m_x; x < m_x + PIXELS_PER_ROW; x++) {
-            uint16_t yIndex = y % (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
-            uint16_t xIndex = x % (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
+            uint16_t yIndex = y % (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
+            uint16_t xIndex = x % (TILE_MAP_COLUMNS * TILE_PIXELS_PER_COL);
 
             screen[index++] = display[yIndex][xIndex];
         }
     }
 
     return screen;
-}
-
-bool GPU::isSpriteVisible(const SpriteData & data) const
-{
-    if ((0 == data.x) || (0 == data.y)) { return false; }
-
-    if ((data.x >= PIXELS_PER_ROW + 8) || (data.y >= PIXELS_PER_COL + 16)) {
-        return false;
-    }
-
-    return true;
 }
 
 void GPU::readSprite(SpriteData & data)
@@ -452,7 +424,7 @@ void GPU::readSprite(SpriteData & data)
         tile.insert(tile.end(), additional.begin(), additional.end());
     }
 
-    vector<GB::RGB> temp = toRGB(tile, false);
+    ColorArray temp = toRGB(data.palette(), tile, false);
 
     bool flipX = data.flags & FLIP_X;
     bool flipY = data.flags & FLIP_Y;
@@ -465,7 +437,6 @@ void GPU::readSprite(SpriteData & data)
     }
 
     IndexIterator yIndex(0, data.height - 1, flipY);
-
     while (yIndex.hasNext()) {
         IndexIterator xIndex(0, SPRITE_WIDTH - 1, flipX);
 
@@ -480,26 +451,16 @@ void GPU::readSprite(SpriteData & data)
     }
 }
 
-void GPU::drawSprites(vector<GB::RGB> & display)
+void GPU::drawSprites(ColorArray & display)
 {
-    if (!isSpriteEnabled()) {
-        return;
-    }
+    if (!isSpriteEnabled()) { return; }
 
     vector<shared_ptr<SpriteData>> enabled;
 
-    for (uint8_t i = 0; i < SPRITE_COUNT; i++) {
-        shared_ptr<SpriteData> data(new SpriteData());
+    for (shared_ptr<SpriteData> & data : m_sprites) {
         if (!data) { continue; }
 
-        data->address = SPRITE_ATTRIBUTES_TABLE + (i * SPRITE_BYTES_PER_ATTRIBUTE);
-
-        // Read out the x and y position.  They are stored in memory offset by 8 and
-        // 16 respectively.
-        data->y = m_memory.read(data->address) - 16;
-        data->x = m_memory.read(data->address + 1) - 8;
-
-        data->pointer = TILE_SET_0_OFFSET + m_memory.read(data->address + 2);
+        data->pointer = TILE_SET_0_OFFSET + (TILE_SIZE * m_memory.read(data->address + 2));
 
         // Figure out the height of the sprite.  If the height of the sprite, is extended
         // (8x16), then we need to mask out the least significant bit and use the masked
@@ -510,9 +471,7 @@ void GPU::drawSprites(vector<GB::RGB> & display)
             data->pointer &= 0xFE;
         }
 
-        data->flags = m_memory.read(data->address + 3);
-
-        if (isSpriteVisible(*data)) {
+        if (data->isVisible()) {
             readSprite(*data);
             enabled.push_back(data);
         }
@@ -525,28 +484,90 @@ void GPU::drawSprites(vector<GB::RGB> & display)
     //
     // In CGB mode, priority is determined by address (lower address = higher priority).
     // In non-CGB mode, the priority first determined by the x position (farther to the left
-    // has higher priority).  If the x position matches, then the address is to determine
-    // the priority (same rule as CGB mode).
+    // has higher priority).  If the x position matches, then the address is used to
+    // determine the priority (same rule as CGB mode).
     std::sort(enabled.begin(), enabled.end(),
             [this](const shared_ptr<SpriteData> & a, const shared_ptr<SpriteData> & b) {
                 return (this->m_cgb || (a->x == b->x)) ? (a->address < b->address) : (a->x < b->x);
         });
 
-    for (const shared_ptr<SpriteData> & ref : enabled) {
-        const SpriteData & sprite = *ref;
+    for (const shared_ptr<SpriteData> & sprite : enabled) {
+        sprite->render(display, m_palette);
+    }
+}
 
-        for (size_t i = 0; i < sprite.colors.size(); i++) {
-            uint8_t x = sprite.x + (i % SPRITE_WIDTH);
-            uint8_t y = sprite.y + (i / SPRITE_WIDTH);
+////////////////////////////////////////////////////////////////////////////////
+GPU::SpriteData::SpriteData(
+    const uint8_t & col,
+    const uint8_t & row,
+    const uint8_t & atts,
+    const uint8_t & p0,
+    const uint8_t & p1)
+    : x(col),
+      y(row),
+      flags(atts),
+      palette0(p0),
+      palette1(p1)
+{
 
-            uint16_t index = (y * PIXELS_PER_ROW) + x;
+}
 
-            // Look at the alpha blend and make sure that this sprite pixel isn't supposed to be
-            // transparent.  If it is, then we need to leave our display alone.
-            const GB::RGB & color = sprite.colors.at(i);
-            if (ALPHA_TRANSPARENT != color.alpha) {
-                display[index] = color;
+uint8_t GPU::SpriteData::palette() const
+{
+    return ((this->flags & PALETTE_NUMBER_NON_CGB) ? palette1 : palette0);
+}
+
+bool GPU::SpriteData::isVisible() const
+{
+    if ((0 == this->x) || (0 == this->y)) { return false; }
+
+    if ((this->x >= PIXELS_PER_ROW + 8) || (this->y >= PIXELS_PER_COL + 16)) {
+        return false;
+    }
+
+    return true;
+}
+
+void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette) const
+{
+    for (size_t i = 0; i < this->colors.size(); i++) {
+        uint8_t x = this->x + (i % SPRITE_WIDTH) - 8;
+        uint8_t y = this->y + (i / SPRITE_WIDTH) - 16;
+
+        uint16_t index = (y * PIXELS_PER_ROW) + x;
+        if (index >= int(display.size())) {
+            continue;
+        }
+
+        // Look at the alpha blend and make sure that this sprite pixel isn't supposed to be
+        // transparent.  If it is, then we need to leave our display alone.
+        const shared_ptr<GB::RGB> & color = this->colors.at(i);
+        if (ALPHA_TRANSPARENT == color->alpha) {
+            continue;
+        }
+
+        // Check the sprite's priority.  If the sprite priority bit is set, the pixels are
+        // supposed to be behind the background (i.e. not shown) unless the background pixel
+        // that the sprite overlaps with is set to color 0.
+        if (this->flags & OBJECT_PRIORITY) {
+            const GB::RGB & bg = NON_CGB_PALETTE[dPalette & 0x03];
+            if (!(*display[index] == bg)) {
+                continue;
             }
         }
+        display[index] = color;
     }
+}
+
+string GPU::SpriteData::toString() const
+{
+    stringstream stream;
+
+    stream << "Sprite: " << std::hex << "0x" << this->address << std::endl;
+    stream << "    Location: (" << this->x << ", " << this->y << ") " << std::endl;;
+    stream << "    Height:   " << int(this->height) << std::endl;
+    stream << "    Flags:    " << int(this->flags) << std::endl;
+    stream << "    Pointer:  " << this->pointer;
+    
+    return stream.str();
 }

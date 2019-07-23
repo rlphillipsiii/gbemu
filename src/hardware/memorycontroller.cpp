@@ -119,6 +119,8 @@ void MemoryController::MemoryMappedIO::reset()
 
 void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 {
+    if (m_initializing) { Region::write(address, value); return; }
+    
     switch (address) {
     case GPU_STATUS_ADDRESS:
         writeBytes(Region::read(address), value, 0x78);
@@ -180,10 +182,8 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
             break;
         }
 
-        if (!m_initializing) {
-            LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
-            assert(0);
-        }
+        LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
+        assert(0);
     }
     }
 }

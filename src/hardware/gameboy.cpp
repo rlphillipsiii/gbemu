@@ -13,6 +13,7 @@
 #include <chrono>
 #include <iostream>
 #include <fstream>
+#include <mutex>
 
 #include "gameboy.h"
 #include "memmap.h"
@@ -22,6 +23,8 @@ using std::string;
 using std::vector;
 using std::ifstream;
 using std::chrono::high_resolution_clock;
+using std::unique_lock;
+using std::mutex;
 
 const uint16_t GameBoy::ROM_HEADER_LENGTH   = 0x0180;
 const uint16_t GameBoy::ROM_NAME_OFFSET     = 0x0134;
@@ -36,16 +39,19 @@ const uint8_t GameBoy::ROM_NAME_MAX_LENGTH = 0x10;
 GameBoy::GameBoy()
     : m_cpu(m_memory),
       m_gpu(m_memory),
-      m_run(false)
+      m_run(false),
+      m_advance(false)
 {
 #ifdef STATIC_MEMORY
-    ifstream ram("memory.bin", std::ios::in | std::ios::binary);
-    for (int i = GPU_RAM_OFFSET; i <= 0xFFFF; i++) {
+    ifstream ram("memory2.bin", std::ios::in | std::ios::binary);
+    //for (int i = GPU_RAM_OFFSET; i <= 0xFFFF; i++) {
+    for (int i = 0; i <= 0xFFFF; i++) {
         uint8_t b;
         ram.read(reinterpret_cast<char*>(&b), 1);
         
         m_memory.initialize(i, b);
     }
+    std::cout << "Memory controller initialized" << std::endl;
 #endif
 }
 
@@ -110,10 +116,21 @@ void GameBoy::run()
 {
     LOG("%s\n", "Gameboy thread running");
 
+    int count = 0;
+    
     while (m_run.load()) {
-        m_cpu.cycle();
+        while (count++ < 133333) {
+            m_cpu.cycle();
 
-        m_gpu.cycle();
+            m_gpu.cycle();
+        }
+
+        count = 0;
+
+        unique_lock<mutex> lock(m_sync);
+        m_wait.wait(lock, [this]() { return m_advance.load(); });
+
+        m_advance = false;
     }
 }
 
@@ -124,4 +141,12 @@ void GameBoy::stop()
     if (m_thread.joinable()) {
         m_thread.join();
     }
+}
+
+void GameBoy::advance()
+{
+#ifndef STATIC_MEMORY
+    m_advance = true;
+    m_wait.notify_one();
+#endif
 }

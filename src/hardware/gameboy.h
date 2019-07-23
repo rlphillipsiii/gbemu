@@ -13,6 +13,8 @@
 #include <atomic>
 #include <thread>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
 
 #include "gameboyinterface.h"
 #include "gpu.h"
@@ -29,7 +31,9 @@ public:
     void start() override;
     void stop() override;
 
-    std::vector<GB::RGB> getRGB() override { return m_gpu.getColorMap(); }
+    void advance() override;
+    
+    ColorArray getRGB() override { return m_gpu.getColorMap(); }
     
 private:
     static const uint16_t ROM_HEADER_LENGTH;
@@ -49,8 +53,12 @@ private:
     Processor m_cpu;
     GPU m_gpu;
 
+    std::condition_variable m_wait;
+    std::mutex m_sync;
+    
     std::atomic<bool> m_run;
-
+    std::atomic<bool> m_advance;
+    
     std::thread m_thread;
 
     void run();

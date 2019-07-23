@@ -22,6 +22,7 @@ HEADERS += gameboy.h
 HEADERS += interrupt.h
 HEADERS += memmap.h
 HEADERS += logging.h
+HEADERS += iiterator.h
 HEADERS += $$PUBLIC_HEADERS
 
 SOURCES += gpu.cpp

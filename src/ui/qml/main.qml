@@ -8,14 +8,14 @@ import GameBoy.Screen 1.0
 ApplicationWindow {
     id: m_root
     visible: true
-    width:  800
-	height: 500
+    width:  500
+    height: 500
     title: "GBC"
     
-	Screen {
-		id: screen
-		
-		width:  800
-		height: 500
-	}
+    Screen {
+        id: screen
+                
+        width:  500
+        height: 500
+    }
 }

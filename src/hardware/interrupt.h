@@ -32,7 +32,7 @@ enum class InterruptMask : uint8_t {
 
 struct Interrupts {
     Interrupts(uint8_t & m, uint8_t & s)
-        : mask(m), status(s) { }
+        : enable(true), mask(m), status(s) { }
     ~Interrupts() = default;
 
     bool enable;

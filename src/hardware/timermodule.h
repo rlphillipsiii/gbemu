@@ -25,7 +25,7 @@ public:
     uint8_t & m_modulo;
     uint8_t & m_control;
 
-    TimerModule(MemoryController & memory);
+    explicit TimerModule(MemoryController & memory);
     ~TimerModule() = default;
 
     void reset();

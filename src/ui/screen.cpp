@@ -4,14 +4,17 @@
 #include <QSGGeometryNode>
 #include <QSGGeometry>
 #include <QSGVertexColorMaterial>
+#include <QThread>
 
 #include <cassert>
 #include <vector>
+#include <iostream>
 
 #include "screen.h"
 #include "gameboyinterface.h"
 
 using std::vector;
+using std::shared_ptr;
 
 Screen::Screen(QQuickItem *parent)
     : QQuickPaintedItem(parent),
@@ -50,14 +53,16 @@ void Screen::stop()
 
 void Screen::paint(QPainter *painter)
 {
-    vector<GB::RGB> rgb = m_console->getRGB();
+    ColorArray rgb = m_console->getRGB();
+    m_console->advance();
+    
     for (size_t i = 0; i < rgb.size(); i++) {
-        const GB::RGB & color = rgb.at(i);
+        const shared_ptr<GB::RGB> & color = rgb.at(i);
 
         int x = i % m_width;
         int y = i / m_width;
 
-        m_canvas.setPixel(x, y, qRgba(color.red, color.green, color.blue, color.alpha));
+        m_canvas.setPixel(x, y, qRgba(color->red, color->green, color->blue, color->alpha));
     }
 
     painter->drawImage(0, 0, m_canvas.scaled(width(), height()));
