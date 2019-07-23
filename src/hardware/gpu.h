@@ -133,7 +133,7 @@ private:
     };
 
     inline bool isBackgroundEnabled() const { return (m_control & BACKGROUND_ENABLE); }
-    inline bool isSpriteEnabled()     const { return (m_control & SPRITE_ENABLE);     }
+    inline bool areSpritesEnabled()   const { return (m_control & SPRITE_ENABLE);     }
     inline bool isWindowEnabled()     const { return (m_control & WINDOW_ENABLE);     }
     inline bool isDisplayEnabled()    const { return (m_control & DISPLAY_ENABLE);    }
 

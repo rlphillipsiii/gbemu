@@ -71,7 +71,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////////
     class MemoryMappedIO : public Region {
     public:
-        MemoryMappedIO(uint16_t address, uint16_t offset);
+        MemoryMappedIO(MemoryController & parent, uint16_t address, uint16_t offset);
 
         void write(uint16_t address, uint8_t value) override;
 
@@ -79,6 +79,9 @@ private:
         
         inline void writeBytes(uint8_t & reg, uint8_t value, uint8_t mask)
             { reg = ((reg & ~mask) | (value & mask)); }
+
+    private:
+        MemoryController & m_parent;
     };
     ////////////////////////////////////////////////////////////////////////////////
 

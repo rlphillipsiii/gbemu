@@ -310,6 +310,7 @@ Tile GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t 
 shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
 {
     if (m_cgb) {
+        // TODO: do something with cgb mode here
         assert(0);
     }
 
@@ -453,7 +454,7 @@ void GPU::readSprite(SpriteData & data)
 
 void GPU::drawSprites(ColorArray & display)
 {
-    if (!isSpriteEnabled()) { return; }
+    if (!areSpritesEnabled()) { return; }
 
     vector<shared_ptr<SpriteData>> enabled;
 

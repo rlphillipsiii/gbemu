@@ -108,9 +108,15 @@ bool MemoryController::WorkingRam::isShadowAddressed(uint16_t address) const
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-MemoryController::MemoryMappedIO::MemoryMappedIO(uint16_t size, uint16_t offset)
-    : Region(size, offset)
-{ }
+MemoryController::MemoryMappedIO::MemoryMappedIO(
+    MemoryController & parent,
+    uint16_t size,
+    uint16_t offset)
+    : Region(size, offset),
+      m_parent(parent)
+{
+    Region::write(JOYPAD_INPUT_ADDRESS, 0xFF);
+}
 
 void MemoryController::MemoryMappedIO::reset()
 {
@@ -129,7 +135,7 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
     case GPU_OAM_DMA: {
         uint16_t source = uint16_t(value) * 0x0100;
         for (uint16_t i = 0; i < GRAPHICS_RAM_SIZE; i++) {
-            Region::write(GRAPHICS_RAM_OFFSET + i, Region::read(source + i));
+            m_parent.write(GRAPHICS_RAM_OFFSET + i, m_parent.read(source + i));
         }
 
         break;
@@ -197,7 +203,7 @@ MemoryController::MemoryController()
       m_ext(EXT_RAM_SIZE, EXT_RAM_OFFSET),
       m_working(WORKING_RAM_SIZE, WORKING_RAM_OFFSET),
       m_graphics(GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
-      m_io(IO_SIZE, IO_OFFSET),
+      m_io(*this, IO_SIZE, IO_OFFSET),
       m_zero(ZRAM_SIZE, ZRAM_OFFSET)
 {
     reset();
