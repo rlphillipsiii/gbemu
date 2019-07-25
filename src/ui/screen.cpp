@@ -9,12 +9,21 @@
 #include <cassert>
 #include <vector>
 #include <iostream>
+#include <unordered_map>
 
 #include "screen.h"
 #include "gameboyinterface.h"
 
 using std::vector;
 using std::shared_ptr;
+using std::unordered_map;
+
+const unordered_map<int, GameBoyInterface::JoyPadButton> Screen::BUTTON_MAP = {
+    { Qt::Key_Left,  GameBoyInterface::JOYPAD_LEFT  },
+    { Qt::Key_Right, GameBoyInterface::JOYPAD_RIGHT },
+    { Qt::Key_Down,  GameBoyInterface::JOYPAD_DOWN  },
+    { Qt::Key_Up,    GameBoyInterface::JOYPAD_UP    },
+};
 
 Screen::Screen(QQuickItem *parent)
     : QQuickPaintedItem(parent),
@@ -49,6 +58,22 @@ void Screen::stop()
     m_timer.stop();
 
     m_console->stop();
+}
+
+void Screen::keyPressEvent(QKeyEvent *event)
+{
+    auto iterator = BUTTON_MAP.find(event->key());
+    if (BUTTON_MAP.end() != iterator) {
+        m_console->setButton(iterator->second);
+    }
+}
+
+void Screen::keyReleaseEvent(QKeyEvent *event)
+{
+    auto iterator = BUTTON_MAP.find(event->key());
+    if (BUTTON_MAP.end() != iterator) {
+        m_console->clrButton(iterator->second);
+    }
 }
 
 void Screen::paint(QPainter *painter)

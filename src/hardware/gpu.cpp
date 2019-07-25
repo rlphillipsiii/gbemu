@@ -264,6 +264,9 @@ Tile GPU::lookup(uint16_t address)
 
 ColorArray GPU::getColorMap()
 {
+    // std::string temp;
+    // std::getline(std::cin, temp);
+    
     if (isWindowEnabled()) {
 
     } else {
@@ -473,7 +476,6 @@ void GPU::drawSprites(ColorArray & display)
         }
 
         if (data->isVisible()) {
-            readSprite(*data);
             enabled.push_back(data);
         }
     }
@@ -493,7 +495,7 @@ void GPU::drawSprites(ColorArray & display)
         });
 
     for (const shared_ptr<SpriteData> & sprite : enabled) {
-        sprite->render(display, m_palette);
+        sprite->render(*this, display, m_palette);
     }
 }
 
@@ -529,8 +531,12 @@ bool GPU::SpriteData::isVisible() const
     return true;
 }
 
-void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette) const
+void GPU::SpriteData::render(GPU & gpu, ColorArray & display, uint8_t dPalette)
 {
+    //std::cout << this->toString() << std::endl;
+    
+    gpu.readSprite(*this);
+
     for (size_t i = 0; i < this->colors.size(); i++) {
         uint8_t x = this->x + (i % SPRITE_WIDTH) - 8;
         uint8_t y = this->y + (i / SPRITE_WIDTH) - 16;
@@ -556,6 +562,7 @@ void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette) const
                 continue;
             }
         }
+
         display[index] = color;
     }
 }
@@ -565,7 +572,7 @@ string GPU::SpriteData::toString() const
     stringstream stream;
 
     stream << "Sprite: " << std::hex << "0x" << this->address << std::endl;
-    stream << "    Location: (" << this->x << ", " << this->y << ") " << std::endl;;
+    stream << "    Location: (" << int(this->x) << ", " << int(this->y) << ") " << std::endl;;
     stream << "    Height:   " << int(this->height) << std::endl;
     stream << "    Flags:    " << int(this->flags) << std::endl;
     stream << "    Pointer:  " << this->pointer;

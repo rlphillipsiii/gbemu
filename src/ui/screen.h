@@ -8,8 +8,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <unordered_map>
 
-class GameBoyInterface;
+#include "gameboyinterface.h"
 
 class Screen : public QQuickPaintedItem {
     Q_OBJECT
@@ -24,8 +25,14 @@ public:
 public slots:
     void onTimeout();
     void stop();
+
+protected:
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+
+private:
+    static const std::unordered_map<int, GameBoyInterface::JoyPadButton> BUTTON_MAP;
     
-private:    
     Screen(const Screen &) = delete;
     Screen & operator=(const Screen &) = delete;
 

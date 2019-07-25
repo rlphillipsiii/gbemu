@@ -39,6 +39,7 @@ const uint8_t GameBoy::ROM_NAME_MAX_LENGTH = 0x10;
 GameBoy::GameBoy()
     : m_cpu(m_memory),
       m_gpu(m_memory),
+      m_joypad(m_memory),
       m_run(false),
       m_advance(false)
 {
@@ -123,6 +124,8 @@ void GameBoy::run()
             m_cpu.cycle();
 
             m_gpu.cycle();
+
+            m_joypad.cycle();
         }
 
         count = 0;

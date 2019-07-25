@@ -19,6 +19,7 @@ HEADERS += memorycontroller.h
 HEADERS += gpu.h
 HEADERS += timermodule.h
 HEADERS += gameboy.h
+HEADERS += joypad.h
 HEADERS += interrupt.h
 HEADERS += memmap.h
 HEADERS += logging.h
@@ -30,6 +31,7 @@ SOURCES += memorycontroller.cpp
 SOURCES += processor.cpp
 SOURCES += timermodule.cpp
 SOURCES += gameboy.cpp
+SOURCES += joypad.cpp
 SOURCES += gameboyinterface.cpp
 
 publishHeaders($$PUBLIC_HEADERS)

@@ -20,6 +20,7 @@
 #include "gpu.h"
 #include "memorycontroller.h"
 #include "processor.h"
+#include "joypad.h"
 
 class GameBoy : public GameBoyInterface {
 public:
@@ -30,6 +31,9 @@ public:
 
     void start() override;
     void stop() override;
+
+    void setButton(JoyPadButton button) override { m_joypad.set(button); }
+    void clrButton(JoyPadButton button) override { m_joypad.clr(button); }
 
     void advance() override;
     
@@ -52,7 +56,8 @@ private:
     MemoryController m_memory;
     Processor m_cpu;
     GPU m_gpu;
-
+    JoyPad m_joypad;
+    
     std::condition_variable m_wait;
     std::mutex m_sync;
     

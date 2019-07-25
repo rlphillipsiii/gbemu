@@ -106,7 +106,7 @@ private:
         
         std::string toString() const;
         bool isVisible() const;
-        void render(ColorArray & display, uint8_t dPalette) const;
+        void render(GPU & gpu, ColorArray & display, uint8_t dPalette);
 
         uint8_t palette() const;
     };

@@ -61,6 +61,17 @@ public:
         GAMEBOY_EMU,
     };
 
+    enum JoyPadButton {
+        JOYPAD_A      = 0x01,
+        JOYPAD_B      = 0x02,
+        JOYPAD_SELECT = 0x04,
+        JOYPAD_START  = 0x08,
+        JOYPAD_RIGHT  = 0x01,
+        JOYPAD_LEFT   = 0x02,
+        JOYPAD_UP     = 0x04,
+        JOYPAD_DOWN   = 0x08,
+    };
+    
     static std::shared_ptr<GameBoyInterface> Instance(ConsoleType type=GAMEBOY_EMU);
 
     virtual bool load(const std::string & filename) = 0;
@@ -68,6 +79,9 @@ public:
     virtual void start() = 0;
     virtual void stop() = 0;
 
+    virtual void setButton(JoyPadButton button) = 0;
+    virtual void clrButton(JoyPadButton button) = 0;
+    
     virtual ColorArray getRGB() = 0;
 
     virtual void advance() = 0;

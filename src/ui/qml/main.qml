@@ -14,7 +14,8 @@ ApplicationWindow {
     
     Screen {
         id: screen
-                
+        focus: true
+        
         width:  500
         height: 500
     }
