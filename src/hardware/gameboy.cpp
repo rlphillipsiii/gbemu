@@ -138,6 +138,8 @@ void GameBoy::stop()
 {
     m_run = false;
 
+    advance();
+    
     if (m_thread.joinable()) {
         m_thread.join();
     }
