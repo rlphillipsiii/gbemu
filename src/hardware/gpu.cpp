@@ -264,8 +264,8 @@ Tile GPU::lookup(uint16_t address)
 
 ColorArray GPU::getColorMap()
 {
-    // std::string temp;
-    // std::getline(std::cin, temp);
+    //std::string temp;
+    //std::getline(std::cin, temp);
     
     if (isWindowEnabled()) {
 
@@ -440,6 +440,8 @@ void GPU::readSprite(SpriteData & data)
         return;
     }
 
+    data.colors.clear();
+    
     IndexIterator yIndex(0, data.height - 1, flipY);
     while (yIndex.hasNext()) {
         IndexIterator xIndex(0, SPRITE_WIDTH - 1, flipX);
@@ -533,8 +535,6 @@ bool GPU::SpriteData::isVisible() const
 
 void GPU::SpriteData::render(GPU & gpu, ColorArray & display, uint8_t dPalette)
 {
-    //std::cout << this->toString() << std::endl;
-    
     gpu.readSprite(*this);
 
     for (size_t i = 0; i < this->colors.size(); i++) {

@@ -39,9 +39,9 @@ void JoyPad::cycle()
     uint8_t state = 0x0F;
     
     if (!(m_register & SHADOW_BUTTONS)) {
-        state = m_shadow[SHADOW_MAP.at(SHADOW_BUTTONS)];
+        state = m_shadow[SHADOW_MAP.at(SHADOW_DIRS)];        
     } else if (!(m_register & SHADOW_DIRS)) {
-        state = m_shadow[SHADOW_MAP.at(SHADOW_DIRS)];
+        state = m_shadow[SHADOW_MAP.at(SHADOW_BUTTONS)];
     }
 
     m_register = (m_register & 0xF0) | state;
