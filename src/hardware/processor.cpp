@@ -750,6 +750,17 @@ Processor::Processor(MemoryController & memory)
         { 0xC8, { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 1, 2 } },
         { 0xD9, { "RETI",   [this]() { ret(true);                            }, 1, 1 } },
 
+        { 0x1F, { "RRA", [this]() { rotater(m_gpr.a, true); }, 1, 1 } },
+        
+        { 0xC7, { "RST_$00", [this]() { jump(0x00); }, 1, 4 } },
+        { 0xCF, { "RST_$08", [this]() { jump(0x08); }, 1, 4 } },
+        { 0xD7, { "RST_$10", [this]() { jump(0x10); }, 1, 4 } },
+        { 0xDF, { "RST_$18", [this]() { jump(0x18); }, 1, 4 } },
+        { 0xE7, { "RST_$20", [this]() { jump(0x20); }, 1, 4 } },
+        { 0xEF, { "RST_$28", [this]() { jump(0x28); }, 1, 4 } },
+        { 0xF7, { "RST_$30", [this]() { jump(0x30); }, 1, 4 } },
+        { 0xFF, { "RST_$38", [this]() { jump(0x38); }, 1, 4 } },
+
         { 0xD6, { "SUB_a_n",  [this]() { sub8(m_operands[0], false); }, 2, 2 } },
         { 0x97, { "SUB_a_a",  [this]() { sub8(m_gpr.a, false);       }, 1, 1 } },
         { 0x90, { "SUB_a_b",  [this]() { sub8(m_gpr.b, false);       }, 1, 1 } },
@@ -910,6 +921,15 @@ Processor::Processor(MemoryController & memory)
         { 0x13, { "RL_e",    [this]() { rotatel(m_gpr.e, true);                 }, 1, 2 } },
         { 0x14, { "RL_h",    [this]() { rotatel(m_gpr.h, true);                 }, 1, 2 } },
         { 0x15, { "RL_l",    [this]() { rotatel(m_gpr.l, true);                 }, 1, 2 } },
+
+        { 0x1E, { "RR_(hl)", [this]() { rotater(m_memory.read(m_gpr.hl), true); }, 1, 4 } },
+        { 0x1F, { "RR_a",    [this]() { rotater(m_gpr.a, true);                 }, 1, 2 } },
+        { 0x18, { "RR_b",    [this]() { rotater(m_gpr.b, true);                 }, 1, 2 } },
+        { 0x19, { "RR_c",    [this]() { rotater(m_gpr.c, true);                 }, 1, 2 } },
+        { 0x1A, { "RR_d",    [this]() { rotater(m_gpr.d, true);                 }, 1, 2 } },
+        { 0x1B, { "RR_e",    [this]() { rotater(m_gpr.e, true);                 }, 1, 2 } },
+        { 0x1C, { "RR_h",    [this]() { rotater(m_gpr.h, true);                 }, 1, 2 } },
+        { 0x1D, { "RR_l",    [this]() { rotater(m_gpr.l, true);                 }, 1, 2 } },
 
         { 0xC6, { "SET_0_(hl)", [this]() { set(m_memory.read(m_gpr.hl), 0); }, 1, 4 } },
         { 0xC7, { "SET_0_a", [this]() { set(m_gpr.a, 0); }, 1, 2 } },

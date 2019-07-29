@@ -33,6 +33,15 @@ namespace GB {
         RGB(const RGB & other)
             : RGB(other.red, other.blue, other.green, other.alpha) { }
 
+        RGB & operator=(const RGB & other)
+        {
+            this->red = other.red;
+            this->green = other.green;
+            this->blue = other.blue;
+            this->alpha = other.alpha;
+            return *this;
+        }
+
         bool operator==(const RGB & other)
         {
             return ((this->red == other.red) && (this->green == other.green)
@@ -46,7 +55,7 @@ namespace GB {
                 "r:0x" << int(this->red) << " " <<
                 "g:0x" << int(this->green) << " " <<
                 "b:0x" << int(this->blue) << " " <<
-                "a:0x" << int(this->alpha) << std::endl;
+                "a:0x" << int(this->alpha);
             
             return stream.str();
         }
@@ -85,6 +94,8 @@ public:
     virtual ColorArray getRGB() = 0;
 
     virtual void advance() = 0;
+
+    virtual bool idle() const = 0;
 };
 
 #endif /* GAMEBOYINTERFACE_H_ */

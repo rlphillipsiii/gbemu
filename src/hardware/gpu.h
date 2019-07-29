@@ -74,6 +74,8 @@ private:
     static const uint16_t HBLANK_TICKS;
     static const uint16_t VBLANK_TICKS;
 
+    static const uint16_t SCANLINE_MAX;
+    
     static const uint16_t PIXELS_PER_ROW;
     static const uint16_t PIXELS_PER_COL;
 

@@ -38,6 +38,8 @@ public:
     void advance() override;
     
     ColorArray getRGB() override { return m_gpu.getColorMap(); }
+
+    bool idle() const override { return !m_running.load(); }
     
 private:
     static const uint16_t ROM_HEADER_LENGTH;
@@ -63,6 +65,7 @@ private:
     
     std::atomic<bool> m_run;
     std::atomic<bool> m_advance;
+    std::atomic<bool> m_running;
     
     std::thread m_thread;
 

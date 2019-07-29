@@ -12,6 +12,7 @@
 #include <unordered_map>
 
 #include "screen.h"
+#include "logging.h"
 #include "gameboyinterface.h"
 
 using std::vector;
@@ -39,10 +40,10 @@ Screen::Screen(QQuickItem *parent)
 
     QObject::connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
 
-    m_timer.setInterval(30);
+    m_timer.setInterval(15);
     m_timer.start();
 
-    m_console->load("bgbtest.gb");
+    m_console->load("rom.gb");
     m_console->start();
 }
 
@@ -78,14 +79,23 @@ void Screen::keyReleaseEvent(QKeyEvent *event)
 
 void Screen::paint(QPainter *painter)
 {
+    while (!m_console->idle());
+    
     ColorArray rgb = m_console->getRGB();
     m_console->advance();
     
     for (size_t i = 0; i < rgb.size(); i++) {
-        const shared_ptr<GB::RGB> & color = rgb.at(i);
+        shared_ptr<GB::RGB> color = rgb.at(i);
 
         int x = i % m_width;
         int y = i / m_width;
+
+#ifdef DEBUG
+        if (!color) {
+            LOG("Invalid color at (%d, %d)\n", x, y);
+            assert(0);
+        }
+#endif
 
         m_canvas.setPixel(x, y, qRgba(color->red, color->green, color->blue, color->alpha));
     }

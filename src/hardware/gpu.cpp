@@ -75,6 +75,8 @@ const uint16_t GPU::VRAM_TICKS   = 172;
 const uint16_t GPU::HBLANK_TICKS = 204;
 const uint16_t GPU::VBLANK_TICKS = 456;
 
+const uint16_t GPU::SCANLINE_MAX = 155;
+
 const uint16_t GPU::PIXELS_PER_ROW = 160;
 const uint16_t GPU::PIXELS_PER_COL = 144;
 
@@ -105,7 +107,7 @@ GPU::GPU(MemoryController & memory)
         uint8_t & flags = m_memory.read(address + 3);
 
         shared_ptr<SpriteData> data(new SpriteData(x, y, flags, m_sPalette0, m_sPalette1));
-        if (!data) { assert(0); }
+        assert(data);
 
         data->address = address;
         data->pointer = GPU_RAM_OFFSET;
@@ -141,7 +143,7 @@ GPU::RenderState GPU::next()
     }
     case VBLANK: {
         if (VBLANK_TICKS == m_ticks) {
-            return (isDisplayEnabled()) ? HBLANK : VBLANK;
+            return (isDisplayEnabled() && (SCANLINE_MAX == m_scanline)) ? HBLANK : VBLANK;
         }
         break;
     }
@@ -196,6 +198,14 @@ void GPU::cycle()
 void GPU::handleHBlank()
 {
     if (HBLANK != (m_status & RENDER_MODE)) {
+        // The hblank mode hasn't been set yet, so this is the first time that we
+        // have executed the function in this mode.  If so, we need to figure out
+        // if we are coming out of a vblank.  If that is the case, we need to
+        // clear the scanline as we are starting back at the beginning.
+        if (VBLANK == (m_status & RENDER_MODE)) {
+            m_scanline = 0;
+        }
+        
         if (isHBlankInterruptEnabled()) {
             Interrupts::set(m_memory, InterruptMask::LCD);
         }
@@ -220,11 +230,9 @@ void GPU::handleVBlank()
         updateRenderStateStatus(VBLANK);
     }
 
-    if (m_ticks < VBLANK_TICKS) {
-        return;
+    if ((VBLANK_TICKS - 10) <= m_ticks) {
+        m_scanline = std::min(uint16_t(m_scanline + 1), SCANLINE_MAX);
     }
-
-    m_scanline = 0;
 }
 
 void GPU::handleOAM()
@@ -235,20 +243,12 @@ void GPU::handleOAM()
         }
         updateRenderStateStatus(OAM);
     }
-
-    if (m_ticks < OAM_TICKS) {
-        return;
-    }
 }
 
 void GPU::handleVRAM()
 {
     if (VRAM != (m_status & RENDER_MODE)) {
         updateRenderStateStatus(VRAM);
-    }
-
-    if (m_ticks < VRAM_TICKS) {
-        return;
     }
 }
 
@@ -320,7 +320,9 @@ shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white)
     uint8_t index = pixel & 0x03;
 
     uint8_t color = (pal >> (index * 2)) & 0x03;
+
     shared_ptr<GB::RGB> rgb(new GB::RGB(NON_CGB_PALETTE[color]));;
+    assert(rgb);
 
     // If the color palette entry is 0, and we are not allowing the color white, then we
     // need to set our alpha blend entry to transparent so that this pixel won't show up
@@ -350,7 +352,7 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
             uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
 
             // Each pixel needs to be run through a palette to get the actual color.
-            colors.push_back(palette(pal, pixel, white));
+            colors.push_back(std::move(palette(pal, pixel, white)));
         }
     }
 
@@ -387,7 +389,7 @@ ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
                 uint16_t x = xOffset + (k % TILE_PIXELS_PER_ROW);
                 uint16_t y = yOffset + (k / TILE_PIXELS_PER_ROW);
 
-                colors[y][x] = rgb[k];
+                colors[y][x] = std::move(rgb[k]);
             }
         }
     }
@@ -402,16 +404,34 @@ ColorArray GPU::constrain(const vector<ColorArray> & display) const
 {
     uint16_t index = 0;
 
+    uint16_t yTemp = m_y, xTemp = m_x;
+    
     // We have an array of the whole map, so now we need to build a flat array of the
     // pixels that we need to display on screen.  The x and y scroll registers determine
     // where in the 32x32 map that we should place the top left corner.
     ColorArray screen(PIXELS_PER_ROW * PIXELS_PER_COL);
     for (uint16_t y = m_y; y < m_y + PIXELS_PER_COL; y++) {
         for (uint16_t x = m_x; x < m_x + PIXELS_PER_ROW; x++) {
-            uint16_t yIndex = y % (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
-            uint16_t xIndex = x % (TILE_MAP_COLUMNS * TILE_PIXELS_PER_COL);
+            uint16_t yIndex = y % display.size();
+            uint16_t xIndex = x % display[yIndex].size();
 
-            screen[index++] = display[yIndex][xIndex];
+#ifdef DEBUG
+            if ((yIndex >= display.size())
+                || (xIndex >= display[yIndex].size())
+                || (index >= screen.size())) {
+                LOG("Coordinates:   (%d, %d)\n", x, y);
+                LOG("Display Index: (%d, %d) ==> xMax %d - yMax %d\n",
+                    xIndex, yIndex, int(display.size()), int(display[yIndex].size()));
+                LOG("Screen Index:  %d ==> %d\n", index, int(screen.size()));
+                assert(0);
+            }
+
+            assert((xTemp == m_x) && (yTemp == m_y));
+            xTemp = m_x; yTemp = m_y;
+#endif
+
+            assert(display[yIndex][xIndex]);
+            screen[index++] = std::move(display[yIndex][xIndex]);
         }
     }
 
@@ -436,7 +456,7 @@ void GPU::readSprite(SpriteData & data)
     // We already have an RGB color map of the sprite, so if the flip x or y flags aren't
     // set, we don't have anything else that we need to do here.
     if (!(flipX || flipY)) {
-        data.colors = temp;
+        data.colors = std::move(temp);
         return;
     }
 
@@ -452,7 +472,7 @@ void GPU::readSprite(SpriteData & data)
             uint8_t x = xIndex.next();
 
             uint8_t index = ((y * SPRITE_WIDTH) + x);
-            data.colors.push_back(temp.at(index));
+            data.colors.push_back(std::move(temp.at(index)));
         }
     }
 }
@@ -479,6 +499,7 @@ void GPU::drawSprites(ColorArray & display)
 
         if (data->isVisible()) {
             enabled.push_back(data);
+            //break;
         }
     }
 
@@ -535,11 +556,19 @@ bool GPU::SpriteData::isVisible() const
 
 void GPU::SpriteData::render(GPU & gpu, ColorArray & display, uint8_t dPalette)
 {
+    //std::cout << toString() << std::endl;
+    
     gpu.readSprite(*this);
 
     for (size_t i = 0; i < this->colors.size(); i++) {
-        uint8_t x = this->x + (i % SPRITE_WIDTH) - 8;
-        uint8_t y = this->y + (i / SPRITE_WIDTH) - 16;
+        int xOffset = (i % SPRITE_WIDTH) - 8;
+        if ((this->x + xOffset) < 0) { continue; }
+
+        int yOffset = (i / SPRITE_WIDTH) - 16;
+        if ((this->y + yOffset) < 0) { continue; }
+
+        uint8_t x = this->x + xOffset;
+        uint8_t y = this->y + yOffset;
 
         uint16_t index = (y * PIXELS_PER_ROW) + x;
         if (index >= int(display.size())) {

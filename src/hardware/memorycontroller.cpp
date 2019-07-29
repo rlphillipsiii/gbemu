@@ -161,6 +161,9 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
     case CPU_TIMER_MODULO_ADDRESS:
     case CPU_TIMER_CONTROL_ADDRESS:
 
+    case SERIAL_TX_DATA_ADDRESS:
+    case SERIAL_TX_CONTROL_ADDRESS:
+        
     case SOUND_CONTROLLER_CHANNEL:
     case SOUND_CONTROLLER_OUTPUT:
     case SOUND_CONTROLLER_CH1_SWEEP:
@@ -188,8 +191,8 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
             break;
         }
 
-        LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
-        assert(0);
+        //LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
+        //assert(0);
     }
     }
 }
@@ -262,7 +265,7 @@ void MemoryController::write(uint16_t address, uint8_t value)
         region->write(address, value);
     } else {
         LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
-        assert(0);
+        //assert(0);
     }
 }
 

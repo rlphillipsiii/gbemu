@@ -12,6 +12,7 @@ DEFINES += HARDWARE_EXPORT
 
 TARGET = hardware
 
+PUBLIC_HEADERS += logging.h
 PUBLIC_HEADERS += gameboyinterface.h
 
 HEADERS += processor.h
@@ -22,7 +23,6 @@ HEADERS += gameboy.h
 HEADERS += joypad.h
 HEADERS += interrupt.h
 HEADERS += memmap.h
-HEADERS += logging.h
 HEADERS += iiterator.h
 HEADERS += $$PUBLIC_HEADERS
 

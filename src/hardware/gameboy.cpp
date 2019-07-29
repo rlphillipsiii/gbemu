@@ -41,7 +41,8 @@ GameBoy::GameBoy()
       m_gpu(m_memory),
       m_joypad(m_memory),
       m_run(false),
-      m_advance(false)
+      m_advance(false),
+      m_running(true)
 {
 #ifdef STATIC_MEMORY
     ifstream ram("memory2.bin", std::ios::in | std::ios::binary);
@@ -130,9 +131,12 @@ void GameBoy::run()
 
         count = 0;
 
+        m_running = false;
+        
         unique_lock<mutex> lock(m_sync);
         m_wait.wait(lock, [this]() { return m_advance.load(); });
 
+        m_running = true;
         m_advance = false;
     }
 }
