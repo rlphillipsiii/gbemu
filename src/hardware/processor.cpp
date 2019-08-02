@@ -608,8 +608,8 @@ Processor::Processor(MemoryController & memory)
         { 0x2C, { "INC_l",    [this]() { inc(m_gpr.l);                 }, 1, 1 } },
         { 0x33, { "INC_sp",   [this]() { inc(m_sp);                    }, 1, 2 } },
 
-        { 0xC3, { "JP_n",    [this]() { jump();                        }, 3, 3 } },
-        { 0xE9, { "JP_(hl)", [this]() { jump(m_memory.read(m_gpr.hl)); }, 1, 1 } },
+        { 0xC3, { "JP_n",  [this]() { jump();         }, 3, 3 } },
+        { 0xE9, { "JP_hl", [this]() { jump(m_gpr.hl); }, 1, 1 } },
 
         { 0xDA, { "JP_C",  [this]() { if (isCarryFlagSet())  { jump(); }}, 3, 3 } },
         { 0xD2, { "JP_NC", [this]() { if (!isCarryFlagSet()) { jump(); }}, 3, 3 } },
