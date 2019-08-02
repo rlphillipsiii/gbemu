@@ -750,6 +750,7 @@ Processor::Processor(MemoryController & memory)
         { 0xC8, { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 1, 2 } },
         { 0xD9, { "RETI",   [this]() { ret(true);                            }, 1, 1 } },
 
+        { 0x1F, { "RLA", [this]() { rotatel(m_gpr.a, true); }, 1, 1 } },
         { 0x1F, { "RRA", [this]() { rotater(m_gpr.a, true); }, 1, 1 } },
         
         { 0xC7, { "RST_$00", [this]() { jump(0x00); }, 1, 4 } },
@@ -761,6 +762,8 @@ Processor::Processor(MemoryController & memory)
         { 0xF7, { "RST_$30", [this]() { jump(0x30); }, 1, 4 } },
         { 0xFF, { "RST_$38", [this]() { jump(0x38); }, 1, 4 } },
 
+        { 0x10, { "STOP", [this]() { }, 1, 1 } },
+        
         { 0xD6, { "SUB_a_n",  [this]() { sub8(m_operands[0], false); }, 2, 2 } },
         { 0x97, { "SUB_a_a",  [this]() { sub8(m_gpr.a, false);       }, 1, 1 } },
         { 0x90, { "SUB_a_b",  [this]() { sub8(m_gpr.b, false);       }, 1, 1 } },
@@ -1007,5 +1010,17 @@ Processor::Processor(MemoryController & memory)
 
         { 0x37, { "SWAP_a", [this]() { swap(m_gpr.a); }, 1, 2 } },
     };
+
+    for (uint16_t i = 0; i < 0x100; i++) {
+        auto op = OPCODES.find(i);
+        if (OPCODES.end() == op) {
+            LOG("Warning: unimplemented opcode 0x%02x\n", i);
+        }
+
+        auto cb = CB_OPCODES.find(i);
+        if (CB_OPCODES.end() == cb) {
+            LOG("Warning: unimplemented CB opcode 0x%02x\n", i);
+        }
+    }
 }
 

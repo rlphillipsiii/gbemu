@@ -10,7 +10,7 @@
 
 #include <cstdint>
 
-#include <map>
+#include <unordered_map>
 #include <functional>
 #include <utility>
 #include <string>
@@ -29,10 +29,10 @@ public:
     void reset();
     void cycle();
 
-    inline void setVBlankInterrupt() { setInterrupt(InterruptMask::VBLANK); }
-    inline void setSerialInterrupt() { setInterrupt(InterruptMask::SERIAL); }
-    inline void setLCDInterrupt()    { setInterrupt(InterruptMask::LCD);    }
-    inline void setJoypadInterrupt() { setInterrupt(InterruptMask::JOYPAD); }
+    inline void setVBlankInterrupt() { Interrupts::set(m_memory, InterruptMask::VBLANK); }
+    inline void setSerialInterrupt() { Interrupts::set(m_memory, InterruptMask::SERIAL); }
+    inline void setLCDInterrupt()    { Interrupts::set(m_memory, InterruptMask::LCD);    }
+    inline void setJoypadInterrupt() { Interrupts::set(m_memory, InterruptMask::JOYPAD); }
     
 private:
     static const uint8_t CB_PREFIX;
@@ -51,8 +51,8 @@ private:
         uint8_t length;
         uint8_t cycles;
     };
-    std::map<uint8_t, Operation> OPCODES;
-    std::map<uint8_t, Operation> CB_OPCODES;
+    std::unordered_map<uint8_t, Operation> OPCODES;
+    std::unordered_map<uint8_t, Operation> CB_OPCODES;
 
     MemoryController & m_memory;
 
@@ -161,8 +161,6 @@ private:
     void history() const;
 
     inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
-    inline void setInterrupt(InterruptMask mask)
-        { if (m_interrupts.mask & uint8_t(mask)) { m_interrupts.status |= uint8_t(mask); } }
 };
 
 
