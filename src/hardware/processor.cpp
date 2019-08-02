@@ -144,14 +144,6 @@ void Processor::cycle()
     // The program counter points to our next opcode.
     uint8_t opcode = m_memory.read(m_pc++);
 
-#ifdef DEBUG
-    bool loop = true;
-    if (m_pc - 1 == 0x01AD) {
-
-        // while (loop);
-    }
-#endif
-
     // Look up the handler in our opcode table.  If the length of our command is greater
     // than 1, then we also need to grab the next length - 1 bytes as they are the
     // arguments to the next operation that we are going to execute.
@@ -162,12 +154,9 @@ void Processor::cycle()
     }
 
 #ifdef DEBUG
-    if (m_executed.size() == 100) {
-        m_executed.pop_front();
-    }
-    m_executed.push_back({ uint16_t(m_pc - operation->length), opcode, m_operands, operation });
+    log(opcode, operation);
 #endif
-
+    
     // Call the function pointer in our Operation struct.  Any arguments to the function
     // will have already been put in to the operands array.
     operation->handler();
@@ -178,6 +167,24 @@ void Processor::cycle()
     // executing the command (i.e. call if z will set ticks to 3 if the call was made
     // and leave it at 0 if it was not).
     m_ticks += operation->cycles;
+}
+
+void Processor::log(uint8_t opcode, const Operation *operation)
+{
+    if (m_executed.size() == 100) {
+        m_executed.pop_front();
+    }
+
+    Command cmd = { uint16_t(m_pc - operation->length), opcode, m_operands, operation };
+    m_executed.push_back(cmd);
+
+    bool loop = true;
+    if ((0x00 == cmd.opcode) && (0x100 != cmd.pc)) {
+        history();
+
+        assert(0);
+        while (loop);
+    }
 }
 
 void Processor::xor8(uint8_t value)
@@ -718,10 +725,10 @@ Processor::Processor(MemoryController & memory)
         { 0x74, { "LD_(hl)_h", [this]() { loadMem(m_gpr.hl, m_gpr.h);       }, 1, 2 } },
         { 0x75, { "LD_(hl)_l", [this]() { loadMem(m_gpr.hl, m_gpr.l);       }, 1, 2 } },
 
-        { 0x21, { "LD_hl_nn", [this]() { load(m_gpr.hl);  }, 3, 3 } },
-        { 0x31, { "LD_sp_nn", [this]() { load(m_sp);      }, 3, 3 } },
-        { 0xF8, { "LD_hl_sp", [this]() { m_gpr.hl = m_sp; }, 1, 2 } },
-        { 0xF9, { "LD_sp_hl", [this]() { m_sp = m_gpr.hl; }, 1, 2 } },
+        { 0x21, { "LD_hl_nn", [this]() { load(m_gpr.hl);                  }, 3, 3 } },
+        { 0x31, { "LD_sp_nn", [this]() { load(m_sp);                      }, 3, 3 } },
+        { 0xF8, { "LD_hl_sp", [this]() { m_gpr.hl = m_sp + m_operands[0]; }, 2, 3 } },
+        { 0xF9, { "LD_sp_hl", [this]() { m_sp = m_gpr.hl;                 }, 1, 2 } },
 
         { 0xF6, { "OR_n",    [this]() { or8(m_operands[0]);           }, 2, 2 } },
         { 0xB6, { "OR_(hl)", [this]() { or8(m_memory.read(m_gpr.hl)); }, 1, 2 } },

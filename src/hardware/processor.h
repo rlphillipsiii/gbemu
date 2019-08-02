@@ -75,7 +75,7 @@ private:
         uint16_t pc;
         uint8_t opcode;
         std::array<uint8_t, 2> operands;
-        Operation *operation;
+        const Operation *operation;
     };
     std::list<Command> m_executed;
 
@@ -160,6 +160,8 @@ private:
 
     void history() const;
 
+    void log(uint8_t opcode, const Operation *operation);
+    
     inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
 };
 
