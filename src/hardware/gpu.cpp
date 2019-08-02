@@ -416,9 +416,11 @@ ColorArray GPU::constrain(const vector<ColorArray> & display) const
             uint16_t xIndex = x % display[yIndex].size();
 
 #ifdef DEBUG
-            if ((yIndex >= display.size())
-                || (xIndex >= display[yIndex].size())
-                || (index >= screen.size())) {
+            bool error = (yIndex >= display.size());
+            error |= (xIndex >= display[yIndex].size());
+            error |= (index >= screen.size());
+            
+            if (error) {
                 LOG("Coordinates:   (%d, %d)\n", x, y);
                 LOG("Display Index: (%d, %d) ==> xMax %d - yMax %d\n",
                     xIndex, yIndex, int(display.size()), int(display[yIndex].size()));

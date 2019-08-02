@@ -40,7 +40,7 @@ Screen::Screen(QQuickItem *parent)
 
     QObject::connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
 
-    m_timer.setInterval(15);
+    m_timer.setInterval(30);
     m_timer.start();
 
     m_console->load("rom.gb");

@@ -156,6 +156,13 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
     case GPU_OBP2_ADDRESS:
     case GPU_SCANLINE_ADDRESS:
 
+    case GPU_LCD_VRAM_BANK_ADDRESS:
+
+    case GPU_BG_PALETTE_INDEX:
+    case GPU_BG_PALETTE_DATA:
+    case GPU_SPRITE_PALETTE_INDEX:
+    case GPU_SPRITE_PALETTE_DATA:
+
     case CPU_TIMER_DIV_ADDRESS:
     case CPU_TIMER_COUNTER_ADDRESS:
     case CPU_TIMER_MODULO_ADDRESS:
@@ -191,8 +198,8 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
             break;
         }
 
-        //LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
-        //assert(0);
+        LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
+        assert(0);
     }
     }
 }

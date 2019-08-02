@@ -35,6 +35,10 @@ public:
     inline void setJoypadInterrupt() { Interrupts::set(m_memory, InterruptMask::JOYPAD); }
     
 private:
+#ifdef UNIT_TEST
+    friend int main(int argc, char **argv);
+#endif
+    
     static const uint8_t CB_PREFIX;
     
     enum FlagMask {
@@ -159,7 +163,8 @@ private:
     bool interrupt();
 
     void history() const;
-
+    void print(const Command & cmd) const;
+    
     inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
 };
 

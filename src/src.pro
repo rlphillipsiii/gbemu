@@ -6,3 +6,4 @@ TEMPLATE = subdirs
 
 SUBDIRS += hardware
 SUBDIRS += ui
+#SUBDIRS += test

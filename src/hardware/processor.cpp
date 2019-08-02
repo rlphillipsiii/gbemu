@@ -37,14 +37,19 @@ void Processor::reset()
     m_timer.reset();
 }
 
+void Processor::print(const Command & cmd) const
+{
+    LOG("0x%04x | 0x%02x (%d): %s ", cmd.pc, cmd.opcode, cmd.operation->length, cmd.operation->name.c_str());
+    for (uint8_t i = 0; i < cmd.operation->length - 1; i++) {
+        LOG("0x%04x ", cmd.operands[i]);
+    }
+    LOG("%s", "\n");
+}
+
 void Processor::history() const
 {
-    for (const Command & c : m_executed) {
-        LOG("0x%04x | 0x%02x (%d): %s ", c.pc, c.opcode, c.operation->length, c.operation->name.c_str());
-        for (uint8_t i = 0; i < c.operation->length - 1; i++) {
-            LOG("0x%04x ", c.operands[i]);
-        }
-        LOG("%s", "\n");
+    for (const Command & cmd : m_executed) {
+        print(cmd);
     }
 }
 
@@ -144,11 +149,11 @@ void Processor::cycle()
     // The program counter points to our next opcode.
     uint8_t opcode = m_memory.read(m_pc++);
 
-#ifdef DEBUG
+#if DEBUG
     bool loop = true;
-    if (m_pc - 1 == 0x01AD) {
-
-        // while (loop);
+    if (m_pc - 1 == 0x0000) {
+        history();
+        while (loop);
     }
 #endif
 
@@ -165,7 +170,11 @@ void Processor::cycle()
     if (m_executed.size() == 100) {
         m_executed.pop_front();
     }
-    m_executed.push_back({ uint16_t(m_pc - operation->length), opcode, m_operands, operation });
+
+    Command cmd = { uint16_t(m_pc - operation->length), opcode, m_operands, operation };
+    m_executed.push_back(cmd);
+
+    // print(cmd);
 #endif
 
     // Call the function pointer in our Operation struct.  Any arguments to the function
@@ -753,14 +762,14 @@ Processor::Processor(MemoryController & memory)
         { 0x1F, { "RLA", [this]() { rotatel(m_gpr.a, true); }, 1, 1 } },
         { 0x1F, { "RRA", [this]() { rotater(m_gpr.a, true); }, 1, 1 } },
         
-        { 0xC7, { "RST_$00", [this]() { jump(0x00); }, 1, 4 } },
-        { 0xCF, { "RST_$08", [this]() { jump(0x08); }, 1, 4 } },
-        { 0xD7, { "RST_$10", [this]() { jump(0x10); }, 1, 4 } },
-        { 0xDF, { "RST_$18", [this]() { jump(0x18); }, 1, 4 } },
-        { 0xE7, { "RST_$20", [this]() { jump(0x20); }, 1, 4 } },
-        { 0xEF, { "RST_$28", [this]() { jump(0x28); }, 1, 4 } },
-        { 0xF7, { "RST_$30", [this]() { jump(0x30); }, 1, 4 } },
-        { 0xFF, { "RST_$38", [this]() { jump(0x38); }, 1, 4 } },
+        { 0xC7, { "RST_$00", [this]() { rst(0x00); }, 1, 4 } },
+        { 0xCF, { "RST_$08", [this]() { rst(0x08); }, 1, 4 } },
+        { 0xD7, { "RST_$10", [this]() { rst(0x10); }, 1, 4 } },
+        { 0xDF, { "RST_$18", [this]() { rst(0x18); }, 1, 4 } },
+        { 0xE7, { "RST_$20", [this]() { rst(0x20); }, 1, 4 } },
+        { 0xEF, { "RST_$28", [this]() { rst(0x28); }, 1, 4 } },
+        { 0xF7, { "RST_$30", [this]() { rst(0x30); }, 1, 4 } },
+        { 0xFF, { "RST_$38", [this]() { rst(0x38); }, 1, 4 } },
 
         { 0x10, { "STOP", [this]() { }, 1, 1 } },
         
