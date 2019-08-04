@@ -98,7 +98,7 @@ private:
 #endif
 
     /** 8 bit flags register */
-    uint8_t m_flags;
+    uint8_t & m_flags;
 
     Operation *lookup(uint8_t opcode);
 
@@ -125,9 +125,11 @@ private:
     void and8(uint8_t value);
     void or8(uint8_t value);
     void xor8(uint8_t value);
+    void add8(uint16_t & reg, uint16_t base, uint8_t value);
     void add8(uint8_t value, bool carry);
     void sub8(uint8_t value, bool carry);
     void add16(uint16_t & reg, uint16_t value);
+    void add16(uint16_t & reg, uint8_t value);
     void compare(uint8_t value);
     void swap(uint8_t & reg);
     void inc(uint8_t & reg);
@@ -155,7 +157,9 @@ private:
     void load(uint16_t & reg);
     void load(uint16_t & reg, uint16_t value);
     void sla(uint8_t & reg);
-
+    void srl(uint8_t & reg);
+    void daa();
+    
     bool interrupt();
 
     void history() const;
