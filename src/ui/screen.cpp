@@ -5,6 +5,7 @@
 #include <QSGGeometry>
 #include <QSGVertexColorMaterial>
 #include <QThread>
+#include <QString>
 
 #include <cassert>
 #include <vector>
@@ -43,7 +44,9 @@ Screen::Screen(QQuickItem *parent)
     m_timer.setInterval(15);
     m_timer.start();
 
-    m_console->load("rom.gb");
+    QStringList args = QCoreApplication::arguments();
+    
+    m_console->load(args.at(1).toStdString());
     m_console->start();
 }
 

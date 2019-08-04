@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <cassert>
+#include <sstream>
 
 #include "processor.h"
 #include "memorycontroller.h"
@@ -14,6 +15,7 @@
 #include "logging.h"
 
 using std::string;
+using std::stringstream;
 
 const uint8_t Processor::CB_PREFIX = 0xCB;
 
@@ -86,7 +88,9 @@ bool Processor::interrupt()
     InterruptVector vector = InterruptVector::INVALID;
 
     uint8_t status = m_interrupts.mask & m_interrupts.status;
-    
+
+    // Check our interrupt status to see if any of the interrupt bits are
+    // set.  The if statements are in order of interrput priority.
     if (status & uint8_t(InterruptMask::VBLANK)) {
         vector = InterruptVector::VBLANK;
 
@@ -109,11 +113,15 @@ bool Processor::interrupt()
         m_interrupts.status &= ~uint8_t(InterruptMask::JOYPAD);
     }
 
+    // If we found an interrupt that needs to be serviced, push the pc
+    // on to the stack and then set the pc to the address of the interrupt
+    // vector.
     if (InterruptVector::INVALID != vector) {
         push(m_pc);
 
         m_pc = uint16_t(vector);
 
+        // We are jumping to an ISR, so turn disable interrupts.
         m_interrupts.enable = false;
         return true;
     }
@@ -142,8 +150,9 @@ void Processor::cycle()
     m_operands[0] = m_operands[1] = 0x00;
 
     // The program counter points to our next opcode.
+    m_instr = m_pc;
     uint8_t opcode = m_memory.read(m_pc++);
-
+    
     // Look up the handler in our opcode table.  If the length of our command is greater
     // than 1, then we also need to grab the next length - 1 bytes as they are the
     // arguments to the next operation that we are going to execute.
@@ -155,6 +164,7 @@ void Processor::cycle()
 
 #ifdef DEBUG
     log(opcode, operation);
+    // logRegisters();
 #endif
     
     // Call the function pointer in our Operation struct.  Any arguments to the function
@@ -179,7 +189,7 @@ void Processor::log(uint8_t opcode, const Operation *operation)
         m_executed.pop_front();
     }
 
-    Command cmd = { uint16_t(m_pc - operation->length), opcode, m_operands, operation };
+    Command cmd = { m_instr, opcode, m_operands, operation };
     m_executed.push_back(cmd);
 
     bool loop = true;
@@ -189,6 +199,25 @@ void Processor::log(uint8_t opcode, const Operation *operation)
         assert(0);
         while (loop);
     }
+}
+
+void Processor::logRegisters()
+{
+    stringstream stream;
+    stream << ((isZeroFlagSet())      ? "Z" : "-");
+    stream << ((isNegFlagSet())       ? "N" : "-");
+    stream << ((isHalfCarryFlagSet()) ? "H" : "-");
+    stream << ((isCarryFlagSet())     ? "C" : "-");
+
+    LOG("PC:0x%04x SP:0x%04x A:0x%02x F:%s BC:0x%04x DE:0x%04x HL:0x%04x | ",
+        m_instr, m_sp, m_gpr.a, stream.str().c_str(), m_gpr.bc, m_gpr.de, m_gpr.hl);
+
+    const Command & c = m_executed.back();
+    LOG("%s (0x%02x): ", c.operation->name.c_str(), c.opcode);
+    for (int8_t i = c.operation->length - 2; i >= 0; i--) {
+        LOG("%02x ", c.operands[i]);
+    }
+    LOG("%s", "\n");
 }
 
 void Processor::xor8(uint8_t value)
@@ -258,13 +287,6 @@ void Processor::add8(uint8_t value, bool carry)
     }
 }
 
-void Processor::add8(uint16_t & reg, uint16_t base, uint8_t value)
-{
-    union { int8_t sVal; uint8_t uVal; } input = { .uVal = value };
-
-    reg = base + input.sVal;
-}
-
 void Processor::sub8(uint8_t value, bool carry)
 {
     m_flags = 0x00;
@@ -282,8 +304,29 @@ void Processor::sub8(uint8_t value, bool carry)
     setNegFlag();
 }
 
+void Processor::sbc(uint8_t value)
+{
+    if (isCarryFlagSet()) { value++; }
+
+    (value > m_gpr.a)  ? setCarryFlag() : clrCarryFlag();
+    (value == m_gpr.a) ? setZeroFlag()  : clrZeroFlag();
+
+    const uint8_t mask = 0x0F;
+	if((value & mask) > (m_gpr.a & mask)) {
+        setHalfCarryFlag();
+    } else {
+        clrHalfCarryFlag();
+    }
+	
+	m_gpr.a -= value;
+
+    setNegFlag();
+}
+
 void Processor::add16(uint16_t & reg, uint16_t value)
 {
+    clrNegFlag();
+    
     uint32_t result = uint32_t(reg) + uint32_t(value);
     (result > 0xFFFF) ? setCarryFlag() : clrCarryFlag();
 
@@ -295,31 +338,29 @@ void Processor::add16(uint16_t & reg, uint16_t value)
     }
 
     reg = result & 0xFFFF;
-
-    if (&reg == &m_sp) { clrZeroFlag(); }
-    
-    clrNegFlag();
 }
 
-void Processor::add16(uint16_t & reg, uint8_t value)
+void Processor::add16(uint16_t & dest, uint16_t reg, uint8_t value)
 {
-    union { int8_t sVal; uint8_t uVal; } input = { .uVal = value };
+    m_flags = 0x00;
     
-    uint32_t result = uint32_t(reg) + input.sVal;
-    (result > 0xFFFF) ? setCarryFlag() : clrCarryFlag();
-
-    const uint16_t mask = 0xFFF;
-    if ((reg & mask) + (input.sVal & mask) > mask) {
+    union { int8_t sVal; uint8_t uVal; } input = { .uVal = value };
+   
+    const uint16_t cMask = 0xFF;
+    if ((reg & cMask) + (input.sVal & cMask) > cMask) {
+        setCarryFlag();
+    } else {
+        clrCarryFlag();
+    }
+    
+    const uint16_t hMask = 0xF;
+    if ((reg & hMask) + (input.sVal & hMask) > hMask) {
         setHalfCarryFlag();
     } else {
         clrHalfCarryFlag();
     }
 
-    reg = result & 0xFFFF;
-
-    if (&reg == &m_sp) { clrZeroFlag(); }
-    
-    clrNegFlag();
+    dest = reg + input.sVal;
 }
     
 void Processor::swap(uint8_t & reg)
@@ -351,14 +392,9 @@ void Processor::jump()
 
 void Processor::jumprel()
 {
-    union {
-        uint8_t valUnsigned;
-        int8_t valSigned;
-    } temp;
-
-    temp.valUnsigned = m_operands[0];
+    union { uint8_t uVal; int8_t sVal; } temp = { .uVal = m_operands[0] };
     
-    uint16_t address = m_pc + temp.valSigned;
+    uint16_t address = m_pc + temp.sVal;
     jump(address);
 }
 
@@ -434,10 +470,8 @@ void Processor::set(uint8_t & reg, uint8_t which)
 
 void Processor::pop(uint16_t & reg)
 {
-    uint8_t lower = m_memory.read(m_sp + 1);
-    uint8_t upper = m_memory.read(m_sp + 2);
-
-    m_sp += 2;
+    uint8_t lower = m_memory.read(m_sp++);
+    uint8_t upper = m_memory.read(m_sp++);
 
     reg = (upper << 8) | lower;
 }
@@ -447,8 +481,8 @@ void Processor::push(uint16_t value)
     uint8_t lower = value & 0xFF;
     uint8_t upper = (value >> 8) & 0xFF;
 
-    m_memory.write(m_sp--, upper);
-    m_memory.write(m_sp--, lower);
+    m_memory.write(--m_sp, upper);
+    m_memory.write(--m_sp, lower);
 }
 
 void Processor::ret(bool enable)
@@ -492,6 +526,34 @@ void Processor::rotater(uint8_t & reg, bool wrap)
     clrHalfCarryFlag();
 }
 
+void Processor::rlca()
+{
+    uint8_t lsb = (m_gpr.a & 0x80) ? 0x01 : 0x00;
+
+    (lsb) ? setCarryFlag() : clrCarryFlag();
+
+    m_gpr.a = (m_gpr.a << 1) | lsb;
+    
+    (0x00 == m_gpr.a) ? setZeroFlag() : clrZeroFlag();
+
+    clrNegFlag();
+    clrHalfCarryFlag();
+}
+
+void Processor::rrca()
+{
+    uint8_t msb = (m_gpr.a & 0x01) ? 0x01 : 0x00;
+
+    (msb) ? setCarryFlag() : clrCarryFlag();
+
+    m_gpr.a = (m_gpr.a >> 1) | msb;
+
+    (0x00 == m_gpr.a) ? setZeroFlag() : clrZeroFlag();
+
+    clrNegFlag();
+    clrHalfCarryFlag();
+}
+
 void Processor::rst(uint8_t address)
 {
     push(m_pc);
@@ -519,8 +581,8 @@ void Processor::loadMem(uint16_t ptr, uint16_t value)
     uint8_t lower = value & 0xFF;
     uint8_t upper = (value >> 8) & 0xFF;
 
-    m_memory.write(ptr, upper);
-    m_memory.write(ptr + 1, lower);
+    m_memory.write(ptr, lower);
+    m_memory.write(ptr + 1, upper);
 }
 
 void Processor::load(uint8_t & reg, uint8_t value)
@@ -609,7 +671,7 @@ Processor::Processor(MemoryController & memory)
         { 0x29, { "ADD_hl_hl", [this]() { add16(m_gpr.hl, m_gpr.hl); }, 1, 2 } },
         { 0x39, { "ADD_hl_sp", [this]() { add16(m_gpr.hl, m_sp);     }, 1, 2 } },
 
-        { 0xE8, { "ADD_sp_n", [this]() { add16(m_sp, m_operands[0]); }, 2, 4 } },
+        { 0xE8, { "ADD_sp_n", [this]() { add16(m_sp, m_sp, m_operands[0]); }, 2, 4 } },
 
         { 0xE6, { "AND_a_n",  [this]() { and8(m_operands[0]); }, 2, 2 } },
         { 0xA7, { "AND_a_a",  [this]() { and8(m_gpr.a);       }, 1, 1 } },
@@ -695,9 +757,9 @@ Processor::Processor(MemoryController & memory)
         ///////////
         { 0xEA, { "LD_(nn)_a",  [this]() { loadMem(m_gpr.a); }, 3, 1 } },
         { 0x08, { "LD_(nn)_sp", [this]() { loadMem(m_sp);    }, 3, 1 } },
-        { 0xE0, { "LD_(n)_a",   [this]() { loadMem(0xFF00 + uint16_t(m_operands[0]), m_gpr.a); }, 2, 1 } },
+        { 0xE0, { "LD_(n)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_operands[0]), m_gpr.a); }, 2, 1 } },
         { 0x02, { "LD_(bc)_a",  [this]() { loadMem(m_gpr.bc, m_gpr.a); }, 1, 1 } },
-        { 0xE2, { "LD_(c)_a",   [this]() { loadMem(0xFF00 + uint16_t(m_gpr.c), m_gpr.a); }, 1, 1 } },
+        { 0xE2, { "LD_(c)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_gpr.c), m_gpr.a); }, 1, 1 } },
         { 0x12, { "LD_(de)_a",  [this]() { loadMem(m_gpr.de, m_gpr.a); }, 1, 1 } },
 
         { 0x3E, { "LD_a_n",     [this]() { m_gpr.a = m_operands[0];                }, 2, 1 } },
@@ -785,10 +847,10 @@ Processor::Processor(MemoryController & memory)
         { 0x74, { "LD_(hl)_h", [this]() { loadMem(m_gpr.hl, m_gpr.h);       }, 1, 2 } },
         { 0x75, { "LD_(hl)_l", [this]() { loadMem(m_gpr.hl, m_gpr.l);       }, 1, 2 } },
 
-        { 0x21, { "LD_hl_nn", [this]() { load(m_gpr.hl);                      }, 3, 3 } },
-        { 0x31, { "LD_sp_nn", [this]() { load(m_sp);                          }, 3, 3 } },
-        { 0xF8, { "LD_hl_sp", [this]() { add8(m_gpr.hl, m_sp, m_operands[0]); }, 2, 3 } },
-        { 0xF9, { "LD_sp_hl", [this]() { m_sp = m_gpr.hl;                     }, 1, 2 } },
+        { 0x21, { "LD_hl_nn", [this]() { load(m_gpr.hl);                       }, 3, 3 } },
+        { 0x31, { "LD_sp_nn", [this]() { load(m_sp);                           }, 3, 3 } },
+        { 0xF8, { "LD_hl_sp", [this]() { add16(m_gpr.hl, m_sp, m_operands[0]); }, 2, 3 } },
+        { 0xF9, { "LD_sp_hl", [this]() { m_sp = m_gpr.hl;                      }, 1, 2 } },
 
         { 0xF6, { "OR_n",    [this]() { or8(m_operands[0]);           }, 2, 2 } },
         { 0xB6, { "OR_(hl)", [this]() { or8(m_memory.read(m_gpr.hl)); }, 1, 2 } },
@@ -817,19 +879,33 @@ Processor::Processor(MemoryController & memory)
         { 0xC8, { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 1, 2 } },
         { 0xD9, { "RETI",   [this]() { ret(true);                            }, 1, 1 } },
 
-        { 0x17, { "RLA", [this]() { rotatel(m_gpr.a, true); }, 1, 1 } },
-        { 0x1F, { "RRA", [this]() { rotater(m_gpr.a, true); }, 1, 1 } },
-        
-        { 0xC7, { "RST_$00", [this]() { jump(0x00); }, 1, 4 } },
-        { 0xCF, { "RST_$08", [this]() { jump(0x08); }, 1, 4 } },
-        { 0xD7, { "RST_$10", [this]() { jump(0x10); }, 1, 4 } },
-        { 0xDF, { "RST_$18", [this]() { jump(0x18); }, 1, 4 } },
-        { 0xE7, { "RST_$20", [this]() { jump(0x20); }, 1, 4 } },
-        { 0xEF, { "RST_$28", [this]() { jump(0x28); }, 1, 4 } },
-        { 0xF7, { "RST_$30", [this]() { jump(0x30); }, 1, 4 } },
-        { 0xFF, { "RST_$38", [this]() { jump(0x38); }, 1, 4 } },
+        { 0x17, { "RLA",  [this]() { rotatel(m_gpr.a, true); }, 1, 1 } },
+        { 0x07, { "RLCA", [this]() { rlca(); }, 1, 1 } },
+        { 0x1F, { "RRA",  [this]() { rotater(m_gpr.a, true); }, 1, 1 } },
+        { 0x0F, { "RRCA", [this]() { rrca(); }, 1, 1 } },
 
+        { 0xC7, { "RST_$00", [this]() { rst(0x00); }, 1, 4 } },
+        { 0xCF, { "RST_$08", [this]() { rst(0x08); }, 1, 4 } },
+        { 0xD7, { "RST_$10", [this]() { rst(0x10); }, 1, 4 } },
+        { 0xDF, { "RST_$18", [this]() { rst(0x18); }, 1, 4 } },
+        { 0xE7, { "RST_$20", [this]() { rst(0x20); }, 1, 4 } },
+        { 0xEF, { "RST_$28", [this]() { rst(0x28); }, 1, 4 } },
+        { 0xF7, { "RST_$30", [this]() { rst(0x30); }, 1, 4 } },
+        { 0xFF, { "RST_$38", [this]() { rst(0x38); }, 1, 4 } },
+
+        { 0x37, { "SCF", [this]() { setCarryFlag(); }, 1, 1 } },
+        
         { 0x10, { "STOP", [this]() { }, 1, 1 } },
+
+        { 0xDE, { "SBC_a_n",  [this]() { sbc(m_operands[0]); }, 2, 2 } },
+        { 0x9F, { "SBC_a_a",  [this]() { sbc(m_gpr.a);       }, 1, 1 } },
+        { 0x98, { "SBC_a_b",  [this]() { sbc(m_gpr.b);       }, 1, 1 } },
+        { 0x99, { "SBC_a_c",  [this]() { sbc(m_gpr.c);       }, 1, 1 } },
+        { 0x9A, { "SBC_a_d",  [this]() { sbc(m_gpr.d);       }, 1, 1 } },
+        { 0x9B, { "SBC_a_e",  [this]() { sbc(m_gpr.e);       }, 1, 1 } },
+        { 0x9C, { "SBC_a_h",  [this]() { sbc(m_gpr.h);       }, 1, 1 } },
+        { 0x9D, { "SBC_a_l",  [this]() { sbc(m_gpr.l);       }, 1, 1 } },
+        { 0x9E, { "SBC_(hl)", [this]() { sbc(m_memory.read(m_gpr.hl)); }, 1, 2 } },
         
         { 0xD6, { "SUB_a_n",  [this]() { sub8(m_operands[0], false); }, 2, 2 } },
         { 0x97, { "SUB_a_a",  [this]() { sub8(m_gpr.a, false);       }, 1, 1 } },
@@ -839,7 +915,8 @@ Processor::Processor(MemoryController & memory)
         { 0x93, { "SUB_a_e",  [this]() { sub8(m_gpr.e, false);       }, 1, 1 } },
         { 0x94, { "SUB_a_h",  [this]() { sub8(m_gpr.h, false);       }, 1, 1 } },
         { 0x95, { "SUB_a_l",  [this]() { sub8(m_gpr.l, false);       }, 1, 1 } },
-
+        { 0x96, { "SUB_(hl)", [this]() { sub8(m_memory.read(m_gpr.hl), false); }, 1, 2 } },
+        
         { 0xEE, { "XOR_a_n",  [this]() { xor8(m_operands[0]); }, 2, 2 } },
         { 0xAF, { "XOR_a_a",  [this]() { xor8(m_gpr.a);       }, 1, 1 } },
         { 0xA8, { "XOR_a_b",  [this]() { xor8(m_gpr.b);       }, 1, 1 } },
@@ -850,7 +927,6 @@ Processor::Processor(MemoryController & memory)
         { 0xAD, { "XOR_a_l",  [this]() { xor8(m_gpr.l);       }, 1, 1 } },
 
         { 0xAE, { "XOR_a_(hl)", [this]() { xor8(m_memory.read(m_gpr.hl)); }, 1, 2 } },
-
     };
 
     CB_OPCODES = {
@@ -1087,14 +1163,20 @@ Processor::Processor(MemoryController & memory)
         { 0x37, { "SWAP_a", [this]() { swap(m_gpr.a); }, 1, 2 } },
     };
 
+    ILLEGAL_OPCODES = {
+        0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD,
+    };
+    
     for (uint16_t i = 0; i < 0x100; i++) {
-        auto op = OPCODES.find(i);
-        if (OPCODES.end() == op) {
-            LOG("Warning: unimplemented opcode 0x%02x\n", i);
+        if ((CB_PREFIX == i)
+            || (ILLEGAL_OPCODES.end() != ILLEGAL_OPCODES.find(i))
+            || (OPCODES.end() != OPCODES.find(i))) {
+            continue;
         }
-
-        auto cb = CB_OPCODES.find(i);
-        if (CB_OPCODES.end() == cb) {
+        LOG("Warning: unimplemented opcode 0x%02x\n", i);
+    }
+    for (uint16_t i = 0; i < 0x100; i++) {
+        if (CB_OPCODES.end() == CB_OPCODES.find(i)) {
             LOG("Warning: unimplemented CB opcode 0x%02x\n", i);
         }
     }
