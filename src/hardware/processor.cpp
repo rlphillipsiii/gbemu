@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <cassert>
+#include <sstream>
 
 #include "processor.h"
 #include "memorycontroller.h"
@@ -14,6 +15,7 @@
 #include "logging.h"
 
 using std::string;
+using std::stringstream;
 
 const uint8_t Processor::CB_PREFIX = 0xCB;
 
@@ -91,7 +93,9 @@ bool Processor::interrupt()
     InterruptVector vector = InterruptVector::INVALID;
 
     uint8_t status = m_interrupts.mask & m_interrupts.status;
-    
+
+    // Check our interrupt status to see if any of the interrupt bits are
+    // set.  The if statements are in order of interrput priority.
     if (status & uint8_t(InterruptMask::VBLANK)) {
         vector = InterruptVector::VBLANK;
 
@@ -114,11 +118,15 @@ bool Processor::interrupt()
         m_interrupts.status &= ~uint8_t(InterruptMask::JOYPAD);
     }
 
+    // If we found an interrupt that needs to be serviced, push the pc
+    // on to the stack and then set the pc to the address of the interrupt
+    // vector.
     if (InterruptVector::INVALID != vector) {
         push(m_pc);
 
         m_pc = uint16_t(vector);
 
+        // We are jumping to an ISR, so turn disable interrupts.
         m_interrupts.enable = false;
         return true;
     }
@@ -147,15 +155,8 @@ void Processor::cycle()
     m_operands[0] = m_operands[1] = 0x00;
 
     // The program counter points to our next opcode.
+    m_instr = m_pc;
     uint8_t opcode = m_memory.read(m_pc++);
-
-#if DEBUG
-    bool loop = true;
-    if (m_pc - 1 == 0x0000) {
-        history();
-        while (loop);
-    }
-#endif
 
     // Look up the handler in our opcode table.  If the length of our command is greater
     // than 1, then we also need to grab the next length - 1 bytes as they are the
@@ -166,17 +167,15 @@ void Processor::cycle()
         m_operands[i] = m_memory.read(m_pc++);
     }
 
-#ifdef DEBUG
     if (m_executed.size() == 100) {
         m_executed.pop_front();
     }
 
-    Command cmd = { uint16_t(m_pc - operation->length), opcode, m_operands, operation };
-    m_executed.push_back(cmd);
-
-    // print(cmd);
+#ifdef DEBUG
+    log(opcode, operation);
+    //logRegisters();
 #endif
-
+    
     // Call the function pointer in our Operation struct.  Any arguments to the function
     // will have already been put in to the operands array.
     operation->handler();
@@ -187,6 +186,47 @@ void Processor::cycle()
     // executing the command (i.e. call if z will set ticks to 3 if the call was made
     // and leave it at 0 if it was not).
     m_ticks += operation->cycles;
+
+    // The flags register only uses the upper 4 bits, so let's go ahead and make sure
+    // that the lower nibble is always 0.
+    m_flags &= 0xF0;
+}
+
+void Processor::log(uint8_t opcode, const Operation *operation)
+{
+    if (m_executed.size() == 100) {
+        m_executed.pop_front();
+    }
+
+    Command cmd = { m_instr, opcode, m_operands, operation };
+    m_executed.push_back(cmd);
+
+    bool loop = true;
+    if ((0x00 == cmd.opcode) && (0x100 != cmd.pc) && false) {
+        history();
+
+        assert(0);
+        while (loop);
+    }
+}
+
+void Processor::logRegisters()
+{
+    stringstream stream;
+    stream << ((isZeroFlagSet())      ? "Z" : "-");
+    stream << ((isNegFlagSet())       ? "N" : "-");
+    stream << ((isHalfCarryFlagSet()) ? "H" : "-");
+    stream << ((isCarryFlagSet())     ? "C" : "-");
+
+    LOG("PC:0x%04x SP:0x%04x A:0x%02x F:%s BC:0x%04x DE:0x%04x HL:0x%04x | ",
+        m_instr, m_sp, m_gpr.a, stream.str().c_str(), m_gpr.bc, m_gpr.de, m_gpr.hl);
+
+    const Command & c = m_executed.back();
+    LOG("%s (0x%02x): ", c.operation->name.c_str(), c.opcode);
+    for (int8_t i = c.operation->length - 2; i >= 0; i--) {
+        LOG("%02x ", c.operands[i]);
+    }
+    LOG("%s", "\n");
 }
 
 void Processor::xor8(uint8_t value)
@@ -195,8 +235,6 @@ void Processor::xor8(uint8_t value)
 
     m_gpr.a ^= value;
     if (!m_gpr.a) { setZeroFlag(); }
-
-    setHalfCarryFlag();
 }
 
 void Processor::and8(uint8_t value)
@@ -219,10 +257,10 @@ void Processor::or8(uint8_t value)
 
 void Processor::inc(uint8_t & reg)
 {
-    (0xF == reg) ? setHalfCarryFlag() : clrHalfCarryFlag();
+    (0xF == (reg & 0xF)) ? setHalfCarryFlag() : clrHalfCarryFlag();
 
     reg++;
-    (0x00 == reg) ? setZeroFlag() : clrZeroFlag();
+    (!reg) ? setZeroFlag() : clrZeroFlag();
 
     clrNegFlag();
 }
@@ -239,56 +277,84 @@ void Processor::dec(uint8_t & reg)
 
 void Processor::add8(uint8_t value, bool carry)
 {
+    uint16_t adjust = (carry && isCarryFlagSet()) ? 0x01 : 0x00;
+
     m_flags = 0x00;
 
-    uint16_t result = uint16_t(m_gpr.a) + uint16_t(value);
-    if (carry && isCarryFlagSet()) { result += 1; }
-
+    uint16_t result = uint16_t(m_gpr.a) + uint16_t(value) + adjust;
     if (result & 0xFF00) { setCarryFlag(); }
 
-    uint8_t half = (m_gpr.a & 0xF) + (value & 0xF);
-    if (carry && isCarryFlagSet()) { half += 1; }
-
+    uint8_t half = (m_gpr.a & 0xF) + (value & 0xF) + adjust;
     if (half & 0xF0) { setHalfCarryFlag(); }
 
-    if (!(m_gpr.a = result & 0xFF)) {
-        setZeroFlag();
-    }
+    m_gpr.a = result & 0xFF;
+    if (!m_gpr.a) { setZeroFlag(); }
 }
 
 void Processor::sub8(uint8_t value, bool carry)
 {
+    uint8_t adjust = (carry && isCarryFlagSet()) ? 0x01 : 0x00;
+
     m_flags = 0x00;
 
-    if (carry) { value += 1; }
+    if (m_gpr.a < (value + adjust)) { setCarryFlag(); }
 
-    if (m_gpr.a < value) { setCarryFlag(); }
+    if ((m_gpr.a & 0x0F) < ((value & 0x0F) + adjust)) {
+        setHalfCarryFlag();
+    }
 
-    if ((m_gpr.a & 0x0F) < (value & 0x0F)) { setHalfCarryFlag(); }
+    m_gpr.a -= (value + adjust);
 
-    m_gpr.a -= value;
-
-    if (0x00 == m_gpr.a) { setZeroFlag(); }
+    if (!m_gpr.a) { setZeroFlag(); }
 
     setNegFlag();
 }
 
+void Processor::sbc(uint8_t value)
+{
+    sub8(value, true);
+}
+
 void Processor::add16(uint16_t & reg, uint16_t value)
 {
+    clrNegFlag();
+    
     uint32_t result = uint32_t(reg) + uint32_t(value);
     (result > 0xFFFF) ? setCarryFlag() : clrCarryFlag();
 
-    if ((reg & 0xFF) + (value & 0xFF) > 0xFF) {
+    const uint16_t mask = 0xFFF;
+    if ((reg & mask) + (value & mask) > mask) {
         setHalfCarryFlag();
     } else {
         clrHalfCarryFlag();
     }
 
     reg = result & 0xFFFF;
-
-    clrZeroFlag();
 }
 
+void Processor::add16(uint16_t & dest, uint16_t reg, uint8_t value)
+{
+    m_flags = 0x00;
+    
+    union { int8_t sVal; uint8_t uVal; } input = { .uVal = value };
+   
+    const uint16_t cMask = 0xFF;
+    if ((reg & cMask) + (input.sVal & cMask) > cMask) {
+        setCarryFlag();
+    } else {
+        clrCarryFlag();
+    }
+    
+    const uint16_t hMask = 0xF;
+    if ((reg & hMask) + (input.sVal & hMask) > hMask) {
+        setHalfCarryFlag();
+    } else {
+        clrHalfCarryFlag();
+    }
+
+    dest = reg + input.sVal;
+}
+    
 void Processor::swap(uint8_t & reg)
 {
     m_flags = 0x00;
@@ -318,14 +384,9 @@ void Processor::jump()
 
 void Processor::jumprel()
 {
-    union {
-        uint8_t valUnsigned;
-        int8_t valSigned;
-    } temp;
-
-    temp.valUnsigned = m_operands[0];
+    union { uint8_t uVal; int8_t sVal; } temp = { .uVal = m_operands[0] };
     
-    uint16_t address = m_pc + temp.valSigned;
+    uint16_t address = m_pc + temp.sVal;
     jump(address);
 }
 
@@ -375,6 +436,9 @@ void Processor::compliment()
     }
 
     m_gpr.a = value;
+
+    setNegFlag();
+    setHalfCarryFlag();
 }
 
 void Processor::bit(uint8_t reg, uint8_t which)
@@ -401,10 +465,8 @@ void Processor::set(uint8_t & reg, uint8_t which)
 
 void Processor::pop(uint16_t & reg)
 {
-    uint8_t lower = m_memory.read(m_sp + 1);
-    uint8_t upper = m_memory.read(m_sp + 2);
-
-    m_sp += 2;
+    uint8_t lower = m_memory.read(m_sp++);
+    uint8_t upper = m_memory.read(m_sp++);
 
     reg = (upper << 8) | lower;
 }
@@ -414,8 +476,8 @@ void Processor::push(uint16_t value)
     uint8_t lower = value & 0xFF;
     uint8_t upper = (value >> 8) & 0xFF;
 
-    m_memory.write(m_sp--, upper);
-    m_memory.write(m_sp--, lower);
+    m_memory.write(--m_sp, upper);
+    m_memory.write(--m_sp, lower);
 }
 
 void Processor::ret(bool enable)
@@ -429,22 +491,26 @@ void Processor::ret(bool enable)
     m_ticks = 3;
 }
 
-void Processor::rotatel(uint8_t & reg, bool wrap)
+void Processor::rotatel(uint8_t & reg, bool wrap, bool ignoreZero)
 {
     uint8_t lsb = (isCarryFlagSet()) ? 0x01 : 0x00;
 
-    (reg & (1 << 7)) ? setCarryFlag() : clrCarryFlag();
+    (reg & 0x80) ? setCarryFlag() : clrCarryFlag();
 
     reg <<= 1;
     if (wrap) { reg |= lsb; }
 
-    (0x00 == reg) ? setZeroFlag() : clrZeroFlag();
+    if (!ignoreZero) {
+        (!reg) ? setZeroFlag() : clrZeroFlag();
+    } else {
+        clrZeroFlag();
+    }
 
     clrNegFlag();
     clrHalfCarryFlag();
 }
 
-void Processor::rotater(uint8_t & reg, bool wrap)
+void Processor::rotater(uint8_t & reg, bool wrap, bool ignoreZero)
 {
     uint8_t msb = (isCarryFlagSet()) ? 0x80 : 0x00;
 
@@ -453,7 +519,47 @@ void Processor::rotater(uint8_t & reg, bool wrap)
     reg >>= 1;
     if (wrap) { reg |= msb; }
 
-    (0x00 == reg) ? setZeroFlag() : clrZeroFlag();
+    if (!ignoreZero) {
+        (!reg) ? setZeroFlag() : clrZeroFlag();
+    } else {
+        clrZeroFlag();
+    }
+
+    clrNegFlag();
+    clrHalfCarryFlag();
+}
+
+void Processor::rlc(uint8_t & reg, bool ignoreZero)
+{
+    uint8_t lsb = (reg & 0x80) ? 0x01 : 0x00;
+
+    (lsb) ? setCarryFlag() : clrCarryFlag();
+
+    reg = (reg << 1) | lsb;
+    
+    if (!ignoreZero) {
+        (!reg) ? setZeroFlag() : clrZeroFlag();
+    } else {
+        clrZeroFlag();
+    }
+
+    clrNegFlag();
+    clrHalfCarryFlag();
+}
+
+void Processor::rrc(uint8_t & reg, bool ignoreZero)
+{
+    uint8_t msb = (reg & 0x01) ? 0x80 : 0x00;
+
+    (msb) ? setCarryFlag() : clrCarryFlag();
+
+    reg = (reg >> 1) | msb;
+
+    if (!ignoreZero) {
+        (!reg) ? setZeroFlag() : clrZeroFlag();
+    } else {
+        clrZeroFlag();
+    }
 
     clrNegFlag();
     clrHalfCarryFlag();
@@ -486,8 +592,8 @@ void Processor::loadMem(uint16_t ptr, uint16_t value)
     uint8_t lower = value & 0xFF;
     uint8_t upper = (value >> 8) & 0xFF;
 
-    m_memory.write(ptr, upper);
-    m_memory.write(ptr + 1, lower);
+    m_memory.write(ptr, lower);
+    m_memory.write(ptr + 1, upper);
 }
 
 void Processor::load(uint8_t & reg, uint8_t value)
@@ -506,7 +612,52 @@ void Processor::load(uint16_t & reg, uint16_t value)
 
 void Processor::sla(uint8_t & reg)
 {
-    rotatel(reg, false);
+    rotatel(reg, false, false);
+}
+
+void Processor::srl(uint8_t & reg)
+{
+    rotater(reg, false, false);
+}
+
+void Processor::sra(uint8_t & reg)
+{
+    m_flags = 0x00;
+    
+    if (reg & 0x01) { setCarryFlag(); }
+
+    uint8_t msb = reg & 0x80;
+    reg = (reg >> 1) | msb;
+
+    if (!reg) { setZeroFlag(); }
+}
+
+void Processor::scf()
+{
+    setCarryFlag();
+
+    clrHalfCarryFlag();
+    clrNegFlag();
+}
+
+void Processor::daa()
+{
+    uint16_t value = m_gpr.a;
+
+    if (isNegFlagSet()) {
+        if (isHalfCarryFlagSet()) { value = (value - 0x06) & 0xFF; }
+        if (isCarryFlagSet())     { value -= 0x60;                 }
+    } else {
+        if (isHalfCarryFlagSet() || ((value & 0xF) > 0x09)) { value += 0x06; }
+        if (isCarryFlagSet() || (value > 0x9F))             { value += 0x60; }              
+    }
+
+    clrHalfCarryFlag();
+    if (value >= 0x100) { setCarryFlag(); }
+
+    m_gpr.a = value;
+    if (m_gpr.a) { clrZeroFlag(); }
+    else         { setZeroFlag(); }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -551,7 +702,7 @@ Processor::Processor(MemoryController & memory)
         { 0x29, { "ADD_hl_hl", [this]() { add16(m_gpr.hl, m_gpr.hl); }, 1, 2 } },
         { 0x39, { "ADD_hl_sp", [this]() { add16(m_gpr.hl, m_sp);     }, 1, 2 } },
 
-        { 0xE8, { "ADD_sp_n", [this]() { add16(m_sp, m_operands[0]); }, 2, 4 } },
+        { 0xE8, { "ADD_sp_n", [this]() { add16(m_sp, m_sp, m_operands[0]); }, 2, 4 } },
 
         { 0xE6, { "AND_a_n",  [this]() { and8(m_operands[0]); }, 2, 2 } },
         { 0xA7, { "AND_a_a",  [this]() { and8(m_gpr.a);       }, 1, 1 } },
@@ -585,7 +736,7 @@ Processor::Processor(MemoryController & memory)
 
         { 0x2F, { "CPL", [this]() { compliment(); }, 1, 1 } },
 
-        { 0x27, { "DAA", [this]() { assert(0); }, 1, 1 } },
+        { 0x27, { "DAA", [this]() { daa(); }, 1, 1 } },
 
         { 0x35, { "DEC_(hl)", [this]() { dec(m_memory.read(m_gpr.hl)); }, 1, 3 } },
         { 0x3D, { "DEC_a",    [this]() { dec(m_gpr.a);                 }, 1, 1 } },
@@ -617,8 +768,8 @@ Processor::Processor(MemoryController & memory)
         { 0x2C, { "INC_l",    [this]() { inc(m_gpr.l);                 }, 1, 1 } },
         { 0x33, { "INC_sp",   [this]() { inc(m_sp);                    }, 1, 2 } },
 
-        { 0xC3, { "JP_n",    [this]() { jump();                        }, 3, 3 } },
-        { 0xE9, { "JP_(hl)", [this]() { jump(m_memory.read(m_gpr.hl)); }, 1, 1 } },
+        { 0xC3, { "JP_n",  [this]() { jump();         }, 3, 3 } },
+        { 0xE9, { "JP_hl", [this]() { jump(m_gpr.hl); }, 1, 1 } },
 
         { 0xDA, { "JP_C",  [this]() { if (isCarryFlagSet())  { jump(); }}, 3, 3 } },
         { 0xD2, { "JP_NC", [this]() { if (!isCarryFlagSet()) { jump(); }}, 3, 3 } },
@@ -637,19 +788,19 @@ Processor::Processor(MemoryController & memory)
         ///////////
         { 0xEA, { "LD_(nn)_a",  [this]() { loadMem(m_gpr.a); }, 3, 1 } },
         { 0x08, { "LD_(nn)_sp", [this]() { loadMem(m_sp);    }, 3, 1 } },
-        { 0xE0, { "LD_(n)_a",   [this]() { loadMem(0xFF00 + uint16_t(m_operands[0]), m_gpr.a); }, 2, 1 } },
+        { 0xE0, { "LD_(n)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_operands[0]), m_gpr.a); }, 2, 1 } },
         { 0x02, { "LD_(bc)_a",  [this]() { loadMem(m_gpr.bc, m_gpr.a); }, 1, 1 } },
-        { 0xE2, { "LD_(c)_a",   [this]() { loadMem(0xFF00 + uint16_t(m_gpr.c), m_gpr.a); }, 1, 1 } },
+        { 0xE2, { "LD_(c)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_gpr.c), m_gpr.a); }, 1, 1 } },
         { 0x12, { "LD_(de)_a",  [this]() { loadMem(m_gpr.de, m_gpr.a); }, 1, 1 } },
 
-        { 0x3E, { "LD_a_n",     [this]() { m_gpr.a = m_operands[0];                }, 2, 1 } },
-        { 0xFA, { "LD_a_(nn)",  [this]() { m_gpr.a = m_memory.read(args());        }, 3, 1 } },
-        { 0x0A, { "LD_a_(bc)",  [this]() { m_gpr.a = m_memory.read(m_gpr.bc);      }, 1, 1 } },
-        { 0xF2, { "LD_a_(c)",   [this]() { m_gpr.a = m_memory.read(m_gpr.c);       }, 1, 1 } },
-        { 0x1A, { "LD_a_(de)",  [this]() { m_gpr.a = m_memory.read(m_gpr.de);      }, 1, 1 } },
-        { 0x7E, { "LD_a_(hl)",  [this]() { m_gpr.a = m_memory.read(m_gpr.hl);      }, 1, 1 } },
-        { 0x3A, { "LDD_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl--);    }, 1, 1 } },
-        { 0x2A, { "LDI_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl++);    }, 1, 1 } },
+        { 0x3E, { "LD_a_n",     [this]() { m_gpr.a = m_operands[0];                   }, 2, 1 } },
+        { 0xFA, { "LD_a_(nn)",  [this]() { m_gpr.a = m_memory.read(args());           }, 3, 1 } },
+        { 0x0A, { "LD_a_(bc)",  [this]() { m_gpr.a = m_memory.read(m_gpr.bc);         }, 1, 1 } },
+        { 0xF2, { "LD_a_(c)",   [this]() { m_gpr.a = m_memory.read(0xFF00 + m_gpr.c); }, 1, 1 } },
+        { 0x1A, { "LD_a_(de)",  [this]() { m_gpr.a = m_memory.read(m_gpr.de);         }, 1, 1 } },
+        { 0x7E, { "LD_a_(hl)",  [this]() { m_gpr.a = m_memory.read(m_gpr.hl);         }, 1, 1 } },
+        { 0x3A, { "LDD_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl--);       }, 1, 1 } },
+        { 0x2A, { "LDI_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl++);       }, 1, 1 } },
 
         { 0xF0, { "LDH_a_(n)",   [this]() { m_gpr.a = m_memory.read(0xFF00 + m_operands[0]); }, 2, 1} },
 
@@ -727,10 +878,10 @@ Processor::Processor(MemoryController & memory)
         { 0x74, { "LD_(hl)_h", [this]() { loadMem(m_gpr.hl, m_gpr.h);       }, 1, 2 } },
         { 0x75, { "LD_(hl)_l", [this]() { loadMem(m_gpr.hl, m_gpr.l);       }, 1, 2 } },
 
-        { 0x21, { "LD_hl_nn", [this]() { load(m_gpr.hl);  }, 3, 3 } },
-        { 0x31, { "LD_sp_nn", [this]() { load(m_sp);      }, 3, 3 } },
-        { 0xF8, { "LD_hl_sp", [this]() { m_gpr.hl = m_sp; }, 1, 2 } },
-        { 0xF9, { "LD_sp_hl", [this]() { m_sp = m_gpr.hl; }, 1, 2 } },
+        { 0x21, { "LD_hl_nn", [this]() { load(m_gpr.hl);                       }, 3, 3 } },
+        { 0x31, { "LD_sp_nn", [this]() { load(m_sp);                           }, 3, 3 } },
+        { 0xF8, { "LD_hl_sp", [this]() { add16(m_gpr.hl, m_sp, m_operands[0]); }, 2, 3 } },
+        { 0xF9, { "LD_sp_hl", [this]() { m_sp = m_gpr.hl;                      }, 1, 2 } },
 
         { 0xF6, { "OR_n",    [this]() { or8(m_operands[0]);           }, 2, 2 } },
         { 0xB6, { "OR_(hl)", [this]() { or8(m_memory.read(m_gpr.hl)); }, 1, 2 } },
@@ -759,9 +910,11 @@ Processor::Processor(MemoryController & memory)
         { 0xC8, { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 1, 2 } },
         { 0xD9, { "RETI",   [this]() { ret(true);                            }, 1, 1 } },
 
-        { 0x1F, { "RLA", [this]() { rotatel(m_gpr.a, true); }, 1, 1 } },
-        { 0x1F, { "RRA", [this]() { rotater(m_gpr.a, true); }, 1, 1 } },
-        
+        { 0x17, { "RLA",  [this]() { rotatel(m_gpr.a, true, true); }, 1, 1 } },
+        { 0x07, { "RLCA", [this]() { rlc(m_gpr.a, true); }, 1, 1 } },
+        { 0x1F, { "RRA",  [this]() { rotater(m_gpr.a, true, true); }, 1, 1 } },
+        { 0x0F, { "RRCA", [this]() { rrc(m_gpr.a, true); }, 1, 1 } },
+
         { 0xC7, { "RST_$00", [this]() { rst(0x00); }, 1, 4 } },
         { 0xCF, { "RST_$08", [this]() { rst(0x08); }, 1, 4 } },
         { 0xD7, { "RST_$10", [this]() { rst(0x10); }, 1, 4 } },
@@ -771,7 +924,19 @@ Processor::Processor(MemoryController & memory)
         { 0xF7, { "RST_$30", [this]() { rst(0x30); }, 1, 4 } },
         { 0xFF, { "RST_$38", [this]() { rst(0x38); }, 1, 4 } },
 
+        { 0x37, { "SCF", [this]() { scf(); }, 1, 1 } },
+        
         { 0x10, { "STOP", [this]() { }, 1, 1 } },
+
+        { 0xDE, { "SBC_a_n",  [this]() { sbc(m_operands[0]); }, 2, 2 } },
+        { 0x9F, { "SBC_a_a",  [this]() { sbc(m_gpr.a);       }, 1, 1 } },
+        { 0x98, { "SBC_a_b",  [this]() { sbc(m_gpr.b);       }, 1, 1 } },
+        { 0x99, { "SBC_a_c",  [this]() { sbc(m_gpr.c);       }, 1, 1 } },
+        { 0x9A, { "SBC_a_d",  [this]() { sbc(m_gpr.d);       }, 1, 1 } },
+        { 0x9B, { "SBC_a_e",  [this]() { sbc(m_gpr.e);       }, 1, 1 } },
+        { 0x9C, { "SBC_a_h",  [this]() { sbc(m_gpr.h);       }, 1, 1 } },
+        { 0x9D, { "SBC_a_l",  [this]() { sbc(m_gpr.l);       }, 1, 1 } },
+        { 0x9E, { "SBC_(hl)", [this]() { sbc(m_memory.read(m_gpr.hl)); }, 1, 2 } },
         
         { 0xD6, { "SUB_a_n",  [this]() { sub8(m_operands[0], false); }, 2, 2 } },
         { 0x97, { "SUB_a_a",  [this]() { sub8(m_gpr.a, false);       }, 1, 1 } },
@@ -781,7 +946,8 @@ Processor::Processor(MemoryController & memory)
         { 0x93, { "SUB_a_e",  [this]() { sub8(m_gpr.e, false);       }, 1, 1 } },
         { 0x94, { "SUB_a_h",  [this]() { sub8(m_gpr.h, false);       }, 1, 1 } },
         { 0x95, { "SUB_a_l",  [this]() { sub8(m_gpr.l, false);       }, 1, 1 } },
-
+        { 0x96, { "SUB_(hl)", [this]() { sub8(m_memory.read(m_gpr.hl), false); }, 1, 2 } },
+        
         { 0xEE, { "XOR_a_n",  [this]() { xor8(m_operands[0]); }, 2, 2 } },
         { 0xAF, { "XOR_a_a",  [this]() { xor8(m_gpr.a);       }, 1, 1 } },
         { 0xA8, { "XOR_a_b",  [this]() { xor8(m_gpr.b);       }, 1, 1 } },
@@ -792,7 +958,6 @@ Processor::Processor(MemoryController & memory)
         { 0xAD, { "XOR_a_l",  [this]() { xor8(m_gpr.l);       }, 1, 1 } },
 
         { 0xAE, { "XOR_a_(hl)", [this]() { xor8(m_memory.read(m_gpr.hl)); }, 1, 2 } },
-
     };
 
     CB_OPCODES = {
@@ -852,13 +1017,14 @@ Processor::Processor(MemoryController & memory)
         { 0x73, { "BIT_6_e", [this]() { bit(m_gpr.e, 6); }, 1, 2 } },
         { 0x74, { "BIT_6_h", [this]() { bit(m_gpr.h, 6); }, 1, 2 } },
         { 0x75, { "BIT_6_l", [this]() { bit(m_gpr.l, 6); }, 1, 2 } },
-        { 0x7D, { "BIT_7_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 7); }, 1, 3 } },
+        { 0x7E, { "BIT_7_(hl)", [this]() { bit(m_memory.read(m_gpr.hl), 7); }, 1, 3 } },
         { 0x7F, { "BIT_7_a", [this]() { bit(m_gpr.a, 7); }, 1, 2 } },
         { 0x78, { "BIT_7_b", [this]() { bit(m_gpr.b, 7); }, 1, 2 } },
         { 0x79, { "BIT_7_c", [this]() { bit(m_gpr.c, 7); }, 1, 2 } },
         { 0x7A, { "BIT_7_d", [this]() { bit(m_gpr.d, 7); }, 1, 2 } },
         { 0x7B, { "BIT_7_e", [this]() { bit(m_gpr.e, 7); }, 1, 2 } },
         { 0x7C, { "BIT_7_h", [this]() { bit(m_gpr.h, 7); }, 1, 2 } },
+        { 0x7D, { "BIT_7_l", [this]() { bit(m_gpr.l, 7); }, 1, 2 } },
 
         { 0x86, { "RES_0_(hl)", [this]() { res(m_memory.read(m_gpr.hl), 0); }, 1, 3 } },
         { 0x87, { "RES_0_a", [this]() { res(m_gpr.a, 0); }, 1, 2 } },
@@ -925,23 +1091,41 @@ Processor::Processor(MemoryController & memory)
         { 0xBC, { "RES_7_h", [this]() { res(m_gpr.h, 7); }, 1, 2 } },
         { 0xBD, { "RES_7_l", [this]() { res(m_gpr.l, 7); }, 1, 2 } },
 
-        { 0x16, { "RL_(hl)", [this]() { rotatel(m_memory.read(m_gpr.hl), true); }, 1, 4 } },
-        { 0x17, { "RL_a",    [this]() { rotatel(m_gpr.a, true);                 }, 1, 2 } },
-        { 0x10, { "RL_b",    [this]() { rotatel(m_gpr.b, true);                 }, 1, 2 } },
-        { 0x11, { "RL_c",    [this]() { rotatel(m_gpr.c, true);                 }, 1, 2 } },
-        { 0x12, { "RL_d",    [this]() { rotatel(m_gpr.d, true);                 }, 1, 2 } },
-        { 0x13, { "RL_e",    [this]() { rotatel(m_gpr.e, true);                 }, 1, 2 } },
-        { 0x14, { "RL_h",    [this]() { rotatel(m_gpr.h, true);                 }, 1, 2 } },
-        { 0x15, { "RL_l",    [this]() { rotatel(m_gpr.l, true);                 }, 1, 2 } },
+        { 0x16, { "RL_(hl)", [this]() { rotatel(m_memory.read(m_gpr.hl), true, false); }, 1, 4 } },
+        { 0x17, { "RL_a",    [this]() { rotatel(m_gpr.a, true, false); }, 1, 2 } },
+        { 0x10, { "RL_b",    [this]() { rotatel(m_gpr.b, true, false); }, 1, 2 } },
+        { 0x11, { "RL_c",    [this]() { rotatel(m_gpr.c, true, false); }, 1, 2 } },
+        { 0x12, { "RL_d",    [this]() { rotatel(m_gpr.d, true, false); }, 1, 2 } },
+        { 0x13, { "RL_e",    [this]() { rotatel(m_gpr.e, true, false); }, 1, 2 } },
+        { 0x14, { "RL_h",    [this]() { rotatel(m_gpr.h, true, false); }, 1, 2 } },
+        { 0x15, { "RL_l",    [this]() { rotatel(m_gpr.l, true, false); }, 1, 2 } },
 
-        { 0x1E, { "RR_(hl)", [this]() { rotater(m_memory.read(m_gpr.hl), true); }, 1, 4 } },
-        { 0x1F, { "RR_a",    [this]() { rotater(m_gpr.a, true);                 }, 1, 2 } },
-        { 0x18, { "RR_b",    [this]() { rotater(m_gpr.b, true);                 }, 1, 2 } },
-        { 0x19, { "RR_c",    [this]() { rotater(m_gpr.c, true);                 }, 1, 2 } },
-        { 0x1A, { "RR_d",    [this]() { rotater(m_gpr.d, true);                 }, 1, 2 } },
-        { 0x1B, { "RR_e",    [this]() { rotater(m_gpr.e, true);                 }, 1, 2 } },
-        { 0x1C, { "RR_h",    [this]() { rotater(m_gpr.h, true);                 }, 1, 2 } },
-        { 0x1D, { "RR_l",    [this]() { rotater(m_gpr.l, true);                 }, 1, 2 } },
+        { 0x06, { "RLC_(hl)", [this]() { rlc(m_memory.read(m_gpr.hl), false); }, 1, 4 } },
+        { 0x07, { "RLC_a",    [this]() { rlc(m_gpr.a, false); }, 1, 1 } },
+        { 0x00, { "RLC_b",    [this]() { rlc(m_gpr.b, false); }, 1, 1 } },
+        { 0x01, { "RLC_c",    [this]() { rlc(m_gpr.c, false); }, 1, 1 } },
+        { 0x02, { "RLC_d",    [this]() { rlc(m_gpr.d, false); }, 1, 1 } },
+        { 0x03, { "RLC_e",    [this]() { rlc(m_gpr.e, false); }, 1, 1 } },
+        { 0x04, { "RLC_h",    [this]() { rlc(m_gpr.h, false); }, 1, 1 } },
+        { 0x05, { "RLC_l",    [this]() { rlc(m_gpr.l, false); }, 1, 1 } },
+
+        { 0x0E, { "RRC_(hl)", [this]() { rrc(m_memory.read(m_gpr.hl), false); }, 1, 4 } },
+        { 0x0F, { "RRC_a",    [this]() { rrc(m_gpr.a, false); }, 1, 1 } },
+        { 0x08, { "RRC_b",    [this]() { rrc(m_gpr.b, false); }, 1, 1 } },
+        { 0x09, { "RRC_c",    [this]() { rrc(m_gpr.c, false); }, 1, 1 } },
+        { 0x0A, { "RRC_d",    [this]() { rrc(m_gpr.d, false); }, 1, 1 } },
+        { 0x0B, { "RRC_e",    [this]() { rrc(m_gpr.e, false); }, 1, 1 } },
+        { 0x0C, { "RRC_h",    [this]() { rrc(m_gpr.h, false); }, 1, 1 } },
+        { 0x0D, { "RRC_l",    [this]() { rrc(m_gpr.l, false); }, 1, 1 } },        
+
+        { 0x1E, { "RR_(hl)", [this]() { rotater(m_memory.read(m_gpr.hl), true, false); }, 1, 4 } },
+        { 0x1F, { "RR_a",    [this]() { rotater(m_gpr.a, true, false); }, 1, 2 } },
+        { 0x18, { "RR_b",    [this]() { rotater(m_gpr.b, true, false); }, 1, 2 } },
+        { 0x19, { "RR_c",    [this]() { rotater(m_gpr.c, true, false); }, 1, 2 } },
+        { 0x1A, { "RR_d",    [this]() { rotater(m_gpr.d, true, false); }, 1, 2 } },
+        { 0x1B, { "RR_e",    [this]() { rotater(m_gpr.e, true, false); }, 1, 2 } },
+        { 0x1C, { "RR_h",    [this]() { rotater(m_gpr.h, true, false); }, 1, 2 } },
+        { 0x1D, { "RR_l",    [this]() { rotater(m_gpr.l, true, false); }, 1, 2 } },
 
         { 0xC6, { "SET_0_(hl)", [this]() { set(m_memory.read(m_gpr.hl), 0); }, 1, 4 } },
         { 0xC7, { "SET_0_a", [this]() { set(m_gpr.a, 0); }, 1, 2 } },
@@ -1008,28 +1192,61 @@ Processor::Processor(MemoryController & memory)
         { 0xFC, { "SET_7_h", [this]() { set(m_gpr.h, 7); }, 1, 2 } },
         { 0xFD, { "SET_7_l", [this]() { set(m_gpr.l, 7); }, 1, 2 } },
         
-        { 0x3E, { "SLA_(hl)", [this]() { sla(m_memory.read(m_gpr.hl)); }, 1, 4 } },
-        { 0x3F, { "SLA_a",    [this]() { sla(m_gpr.a); }, 1, 2 } },
-        { 0x38, { "SLA_b",    [this]() { sla(m_gpr.b); }, 1, 2 } },
-        { 0x39, { "SLA_c",    [this]() { sla(m_gpr.c); }, 1, 2 } },
-        { 0x3A, { "SLA_d",    [this]() { sla(m_gpr.d); }, 1, 2 } },
-        { 0x3B, { "SLA_e",    [this]() { sla(m_gpr.e); }, 1, 2 } },
-        { 0x3C, { "SLA_h",    [this]() { sla(m_gpr.h); }, 1, 2 } },
-        { 0x3D, { "SLA_l",    [this]() { sla(m_gpr.l); }, 1, 2 } },
+        { 0x26, { "SLA_(hl)", [this]() { sla(m_memory.read(m_gpr.hl)); }, 1, 4 } },
+        { 0x27, { "SLA_a",    [this]() { sla(m_gpr.a); }, 1, 2 } },
+        { 0x20, { "SLA_b",    [this]() { sla(m_gpr.b); }, 1, 2 } },
+        { 0x21, { "SLA_c",    [this]() { sla(m_gpr.c); }, 1, 2 } },
+        { 0x22, { "SLA_d",    [this]() { sla(m_gpr.d); }, 1, 2 } },
+        { 0x23, { "SLA_e",    [this]() { sla(m_gpr.e); }, 1, 2 } },
+        { 0x24, { "SLA_h",    [this]() { sla(m_gpr.h); }, 1, 2 } },
+        { 0x25, { "SLA_l",    [this]() { sla(m_gpr.l); }, 1, 2 } },
 
-        { 0x37, { "SWAP_a", [this]() { swap(m_gpr.a); }, 1, 2 } },
+        { 0x2E, { "SRA_(hl)", [this]() { sra(m_memory.read(m_gpr.hl)); }, 1, 4 } },
+        { 0x2F, { "SRA_a",    [this]() { sra(m_gpr.a); }, 1, 2 } },
+        { 0x28, { "SRA_b",    [this]() { sra(m_gpr.b); }, 1, 2 } },
+        { 0x29, { "SRA_c",    [this]() { sra(m_gpr.c); }, 1, 2 } },
+        { 0x2A, { "SRA_d",    [this]() { sra(m_gpr.d); }, 1, 2 } },
+        { 0x2B, { "SRA_e",    [this]() { sra(m_gpr.e); }, 1, 2 } },
+        { 0x2C, { "SRA_h",    [this]() { sra(m_gpr.h); }, 1, 2 } },
+        { 0x2D, { "SRA_l",    [this]() { sra(m_gpr.l); }, 1, 2 } },
+
+        { 0x36, { "SWAP_(hl)", [this]() { swap(m_memory.read(m_gpr.hl)); }, 1, 4 } },
+        { 0x37, { "SWAP_a",    [this]() { swap(m_gpr.a); }, 1, 2 } },
+        { 0x30, { "SWAP_b",    [this]() { swap(m_gpr.b); }, 1, 2 } },
+        { 0x31, { "SWAP_c",    [this]() { swap(m_gpr.c); }, 1, 2 } },
+        { 0x32, { "SWAP_d",    [this]() { swap(m_gpr.d); }, 1, 2 } },
+        { 0x33, { "SWAP_e",    [this]() { swap(m_gpr.e); }, 1, 2 } },
+        { 0x34, { "SWAP_h",    [this]() { swap(m_gpr.h); }, 1, 2 } },
+        { 0x35, { "SWAP_l",    [this]() { swap(m_gpr.l); }, 1, 2 } },
+        
+        { 0x3E, { "SRL_(hl)", [this]() { srl(m_memory.read(m_gpr.hl)); }, 1, 4 } },
+        { 0x3F, { "SRL_a",    [this]() { srl(m_gpr.a); }, 1, 2 } },
+        { 0x38, { "SRL_b",    [this]() { srl(m_gpr.b); }, 1, 2 } },
+        { 0x39, { "SRL_c",    [this]() { srl(m_gpr.c); }, 1, 2 } },
+        { 0x3A, { "SRL_d",    [this]() { srl(m_gpr.d); }, 1, 2 } },
+        { 0x3B, { "SRL_e",    [this]() { srl(m_gpr.e); }, 1, 2 } },
+        { 0x3C, { "SRL_h",    [this]() { srl(m_gpr.h); }, 1, 2 } },
+        { 0x3D, { "SRL_l",    [this]() { srl(m_gpr.l); }, 1, 2 } },
     };
 
-    for (uint16_t i = 0; i < 0x100; i++) {
-        auto op = OPCODES.find(i);
-        if (OPCODES.end() == op) {
-            LOG("Warning: unimplemented opcode 0x%02x\n", i);
-        }
+    ILLEGAL_OPCODES = {
+        0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD,
+    };
 
-        auto cb = CB_OPCODES.find(i);
-        if (CB_OPCODES.end() == cb) {
+#ifdef DEBUG    
+    for (uint16_t i = 0; i < 0x100; i++) {
+        if ((CB_PREFIX == i)
+            || (ILLEGAL_OPCODES.end() != ILLEGAL_OPCODES.find(i))
+            || (OPCODES.end() != OPCODES.find(i))) {
+            continue;
+        }
+        LOG("Warning: unimplemented opcode 0x%02x\n", i);
+    }
+    for (uint16_t i = 0; i < 0x100; i++) {
+        if (CB_OPCODES.end() == CB_OPCODES.find(i)) {
             LOG("Warning: unimplemented CB opcode 0x%02x\n", i);
         }
     }
+#endif
 }
 

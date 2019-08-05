@@ -193,6 +193,8 @@ void GPU::cycle()
     if (!isDisplayEnabled() || (current != m_state)) {
         m_ticks = 0;
     }
+
+    if (!isDisplayEnabled()) { m_scanline = PIXELS_PER_COL; }
 }
 
 void GPU::handleHBlank()
@@ -212,9 +214,7 @@ void GPU::handleHBlank()
         updateRenderStateStatus(HBLANK);
     }
 
-    if (m_ticks < HBLANK_TICKS) {
-        return;
-    }
+    if (m_ticks < HBLANK_TICKS) { return; }
 
     m_scanline++;
 }
@@ -230,9 +230,12 @@ void GPU::handleVBlank()
         updateRenderStateStatus(VBLANK);
     }
 
-    if ((VBLANK_TICKS - 10) <= m_ticks) {
-        m_scanline = std::min(uint16_t(m_scanline + 1), SCANLINE_MAX);
+    const int cycles = VBLANK_TICKS / (SCANLINE_MAX - PIXELS_PER_COL);
+    if (0 != m_ticks%cycles) {
+        return;
     }
+
+    m_scanline = std::min(uint16_t(m_scanline + 1), SCANLINE_MAX);
 }
 
 void GPU::handleOAM()
@@ -264,9 +267,6 @@ Tile GPU::lookup(uint16_t address)
 
 ColorArray GPU::getColorMap()
 {
-    //std::string temp;
-    //std::getline(std::cin, temp);
-    
     if (isWindowEnabled()) {
 
     } else {
@@ -292,8 +292,7 @@ Tile GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t 
     // tile pointer object.  This will let us interpret the number that comes out as
     // either a signed integer (in the case of map 1) or an unsigned integer (in the
     // case of map 2).
-    union { uint8_t tile0; int8_t tile1; } tptr;
-    tptr.tile0 = m_memory.read(address);
+    union { uint8_t tile0; int8_t tile1; } tptr = { .tile0 = m_memory.read(address) };
 
     // Now that we have our union initialized, we need to figure out the offset we
     // need to use in order to figure out the location of our tile in memory.
@@ -501,7 +500,6 @@ void GPU::drawSprites(ColorArray & display)
 
         if (data->isVisible()) {
             enabled.push_back(data);
-            //break;
         }
     }
 
@@ -558,8 +556,6 @@ bool GPU::SpriteData::isVisible() const
 
 void GPU::SpriteData::render(GPU & gpu, ColorArray & display, uint8_t dPalette)
 {
-    //std::cout << toString() << std::endl;
-    
     gpu.readSprite(*this);
 
     for (size_t i = 0; i < this->colors.size(); i++) {

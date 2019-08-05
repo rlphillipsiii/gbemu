@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <utility>
 #include <string>
@@ -58,13 +59,16 @@ private:
     std::unordered_map<uint8_t, Operation> OPCODES;
     std::unordered_map<uint8_t, Operation> CB_OPCODES;
 
+    std::unordered_set<uint16_t> ILLEGAL_OPCODES;
+    
     MemoryController & m_memory;
 
     uint8_t m_ticks;
 
     /** Program counter that holds the address of the next instruction to fetch */
     uint16_t m_pc;
-
+    uint16_t m_instr;
+    
     /** Stack pointer that holds the next available address in the stack memory space */
     uint16_t m_sp;
 
@@ -79,7 +83,7 @@ private:
         uint16_t pc;
         uint8_t opcode;
         std::array<uint8_t, 2> operands;
-        Operation *operation;
+        const Operation *operation;
     };
     std::list<Command> m_executed;
 
@@ -102,7 +106,7 @@ private:
 #endif
 
     /** 8 bit flags register */
-    uint8_t m_flags;
+    uint8_t & m_flags;
 
     Operation *lookup(uint8_t opcode);
 
@@ -131,7 +135,9 @@ private:
     void xor8(uint8_t value);
     void add8(uint8_t value, bool carry);
     void sub8(uint8_t value, bool carry);
+    void sbc(uint8_t value);
     void add16(uint16_t & reg, uint16_t value);
+    void add16(uint16_t & dest, uint16_t reg, uint8_t value);
     void compare(uint8_t value);
     void swap(uint8_t & reg);
     void inc(uint8_t & reg);
@@ -148,8 +154,10 @@ private:
     void bit(uint8_t reg, uint8_t which);
     void res(uint8_t & reg, uint8_t which);
     void set(uint8_t & reg, uint8_t which);
-    void rotatel(uint8_t & reg, bool wrap);
-    void rotater(uint8_t & reg, bool wrap);
+    void rotatel(uint8_t & reg, bool wrap, bool ignoreZero);
+    void rotater(uint8_t & reg, bool wrap, bool ignoreZero);
+    void rlc(uint8_t & reg, bool ignoreZero);
+    void rrc(uint8_t & reg, bool ignoreZero);
     void rst(uint8_t address);
     void loadMem(uint8_t value);
     void loadMem(uint16_t value);
@@ -159,11 +167,18 @@ private:
     void load(uint16_t & reg);
     void load(uint16_t & reg, uint16_t value);
     void sla(uint8_t & reg);
-
+    void srl(uint8_t & reg);
+    void sra(uint8_t & reg);
+    void scf();
+    void daa();
+    
     bool interrupt();
 
     void history() const;
     void print(const Command & cmd) const;
+
+    void log(uint8_t opcode, const Operation *operation);
+    void logRegisters();
     
     inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
 };

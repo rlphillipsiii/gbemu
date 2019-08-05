@@ -5,6 +5,7 @@
 #include <QSGGeometry>
 #include <QSGVertexColorMaterial>
 #include <QThread>
+#include <QString>
 
 #include <cassert>
 #include <vector>
@@ -20,10 +21,14 @@ using std::shared_ptr;
 using std::unordered_map;
 
 const unordered_map<int, GameBoyInterface::JoyPadButton> Screen::BUTTON_MAP = {
-    { Qt::Key_Left,  GameBoyInterface::JOYPAD_LEFT  },
-    { Qt::Key_Right, GameBoyInterface::JOYPAD_RIGHT },
-    { Qt::Key_Down,  GameBoyInterface::JOYPAD_DOWN  },
-    { Qt::Key_Up,    GameBoyInterface::JOYPAD_UP    },
+    { Qt::Key_Left,  GameBoyInterface::JOYPAD_LEFT   },
+    { Qt::Key_Right, GameBoyInterface::JOYPAD_RIGHT  },
+    { Qt::Key_Down,  GameBoyInterface::JOYPAD_DOWN   },
+    { Qt::Key_Up,    GameBoyInterface::JOYPAD_UP     },
+    { Qt::Key_A,     GameBoyInterface::JOYPAD_A      },
+    { Qt::Key_B,     GameBoyInterface::JOYPAD_B      },
+    { Qt::Key_Space, GameBoyInterface::JOYPAD_START  },
+    { Qt::Key_F,     GameBoyInterface::JOYPAD_SELECT },
 };
 
 Screen::Screen(QQuickItem *parent)
@@ -43,7 +48,9 @@ Screen::Screen(QQuickItem *parent)
     m_timer.setInterval(30);
     m_timer.start();
 
-    m_console->load("rom.gb");
+    QStringList args = QCoreApplication::arguments();
+    
+    m_console->load(args.at(1).toStdString());
     m_console->start();
 }
 

@@ -13,35 +13,27 @@
 #include <QVector>
 
 #include <cstdint>
+#include <fstream>
 
 #include "screen.h"
+#include "logging.h"
 
-#if 0
-#include <fstream>
-#include <string>
-#include <sstream>
-
-int main(int, char**)
-{
-    std::ifstream input("tmp.txt");
-
-    std::ofstream output("vram.bin", std::ios::out | std::ios::binary);
-
-    char buffer[2];
-    while (input.read(buffer, 2)) {
-        std::stringstream str;
-        str << buffer[0] << buffer[1];
-
-        uint8_t b = uint8_t(std::stoi(str.str(), 0, 16));
-        output.write(reinterpret_cast<char*>(&b), 1);
-    }
-
-    return 0;
-}
-#endif
+using std::ifstream;
 
 int main(int argc, char **argv)
 {
+    if (argc < 2) {
+        LOG("USAGE: %s <rom>\n", argv[0]);
+        return -1;
+    }
+
+    ifstream file(argv[1], std::ios::in | std::ios::binary);
+    if (!file.is_open()) {
+        LOG("Failed to open file \"%s\"\n", argv[1]);
+        return -1;
+    }
+    file.close();
+    
     QGuiApplication app(argc, argv);
 
     qmlRegisterType<Screen>("GameBoy.Screen", 1, 0, "Screen");
