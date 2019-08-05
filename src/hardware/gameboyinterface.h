@@ -35,9 +35,9 @@ namespace GB {
 
         RGB & operator=(const RGB & other)
         {
-            this->red = other.red;
+            this->red   = other.red;
             this->green = other.green;
-            this->blue = other.blue;
+            this->blue  = other.blue;
             this->alpha = other.alpha;
             return *this;
         }
@@ -71,10 +71,10 @@ public:
     };
 
     enum JoyPadButton {
-        JOYPAD_A      = 0x01,
-        JOYPAD_B      = 0x02,
-        JOYPAD_SELECT = 0x04,
-        JOYPAD_START  = 0x08,
+        JOYPAD_A      = 0x10,
+        JOYPAD_B      = 0x20,
+        JOYPAD_SELECT = 0x40,
+        JOYPAD_START  = 0x80,
         JOYPAD_RIGHT  = 0x01,
         JOYPAD_LEFT   = 0x02,
         JOYPAD_UP     = 0x04,

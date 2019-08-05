@@ -164,7 +164,7 @@ void Processor::cycle()
 
 #ifdef DEBUG
     log(opcode, operation);
-    // logRegisters();
+    //logRegisters();
 #endif
     
     // Call the function pointer in our Operation struct.  Any arguments to the function

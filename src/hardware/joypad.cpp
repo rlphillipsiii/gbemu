@@ -38,9 +38,9 @@ void JoyPad::cycle()
 
     uint8_t state = 0x0F;
     
-    if (!(m_register & SHADOW_BUTTONS)) {
+    if (!(m_register & SHADOW_DIRS)) {
         state = m_shadow[SHADOW_MAP.at(SHADOW_DIRS)];        
-    } else if (!(m_register & SHADOW_DIRS)) {
+    } else if (!(m_register & SHADOW_BUTTONS)) {
         state = m_shadow[SHADOW_MAP.at(SHADOW_BUTTONS)];
     }
 
@@ -52,7 +52,9 @@ void JoyPad::clr(GameBoyInterface::JoyPadButton button)
     lock_guard<mutex> guard(m_lock);
 
     ShadowSelect select = BUTTON_MAP.at(button);
-    m_shadow[SHADOW_MAP.at(select)] |= button;
+
+    int index = SHADOW_MAP.at(select);
+    m_shadow[index] |= (button >> (4 * index));
 }
 
 void JoyPad::set(GameBoyInterface::JoyPadButton button)
@@ -60,5 +62,7 @@ void JoyPad::set(GameBoyInterface::JoyPadButton button)
     lock_guard<mutex> guard(m_lock);
 
     ShadowSelect select = BUTTON_MAP.at(button);
-    m_shadow[SHADOW_MAP.at(select)] &= ~button;
+
+    int index = SHADOW_MAP.at(select);
+    m_shadow[index] &= (~button >> (4 * index));
 }
