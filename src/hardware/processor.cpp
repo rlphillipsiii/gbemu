@@ -248,10 +248,10 @@ void Processor::or8(uint8_t value)
 
 void Processor::inc(uint8_t & reg)
 {
-    (0xF == reg) ? setHalfCarryFlag() : clrHalfCarryFlag();
+    (0xF == (reg & 0xF)) ? setHalfCarryFlag() : clrHalfCarryFlag();
 
     reg++;
-    (0x00 == reg) ? setZeroFlag() : clrZeroFlag();
+    (!reg) ? setZeroFlag() : clrZeroFlag();
 
     clrNegFlag();
 }
@@ -427,6 +427,9 @@ void Processor::compliment()
     }
 
     m_gpr.a = value;
+
+    setNegFlag();
+    setHalfCarryFlag();
 }
 
 void Processor::bit(uint8_t reg, uint8_t which)
@@ -479,22 +482,26 @@ void Processor::ret(bool enable)
     m_ticks = 3;
 }
 
-void Processor::rotatel(uint8_t & reg, bool wrap)
+void Processor::rotatel(uint8_t & reg, bool wrap, bool ignoreZero)
 {
     uint8_t lsb = (isCarryFlagSet()) ? 0x01 : 0x00;
 
-    (reg & (1 << 7)) ? setCarryFlag() : clrCarryFlag();
+    (reg & 0x80) ? setCarryFlag() : clrCarryFlag();
 
     reg <<= 1;
     if (wrap) { reg |= lsb; }
 
-    (0x00 == reg) ? setZeroFlag() : clrZeroFlag();
+    if (!ignoreZero) {
+        (!reg) ? setZeroFlag() : clrZeroFlag();
+    } else {
+        clrZeroFlag();
+    }
 
     clrNegFlag();
     clrHalfCarryFlag();
 }
 
-void Processor::rotater(uint8_t & reg, bool wrap)
+void Processor::rotater(uint8_t & reg, bool wrap, bool ignoreZero)
 {
     uint8_t msb = (isCarryFlagSet()) ? 0x80 : 0x00;
 
@@ -503,13 +510,17 @@ void Processor::rotater(uint8_t & reg, bool wrap)
     reg >>= 1;
     if (wrap) { reg |= msb; }
 
-    (0x00 == reg) ? setZeroFlag() : clrZeroFlag();
+    if (!ignoreZero) {
+        (!reg) ? setZeroFlag() : clrZeroFlag();
+    } else {
+        clrZeroFlag();
+    }
 
     clrNegFlag();
     clrHalfCarryFlag();
 }
 
-void Processor::rlc(uint8_t & reg)
+void Processor::rlc(uint8_t & reg, bool ignoreZero)
 {
     uint8_t lsb = (reg & 0x80) ? 0x01 : 0x00;
 
@@ -517,21 +528,29 @@ void Processor::rlc(uint8_t & reg)
 
     reg = (reg << 1) | lsb;
     
-    (!reg) ? setZeroFlag() : clrZeroFlag();
+    if (!ignoreZero) {
+        (!reg) ? setZeroFlag() : clrZeroFlag();
+    } else {
+        clrZeroFlag();
+    }
 
     clrNegFlag();
     clrHalfCarryFlag();
 }
 
-void Processor::rrc(uint8_t & reg)
+void Processor::rrc(uint8_t & reg, bool ignoreZero)
 {
-    uint8_t msb = (reg & 0x01) ? 0x01 : 0x00;
+    uint8_t msb = (reg & 0x01) ? 0x80 : 0x00;
 
     (msb) ? setCarryFlag() : clrCarryFlag();
 
     reg = (reg >> 1) | msb;
 
-    (!reg) ? setZeroFlag() : clrZeroFlag();
+    if (!ignoreZero) {
+        (!reg) ? setZeroFlag() : clrZeroFlag();
+    } else {
+        clrZeroFlag();
+    }
 
     clrNegFlag();
     clrHalfCarryFlag();
@@ -584,12 +603,12 @@ void Processor::load(uint16_t & reg, uint16_t value)
 
 void Processor::sla(uint8_t & reg)
 {
-    rotatel(reg, false);
+    rotatel(reg, false, false);
 }
 
 void Processor::srl(uint8_t & reg)
 {
-    rotater(reg, false);
+    rotater(reg, false, false);
 }
 
 void Processor::sra(uint8_t & reg)
@@ -602,6 +621,14 @@ void Processor::sra(uint8_t & reg)
     reg = (reg >> 1) | msb;
 
     if (!reg) { setZeroFlag(); }
+}
+
+void Processor::scf()
+{
+    setCarryFlag();
+
+    clrHalfCarryFlag();
+    clrNegFlag();
 }
 
 void Processor::daa()
@@ -874,10 +901,10 @@ Processor::Processor(MemoryController & memory)
         { 0xC8, { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 1, 2 } },
         { 0xD9, { "RETI",   [this]() { ret(true);                            }, 1, 1 } },
 
-        { 0x17, { "RLA",  [this]() { rotatel(m_gpr.a, true); }, 1, 1 } },
-        { 0x07, { "RLCA", [this]() { rlc(m_gpr.a); }, 1, 1 } },
-        { 0x1F, { "RRA",  [this]() { rotater(m_gpr.a, true); }, 1, 1 } },
-        { 0x0F, { "RRCA", [this]() { rrc(m_gpr.a); }, 1, 1 } },
+        { 0x17, { "RLA",  [this]() { rotatel(m_gpr.a, true, true); }, 1, 1 } },
+        { 0x07, { "RLCA", [this]() { rlc(m_gpr.a, true); }, 1, 1 } },
+        { 0x1F, { "RRA",  [this]() { rotater(m_gpr.a, true, true); }, 1, 1 } },
+        { 0x0F, { "RRCA", [this]() { rrc(m_gpr.a, true); }, 1, 1 } },
 
         { 0xC7, { "RST_$00", [this]() { rst(0x00); }, 1, 4 } },
         { 0xCF, { "RST_$08", [this]() { rst(0x08); }, 1, 4 } },
@@ -888,7 +915,7 @@ Processor::Processor(MemoryController & memory)
         { 0xF7, { "RST_$30", [this]() { rst(0x30); }, 1, 4 } },
         { 0xFF, { "RST_$38", [this]() { rst(0x38); }, 1, 4 } },
 
-        { 0x37, { "SCF", [this]() { setCarryFlag(); }, 1, 1 } },
+        { 0x37, { "SCF", [this]() { scf(); }, 1, 1 } },
         
         { 0x10, { "STOP", [this]() { }, 1, 1 } },
 
@@ -1055,41 +1082,41 @@ Processor::Processor(MemoryController & memory)
         { 0xBC, { "RES_7_h", [this]() { res(m_gpr.h, 7); }, 1, 2 } },
         { 0xBD, { "RES_7_l", [this]() { res(m_gpr.l, 7); }, 1, 2 } },
 
-        { 0x16, { "RL_(hl)", [this]() { rotatel(m_memory.read(m_gpr.hl), true); }, 1, 4 } },
-        { 0x17, { "RL_a",    [this]() { rotatel(m_gpr.a, true);                 }, 1, 2 } },
-        { 0x10, { "RL_b",    [this]() { rotatel(m_gpr.b, true);                 }, 1, 2 } },
-        { 0x11, { "RL_c",    [this]() { rotatel(m_gpr.c, true);                 }, 1, 2 } },
-        { 0x12, { "RL_d",    [this]() { rotatel(m_gpr.d, true);                 }, 1, 2 } },
-        { 0x13, { "RL_e",    [this]() { rotatel(m_gpr.e, true);                 }, 1, 2 } },
-        { 0x14, { "RL_h",    [this]() { rotatel(m_gpr.h, true);                 }, 1, 2 } },
-        { 0x15, { "RL_l",    [this]() { rotatel(m_gpr.l, true);                 }, 1, 2 } },
+        { 0x16, { "RL_(hl)", [this]() { rotatel(m_memory.read(m_gpr.hl), true, false); }, 1, 4 } },
+        { 0x17, { "RL_a",    [this]() { rotatel(m_gpr.a, true, false); }, 1, 2 } },
+        { 0x10, { "RL_b",    [this]() { rotatel(m_gpr.b, true, false); }, 1, 2 } },
+        { 0x11, { "RL_c",    [this]() { rotatel(m_gpr.c, true, false); }, 1, 2 } },
+        { 0x12, { "RL_d",    [this]() { rotatel(m_gpr.d, true, false); }, 1, 2 } },
+        { 0x13, { "RL_e",    [this]() { rotatel(m_gpr.e, true, false); }, 1, 2 } },
+        { 0x14, { "RL_h",    [this]() { rotatel(m_gpr.h, true, false); }, 1, 2 } },
+        { 0x15, { "RL_l",    [this]() { rotatel(m_gpr.l, true, false); }, 1, 2 } },
 
-        { 0x06, { "RLC_(hl)", [this]() { rlc(m_memory.read(m_gpr.hl)); }, 1, 4 } },
-        { 0x07, { "RLC_a",    [this]() { rlc(m_gpr.a);                 }, 1, 1 } },
-        { 0x00, { "RLC_b",    [this]() { rlc(m_gpr.b);                 }, 1, 1 } },
-        { 0x01, { "RLC_c",    [this]() { rlc(m_gpr.c);                 }, 1, 1 } },
-        { 0x02, { "RLC_d",    [this]() { rlc(m_gpr.d);                 }, 1, 1 } },
-        { 0x03, { "RLC_e",    [this]() { rlc(m_gpr.e);                 }, 1, 1 } },
-        { 0x04, { "RLC_h",    [this]() { rlc(m_gpr.h);                 }, 1, 1 } },
-        { 0x05, { "RLC_l",    [this]() { rlc(m_gpr.l);                 }, 1, 1 } },
+        { 0x06, { "RLC_(hl)", [this]() { rlc(m_memory.read(m_gpr.hl), false); }, 1, 4 } },
+        { 0x07, { "RLC_a",    [this]() { rlc(m_gpr.a, false); }, 1, 1 } },
+        { 0x00, { "RLC_b",    [this]() { rlc(m_gpr.b, false); }, 1, 1 } },
+        { 0x01, { "RLC_c",    [this]() { rlc(m_gpr.c, false); }, 1, 1 } },
+        { 0x02, { "RLC_d",    [this]() { rlc(m_gpr.d, false); }, 1, 1 } },
+        { 0x03, { "RLC_e",    [this]() { rlc(m_gpr.e, false); }, 1, 1 } },
+        { 0x04, { "RLC_h",    [this]() { rlc(m_gpr.h, false); }, 1, 1 } },
+        { 0x05, { "RLC_l",    [this]() { rlc(m_gpr.l, false); }, 1, 1 } },
 
-        { 0x0E, { "RRC_(hl)", [this]() { rrc(m_memory.read(m_gpr.hl)); }, 1, 4 } },
-        { 0x0F, { "RRC_a",    [this]() { rrc(m_gpr.a);                 }, 1, 1 } },
-        { 0x08, { "RRC_b",    [this]() { rrc(m_gpr.b);                 }, 1, 1 } },
-        { 0x09, { "RRC_c",    [this]() { rrc(m_gpr.c);                 }, 1, 1 } },
-        { 0x0A, { "RRC_d",    [this]() { rrc(m_gpr.d);                 }, 1, 1 } },
-        { 0x0B, { "RRC_e",    [this]() { rrc(m_gpr.e);                 }, 1, 1 } },
-        { 0x0C, { "RRC_h",    [this]() { rrc(m_gpr.h);                 }, 1, 1 } },
-        { 0x0D, { "RRC_l",    [this]() { rrc(m_gpr.l);                 }, 1, 1 } },        
+        { 0x0E, { "RRC_(hl)", [this]() { rrc(m_memory.read(m_gpr.hl), false); }, 1, 4 } },
+        { 0x0F, { "RRC_a",    [this]() { rrc(m_gpr.a, false); }, 1, 1 } },
+        { 0x08, { "RRC_b",    [this]() { rrc(m_gpr.b, false); }, 1, 1 } },
+        { 0x09, { "RRC_c",    [this]() { rrc(m_gpr.c, false); }, 1, 1 } },
+        { 0x0A, { "RRC_d",    [this]() { rrc(m_gpr.d, false); }, 1, 1 } },
+        { 0x0B, { "RRC_e",    [this]() { rrc(m_gpr.e, false); }, 1, 1 } },
+        { 0x0C, { "RRC_h",    [this]() { rrc(m_gpr.h, false); }, 1, 1 } },
+        { 0x0D, { "RRC_l",    [this]() { rrc(m_gpr.l, false); }, 1, 1 } },        
 
-        { 0x1E, { "RR_(hl)", [this]() { rotater(m_memory.read(m_gpr.hl), true); }, 1, 4 } },
-        { 0x1F, { "RR_a",    [this]() { rotater(m_gpr.a, true);                 }, 1, 2 } },
-        { 0x18, { "RR_b",    [this]() { rotater(m_gpr.b, true);                 }, 1, 2 } },
-        { 0x19, { "RR_c",    [this]() { rotater(m_gpr.c, true);                 }, 1, 2 } },
-        { 0x1A, { "RR_d",    [this]() { rotater(m_gpr.d, true);                 }, 1, 2 } },
-        { 0x1B, { "RR_e",    [this]() { rotater(m_gpr.e, true);                 }, 1, 2 } },
-        { 0x1C, { "RR_h",    [this]() { rotater(m_gpr.h, true);                 }, 1, 2 } },
-        { 0x1D, { "RR_l",    [this]() { rotater(m_gpr.l, true);                 }, 1, 2 } },
+        { 0x1E, { "RR_(hl)", [this]() { rotater(m_memory.read(m_gpr.hl), true, false); }, 1, 4 } },
+        { 0x1F, { "RR_a",    [this]() { rotater(m_gpr.a, true, false); }, 1, 2 } },
+        { 0x18, { "RR_b",    [this]() { rotater(m_gpr.b, true, false); }, 1, 2 } },
+        { 0x19, { "RR_c",    [this]() { rotater(m_gpr.c, true, false); }, 1, 2 } },
+        { 0x1A, { "RR_d",    [this]() { rotater(m_gpr.d, true, false); }, 1, 2 } },
+        { 0x1B, { "RR_e",    [this]() { rotater(m_gpr.e, true, false); }, 1, 2 } },
+        { 0x1C, { "RR_h",    [this]() { rotater(m_gpr.h, true, false); }, 1, 2 } },
+        { 0x1D, { "RR_l",    [this]() { rotater(m_gpr.l, true, false); }, 1, 2 } },
 
         { 0xC6, { "SET_0_(hl)", [this]() { set(m_memory.read(m_gpr.hl), 0); }, 1, 4 } },
         { 0xC7, { "SET_0_a", [this]() { set(m_gpr.a, 0); }, 1, 2 } },
@@ -1191,8 +1218,6 @@ Processor::Processor(MemoryController & memory)
         { 0x3B, { "SRL_e",    [this]() { srl(m_gpr.e); }, 1, 2 } },
         { 0x3C, { "SRL_h",    [this]() { srl(m_gpr.h); }, 1, 2 } },
         { 0x3D, { "SRL_l",    [this]() { srl(m_gpr.l); }, 1, 2 } },
-
-        { 0x37, { "SWAP_a", [this]() { swap(m_gpr.a); }, 1, 2 } },
     };
 
     ILLEGAL_OPCODES = {

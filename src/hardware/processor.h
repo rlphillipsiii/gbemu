@@ -150,10 +150,10 @@ private:
     void bit(uint8_t reg, uint8_t which);
     void res(uint8_t & reg, uint8_t which);
     void set(uint8_t & reg, uint8_t which);
-    void rotatel(uint8_t & reg, bool wrap);
-    void rotater(uint8_t & reg, bool wrap);
-    void rlc(uint8_t & reg);
-    void rrc(uint8_t & reg);
+    void rotatel(uint8_t & reg, bool wrap, bool ignoreZero);
+    void rotater(uint8_t & reg, bool wrap, bool ignoreZero);
+    void rlc(uint8_t & reg, bool ignoreZero);
+    void rrc(uint8_t & reg, bool ignoreZero);
     void rst(uint8_t address);
     void loadMem(uint8_t value);
     void loadMem(uint16_t value);
@@ -165,6 +165,7 @@ private:
     void sla(uint8_t & reg);
     void srl(uint8_t & reg);
     void sra(uint8_t & reg);
+    void scf();
     void daa();
     
     bool interrupt();
