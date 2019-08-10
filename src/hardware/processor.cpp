@@ -850,23 +850,22 @@ Processor::Processor(MemoryController & memory)
         { 0x20, { "JR_NZ", [this]() { if (!isZeroFlagSet())  { jumprel(); }}, 2, 2 } },
         { 0x28, { "JR_Z",  [this]() { if (isZeroFlagSet())   { jumprel(); }}, 2, 2 } },
 
-        { 0x32, { "LDD_(hl)_a", [this]() { loadMem(m_gpr.hl--, m_gpr.a); }, 1, 3 } },
-        { 0x22, { "LDI_(hl)_a", [this]() { loadMem(m_gpr.hl++, m_gpr.a); }, 1, 3 } },
+        { 0x32, { "LDD_(hl)_a", [this]() { loadMem(m_gpr.hl--, m_gpr.a); }, 1, 2 } },
+        { 0x22, { "LDI_(hl)_a", [this]() { loadMem(m_gpr.hl++, m_gpr.a); }, 1, 2 } },
 
-        ///////////
-        { 0xEA, { "LD_(nn)_a",  [this]() { loadMem(m_gpr.a); }, 3, 1 } },
-        { 0x08, { "LD_(nn)_sp", [this]() { loadMem(m_sp);    }, 3, 1 } },
-        { 0xE0, { "LD_(n)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_operands[0]), m_gpr.a); }, 2, 1 } },
-        { 0x02, { "LD_(bc)_a",  [this]() { loadMem(m_gpr.bc, m_gpr.a); }, 1, 1 } },
-        { 0xE2, { "LD_(c)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_gpr.c), m_gpr.a); }, 1, 1 } },
-        { 0x12, { "LD_(de)_a",  [this]() { loadMem(m_gpr.de, m_gpr.a); }, 1, 1 } },
+        { 0xEA, { "LD_(nn)_a",  [this]() { loadMem(m_gpr.a); }, 3, 4 } },
+        { 0x08, { "LD_(nn)_sp", [this]() { loadMem(m_sp);    }, 3, 5 } },
+        { 0xE0, { "LD_(n)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_operands[0]), m_gpr.a); }, 2, 3 } },
+        { 0x02, { "LD_(bc)_a",  [this]() { loadMem(m_gpr.bc, m_gpr.a); }, 1, 2 } },
+        { 0xE2, { "LD_(c)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_gpr.c), m_gpr.a); }, 1, 2 } },
+        { 0x12, { "LD_(de)_a",  [this]() { loadMem(m_gpr.de, m_gpr.a); }, 1, 2 } },
 
-        { 0xFA, { "LD_a_(nn)",  [this]() { m_gpr.a = m_memory.read(args());           }, 3, 1 } },
-        { 0x0A, { "LD_a_(bc)",  [this]() { m_gpr.a = m_memory.read(m_gpr.bc);         }, 1, 1 } },
-        { 0xF2, { "LD_a_(c)",   [this]() { m_gpr.a = m_memory.read(0xFF00 + m_gpr.c); }, 1, 1 } },
-        { 0x1A, { "LD_a_(de)",  [this]() { m_gpr.a = m_memory.read(m_gpr.de);         }, 1, 1 } },
-        { 0x3A, { "LDD_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl--);       }, 1, 1 } },
-        { 0x2A, { "LDI_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl++);       }, 1, 1 } },
+        { 0xFA, { "LD_a_(nn)",  [this]() { m_gpr.a = m_memory.read(args());           }, 3, 4 } },
+        { 0x0A, { "LD_a_(bc)",  [this]() { m_gpr.a = m_memory.read(m_gpr.bc);         }, 1, 2 } },
+        { 0xF2, { "LD_a_(c)",   [this]() { m_gpr.a = m_memory.read(0xFF00 + m_gpr.c); }, 1, 2 } },
+        { 0x1A, { "LD_a_(de)",  [this]() { m_gpr.a = m_memory.read(m_gpr.de);         }, 1, 2 } },
+        { 0x3A, { "LDD_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl--);       }, 1, 2 } },
+        { 0x2A, { "LDI_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl++);       }, 1, 2 } },
 
         { 0xF0, { "LDH_a_(n)", [this]() { m_gpr.a = m_memory.read(0xFF00 + m_operands[0]); }, 2, 3} },
 
@@ -888,7 +887,7 @@ Processor::Processor(MemoryController & memory)
         { 0x43, { "LD_b_e",   [this]() { m_gpr.b = m_gpr.e;       }, 1, 1 } },
         { 0x44, { "LD_b_h",   [this]() { m_gpr.b = m_gpr.h;       }, 1, 1 } },
         { 0x45, { "LD_b_l",   [this]() { m_gpr.b = m_gpr.l;       }, 1, 1 } },
-        { 0x01, { "LD_bc_nn", [this]() { m_gpr.bc = args();       }, 3, 1 } },
+        { 0x01, { "LD_bc_nn", [this]() { m_gpr.bc = args();       }, 3, 3 } },
         { 0x0E, { "LD_c_n",   [this]() { m_gpr.c = m_operands[0]; }, 2, 2 } },
         { 0x4E, { "LD_c_(hl)", [this]() { m_gpr.c = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x4F, { "LD_c_a",   [this]() { m_gpr.c = m_gpr.a;       }, 1, 1 } },
@@ -907,7 +906,7 @@ Processor::Processor(MemoryController & memory)
         { 0x53, { "LD_d_e",   [this]() { m_gpr.d = m_gpr.e;       }, 1, 1 } },
         { 0x54, { "LD_d_h",   [this]() { m_gpr.d = m_gpr.h;       }, 1, 1 } },
         { 0x55, { "LD_d_l",   [this]() { m_gpr.d = m_gpr.l;       }, 1, 1 } },
-        { 0x11, { "LD_de_nn", [this]() { m_gpr.de = args();       }, 3, 1 } },
+        { 0x11, { "LD_de_nn", [this]() { m_gpr.de = args();       }, 3, 3 } },
         { 0x1E, { "LD_e_n",   [this]() { m_gpr.e = m_operands[0]; }, 2, 2 } },
         { 0x5E, { "LD_e_(hl)", [this]() { m_gpr.e = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x5F, { "LD_e_a",   [this]() { m_gpr.e = m_gpr.a;       }, 1, 1 } },
@@ -935,7 +934,6 @@ Processor::Processor(MemoryController & memory)
         { 0x6B, { "LD_l_e",   [this]() { m_gpr.l = m_gpr.e;       }, 1, 1 } },
         { 0x6C, { "LD_l_h",   [this]() { m_gpr.l = m_gpr.h;       }, 1, 1 } },
         { 0x6D, { "LD_l_l",   [this]() { m_gpr.l = m_gpr.l;       }, 1, 1 } },
-        ///////////
 
         { 0x36, { "LD_(hl)_n", [this]() { loadMem(m_gpr.hl, m_operands[0]); }, 2, 3 } },
         { 0x77, { "LD_(hl)_a", [this]() { loadMem(m_gpr.hl, m_gpr.a);       }, 1, 2 } },
@@ -1315,36 +1313,6 @@ Processor::Processor(MemoryController & memory)
             LOG("Warning: unimplemented CB opcode 0x%02x\n", i);
         }
     }
-
-    const unsigned char ticks[256] = {
-        2, 6, 4, 4, 2, 2, 4, 4, 10, 4, 4, 4, 2, 2, 4, 4, // 0x0_
-        2, 6, 4, 4, 2, 2, 4, 4,  4, 4, 4, 4, 2, 2, 4, 4, // 0x1_
-        0, 6, 4, 4, 2, 2, 4, 2,  0, 4, 4, 4, 2, 2, 4, 2, // 0x2_
-        4, 6, 4, 4, 6, 6, 6, 2,  0, 4, 4, 4, 2, 2, 4, 2, // 0x3_
-        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x4_
-        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x5_
-        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x6_
-        4, 4, 4, 4, 4, 4, 2, 4,  2, 2, 2, 2, 2, 2, 4, 2, // 0x7_
-        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x8_
-        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x9_
-        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0xa_
-        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0xb_
-        0, 6, 0, 6, 0, 8, 4, 8,  0, 2, 0, 0, 0, 6, 4, 8, // 0xc_
-        0, 6, 0, 0, 0, 8, 4, 8,  0, 8, 0, 0, 0, 0, 4, 8, // 0xd_
-        6, 6, 4, 0, 0, 8, 4, 8,  8, 2, 8, 0, 0, 0, 4, 8, // 0xe_
-        6, 6, 4, 2, 0, 8, 4, 8,  6, 4, 8, 2, 0, 0, 4, 8  // 0xf_
-    };
-    for (const auto & instr : OPCODES) {
-        uint8_t opcode = instr.first;
-
-        const Operation & operation = instr.second;
-
-        uint8_t expected = ticks[opcode]/2;
-        if (operation.cycles != expected) {
-            LOG("%s: expected = %d | actual = %d\n", operation.name.c_str(), expected, operation.cycles);
-        }
-    }
-    assert(0);
 #endif
 }
 
