@@ -69,6 +69,8 @@ private:
     
     std::thread m_thread;
 
+    std::vector<Processor::Command> m_assembly;
+    
     void run();
     RomHeader parseHeader(const std::vector<uint8_t> & header);
 };

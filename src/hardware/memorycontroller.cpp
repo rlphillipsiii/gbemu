@@ -108,6 +108,24 @@ bool MemoryController::WorkingRam::isShadowAddressed(uint16_t address) const
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
+MemoryController::ReadOnly::ReadOnly(uint16_t size, uint16_t offset)
+    : Region(size, offset)
+{
+
+}
+
+void MemoryController::ReadOnly::write(uint16_t address, uint8_t value)
+{
+    if (!m_initializing) {
+        LOG("Illegal write to address 0x%04x => 0x%02x\n", address, value);
+        return;
+    }
+    Region::write(address, value);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
 MemoryController::MemoryMappedIO::MemoryMappedIO(
     MemoryController & parent,
     uint16_t size,
@@ -128,10 +146,12 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
     if (m_initializing) { Region::write(address, value); return; }
     
     switch (address) {
-    case GPU_STATUS_ADDRESS:
-        writeBytes(Region::read(address), value, 0x78);
-        break;
-
+    case GPU_STATUS_ADDRESS:        writeBytes(address, value, 0x78); break;
+    case JOYPAD_INPUT_ADDRESS:      writeBytes(address, value, 0x30); break;
+    case INTERRUPT_MASK_ADDRESS:    writeBytes(address, value, 0x1F); break;
+    case INTERRUPT_FLAGS_ADDRESS:   writeBytes(address, value, 0x1F); break;
+    case CPU_TIMER_CONTROL_ADDRESS: writeBytes(address, value, 0x07); break;
+        
     case GPU_OAM_DMA: {
         uint16_t source = uint16_t(value) * 0x0100;
         for (uint16_t i = 0; i < GRAPHICS_RAM_SIZE; i++) {
@@ -141,65 +161,17 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
         break;
     }
 
-    case JOYPAD_INPUT_ADDRESS:
-        writeBytes(Region::read(address), value, 0x30);
+    case SERIAL_TX_CONTROL_ADDRESS: {
+        if (value & 0x80) {
+            char c = m_parent.read(SERIAL_TX_DATA_ADDRESS);
+            LOG("%c", c);
+        }
         break;
+    }
 
-    case INTERRUPT_MASK_ADDRESS:
-    case INTERRUPT_FLAGS_ADDRESS:
-
-    case GPU_CONTROL_ADDRESS:
-    case GPU_SCROLLX_ADDRESS:
-    case GPU_SCROLLY_ADDRESS:
-    case GPU_PALETTE_ADDRESS:
-    case GPU_OBP1_ADDRESS:
-    case GPU_OBP2_ADDRESS:
-    case GPU_SCANLINE_ADDRESS:
-
-    case GPU_LCD_VRAM_BANK_ADDRESS:
-
-    case GPU_BG_PALETTE_INDEX:
-    case GPU_BG_PALETTE_DATA:
-    case GPU_SPRITE_PALETTE_INDEX:
-    case GPU_SPRITE_PALETTE_DATA:
-
-    case CPU_TIMER_DIV_ADDRESS:
-    case CPU_TIMER_COUNTER_ADDRESS:
-    case CPU_TIMER_MODULO_ADDRESS:
-    case CPU_TIMER_CONTROL_ADDRESS:
-
-    case SERIAL_TX_DATA_ADDRESS:
-    case SERIAL_TX_CONTROL_ADDRESS:
-        
-    case SOUND_CONTROLLER_CHANNEL:
-    case SOUND_CONTROLLER_OUTPUT:
-    case SOUND_CONTROLLER_CH1_SWEEP:
-    case SOUND_CONTROLLER_CH1_PATTERN:
-    case SOUND_CONTROLLER_CH1_ENVELOPE:
-    case SOUND_CONTROLLER_CH1_FREQ_LO:
-    case SOUND_CONTROLLER_CH1_FREQ_HI:
-    case SOUND_CONTROLLER_CH2_PATTERN:
-    case SOUND_CONTROLLER_CH2_ENVELOPE:
-    case SOUND_CONTROLLER_CH2_FREQ_LO:
-    case SOUND_CONTROLLER_CH2_FREQ_HI:
-    case SOUND_CONTROLLER_CH3_ENABLE:
-    case SOUND_CONTROLLER_CH3_LENGTH:
-    case SOUND_CONTROLLER_CH3_LEVEL:
-    case SOUND_CONTROLLER_CH3_FREQ_LO:
-    case SOUND_CONTROLLER_CH3_FREQ_HI:
-    case SOUND_CONTROLLER_ENABLE:
+    default:
         Region::write(address, value);
         break;
-
-    default: {
-        if ((address >= SOUND_CONTROLLER_CH3_ARB) &&
-            (address < SOUND_CONTROLLER_CH3_ARB + SOUND_CONTROLLER_ARB_BYTES)) {
-            Region::write(address, value);
-            break;
-        }
-
-        LOG("MemoryController::MemoryMappedIO::write : unhandled IO address 0x%04x\n", address);
-        assert(0);
     }
     }
 }
@@ -220,10 +192,14 @@ MemoryController::MemoryController()
 
     assert(uint16_t(BIOS_REGION.size()) == m_bios.size());
 
+    m_bios.enableInit();
+    
     uint16_t length = std::min(uint16_t(BIOS_REGION.size()), m_bios.size());
     for (uint16_t i = 0; i < length; i++) {
         m_bios.write(i, BIOS_REGION[i]);
     }
+
+    m_bios.disableInit();
 }
 
 void MemoryController::reset()
@@ -268,17 +244,25 @@ void MemoryController::write(uint16_t address, uint8_t value)
 {
     Region *region = find(address);
 
+    if (address == 0xd65e) {
+        printf(" ");
+    }
+
     if (region) {
         region->write(address, value);
     } else {
         LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
-        //assert(0);
+        assert(0);
     }
 }
 
 uint8_t & MemoryController::read(uint16_t address)
 {
     Region *region = find(address);
+
+    if (address == 0xd65e) {
+        printf(" ");
+    }
 
     if (region) {
         return region->read(address);
@@ -288,23 +272,6 @@ uint8_t & MemoryController::read(uint16_t address)
     assert(0);
 
     return DUMMY;
-}
-
-void MemoryController::writeWord(uint16_t address, uint16_t value)
-{
-    uint16_t low  = value & 0xFF;
-    uint16_t high = (value >> 8) & 0xFF;
-
-    write(address, low);
-    write(address + 1, high);
-}
-
-uint16_t MemoryController::readWord(uint16_t address)
-{
-    uint16_t low  = read(address);
-    uint16_t high = read(address + 1);
-
-    return (high << 8) | low;
 }
 
 void MemoryController::unlockBiosRegion()

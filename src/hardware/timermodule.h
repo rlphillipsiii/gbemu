@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <array>
+#include <unordered_map>
 
 class MemoryController;
 
@@ -20,11 +21,6 @@ public:
         TIMER_ENABLE    = 0x04,
     };
 
-    uint8_t & m_divider;
-    uint8_t & m_counter;
-    uint8_t & m_modulo;
-    uint8_t & m_control;
-
     explicit TimerModule(MemoryController & memory);
     ~TimerModule() = default;
 
@@ -33,7 +29,26 @@ public:
     void cycle();
 
 private:
+    static const uint16_t RTC_INCREMENT;
+
+    static const uint16_t TIMEOUT_4K;
+    static const uint16_t TIMEOUT_252K;
+    static const uint16_t TIMEOUT_65K;
+    static const uint16_t TIMEOUT_16K;
+    
+    static const std::unordered_map<uint8_t, uint16_t> TIMEOUT_MAP;
+
     MemoryController & m_memory;
+
+    uint8_t & m_divider;
+    uint8_t & m_counter;
+    uint8_t & m_modulo;
+    uint8_t & m_control;
+
+    uint16_t m_ticks;
+    uint16_t m_rtc;
+    
+    uint16_t m_timeout;
 };
 
 #endif /* TIMERMODULE_H_ */

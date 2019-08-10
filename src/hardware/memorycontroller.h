@@ -25,9 +25,7 @@ public:
     void initialize(uint16_t address, uint8_t value);
 
     void write(uint16_t address, uint8_t value);
-    void writeWord(uint16_t address, uint16_t value);
     uint8_t & read(uint16_t address);
-    uint16_t readWord(uint16_t address);
 
     void reset();
 
@@ -42,7 +40,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////////
     class Region {
     public:
-        Region(uint16_t size, uint16_t offset);
+        explicit Region(uint16_t size, uint16_t offset);
         virtual ~Region() = default;
 
         Region & operator=(const Region &) = delete;
@@ -53,13 +51,15 @@ private:
         virtual void write(uint16_t address, uint8_t value);
         virtual uint8_t & read(uint16_t address);
 
-        virtual uint16_t size() const { return uint16_t(m_memory.size()); }
+        virtual inline uint16_t size() const { return uint16_t(m_memory.size()); }
 
-        virtual void reset() { std::fill(m_memory.begin(), m_memory.end(), 0); }
+        virtual void reset() { std::fill(m_memory.begin(), m_memory.end(), resetValue()); }
 
-        void enableInit()  { m_initializing = true;  }
-        void disableInit() { m_initializing = false; }
+        inline void enableInit()  { m_initializing = true;  }
+        inline void disableInit() { m_initializing = false; }
 
+        virtual inline uint8_t resetValue() const { return 0x00; }
+        
     protected:
         uint16_t m_offset;
         uint16_t m_initializing;
@@ -71,15 +71,19 @@ private:
     ////////////////////////////////////////////////////////////////////////////////
     class MemoryMappedIO : public Region {
     public:
-        MemoryMappedIO(MemoryController & parent, uint16_t address, uint16_t offset);
+        explicit MemoryMappedIO(MemoryController & parent, uint16_t address, uint16_t offset);
 
         void write(uint16_t address, uint8_t value) override;
 
         void reset() override;
-        
+
+        inline void writeBytes(uint16_t ptr, uint8_t value, uint8_t mask)
+            { writeBytes(Region::read(ptr), value, mask); }
         inline void writeBytes(uint8_t & reg, uint8_t value, uint8_t mask)
             { reg = ((reg & ~mask) | (value & mask)); }
 
+        inline uint8_t resetValue() const override { return 0xFF; }
+        
     private:
         MemoryController & m_parent;
     };
@@ -88,7 +92,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////////
     class WorkingRam : public Region {
     public:
-        WorkingRam(uint16_t size, uint16_t offset);
+        explicit WorkingRam(uint16_t size, uint16_t offset);
 
         void write(uint16_t address, uint8_t value) override;
         uint8_t & read(uint16_t address) override;
@@ -104,9 +108,18 @@ private:
     };
     ////////////////////////////////////////////////////////////////////////////////
 
-    Region m_bios;
-    Region m_rom_0;
-    Region m_rom_1;
+    ////////////////////////////////////////////////////////////////////////////////
+    class ReadOnly : public Region {
+    public:
+        explicit ReadOnly(uint16_t size, uint16_t offset);
+
+        void write(uint16_t address, uint8_t value) override;
+    };
+    ////////////////////////////////////////////////////////////////////////////////
+
+    ReadOnly m_bios;
+    ReadOnly m_rom_0;
+    ReadOnly m_rom_1;
     Region m_gram;
     Region m_ext;
     WorkingRam m_working;

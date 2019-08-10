@@ -24,21 +24,38 @@ class MemoryController;
 
 class Processor {
 public:
+    struct Operation {
+        std::string name;
+        std::function<void()> handler;
+
+        uint8_t length;
+        uint8_t cycles;
+    };
+
+    struct Command {
+        uint16_t pc;
+        uint8_t opcode;
+        std::array<uint8_t, 2> operands;
+        const Operation *operation;
+
+        void print() const;
+        std::string str() const;
+    };
+
     explicit Processor(MemoryController & memory);
     ~Processor() = default;
 
     void reset();
     void cycle();
 
-    inline void setVBlankInterrupt() { Interrupts::set(m_memory, InterruptMask::VBLANK); }
-    inline void setSerialInterrupt() { Interrupts::set(m_memory, InterruptMask::SERIAL); }
-    inline void setLCDInterrupt()    { Interrupts::set(m_memory, InterruptMask::LCD);    }
-    inline void setJoypadInterrupt() { Interrupts::set(m_memory, InterruptMask::JOYPAD); }
+    std::vector<Command> disassemble();
     
 private:
 #ifdef UNIT_TEST
     friend int main(int argc, char **argv);
 #endif
+
+    static const uint16_t HISTORY_SIZE;
     
     static const uint8_t CB_PREFIX;
     
@@ -49,13 +66,6 @@ private:
         CARRY_FLAG_MASK      = 0x10,
     };
 
-    struct Operation {
-        std::string name;
-        std::function<void()> handler;
-
-        uint8_t length;
-        uint8_t cycles;
-    };
     std::unordered_map<uint8_t, Operation> OPCODES;
     std::unordered_map<uint8_t, Operation> CB_OPCODES;
 
@@ -79,12 +89,6 @@ private:
 
     std::array<uint8_t, 2> m_operands;
 
-    struct Command {
-        uint16_t pc;
-        uint8_t opcode;
-        std::array<uint8_t, 2> operands;
-        const Operation *operation;
-    };
     std::list<Command> m_executed;
 
     struct {
@@ -96,19 +100,15 @@ private:
 
     TimerModule m_timer;
 
-#if 0
-    struct {
-        union { struct { uint8_t a, f; }; uint16_t af; };
-        union { struct { uint8_t b, c; }; uint16_t bc; };
-        union { struct { uint8_t d, e; }; uint16_t de; };
-        union { struct { uint8_t h, l; }; uint16_t hl; };
-    } m_gpr;
-#endif
-
     /** 8 bit flags register */
     uint8_t & m_flags;
 
-    Operation *lookup(uint8_t opcode);
+    Operation *lookup(uint16_t & pc, uint8_t opcode);
+
+    inline void setVBlankInterrupt() { Interrupts::set(m_memory, InterruptMask::VBLANK); }
+    inline void setSerialInterrupt() { Interrupts::set(m_memory, InterruptMask::SERIAL); }
+    inline void setLCDInterrupt()    { Interrupts::set(m_memory, InterruptMask::LCD);    }
+    inline void setJoypadInterrupt() { Interrupts::set(m_memory, InterruptMask::JOYPAD); }
 
     inline bool isZeroFlagSet()      const { return (m_flags & ZERO_FLAG_MASK);       }
     inline bool isNegFlagSet()       const { return (m_flags & NEG_FLAG_MASK);        }
@@ -170,17 +170,17 @@ private:
     void srl(uint8_t & reg);
     void sra(uint8_t & reg);
     void scf();
+    void stop();
     void daa();
     
     bool interrupt();
 
     void history() const;
-    void print(const Command & cmd) const;
 
     void log(uint8_t opcode, const Operation *operation);
-    void logRegisters();
+    void logRegisters() const;
     
-    inline uint16_t args() const { return (m_operands[1] << 8) | m_operands[0]; }
+    inline uint16_t args() const { return (uint16_t(m_operands[1]) << 8) | m_operands[0]; }
 };
 
 

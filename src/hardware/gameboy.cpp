@@ -80,6 +80,12 @@ bool GameBoy::load(const string & filename)
         m_memory.initialize(ROM_0_OFFSET + i, data.at(i));
     }
 
+    m_assembly = m_cpu.disassemble();
+#if 0
+    for (const Processor::Command & cmd : m_assembly) {
+        std::cout << cmd.str() << std::endl;
+    }
+#endif    
     return true;
 }
 

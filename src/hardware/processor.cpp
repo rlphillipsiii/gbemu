@@ -8,6 +8,8 @@
 #include <iostream>
 #include <cassert>
 #include <sstream>
+#include <vector>
+#include <cstring>
 
 #include "processor.h"
 #include "memorycontroller.h"
@@ -16,8 +18,11 @@
 
 using std::string;
 using std::stringstream;
+using std::vector;
 
 const uint8_t Processor::CB_PREFIX = 0xCB;
+
+const uint16_t Processor::HISTORY_SIZE = 100;
 
 void Processor::reset()
 {
@@ -39,23 +44,79 @@ void Processor::reset()
     m_timer.reset();
 }
 
-void Processor::print(const Command & cmd) const
+void Processor::Command::print() const
 {
-    LOG("0x%04x | 0x%02x (%d): %s ", cmd.pc, cmd.opcode, cmd.operation->length, cmd.operation->name.c_str());
-    for (uint8_t i = 0; i < cmd.operation->length - 1; i++) {
-        LOG("0x%04x ", cmd.operands[i]);
-    }
-    LOG("%s", "\n");
+    LOG("%s\n", str().c_str());
 }
 
+string Processor::Command::str() const
+{
+    const int size = 32;
+    char buffer[size];
+    
+    stringstream stream;
+
+    sprintf(buffer, "0x%04x", pc);
+    stream << buffer << " | ";
+
+    sprintf(buffer, "0x%02x", opcode);
+    stream << buffer << " ";
+
+    stream << "(" << int(operation->length) << "): " << operation->name;
+
+    uint8_t args = operation->length - 1;
+    if (args) {
+        uint16_t operand = 0;
+        for (uint8_t i = 0; i < args; i++) {
+            operand |= (operands[i] << (8 * i));
+        }
+
+        if (operand > 0xFF) { sprintf(buffer, "0x%04x", operand); }
+        else                { sprintf(buffer, "0x%02x", operand); }
+
+        stream << " " << buffer;
+    }
+
+    return stream.str();
+}
+   
 void Processor::history() const
 {
     for (const Command & cmd : m_executed) {
-        print(cmd);
+        cmd.print();
     }
 }
 
-Processor::Operation *Processor::lookup(uint8_t opcode)
+vector<Processor::Command> Processor::disassemble()
+{
+    vector<Command> cmds;
+    
+    uint16_t pc = 0x100;
+    while (pc < GPU_RAM_OFFSET) {
+        Command cmd;
+        cmd.pc     = pc;
+        cmd.opcode = m_memory.read(pc++);
+
+        if (ILLEGAL_OPCODES.find(cmd.opcode) != ILLEGAL_OPCODES.end()) {
+            continue;
+        }
+        
+        Operation *operation = lookup(pc, cmd.opcode);
+        if (!operation) { continue; }
+
+        cmd.operation = operation;
+        
+        for (uint8_t i = 0; i < operation->length - 1; i++) {
+            cmd.operands[i] = m_memory.read(pc++);
+        }
+
+        cmds.push_back(cmd);
+    }
+
+    return cmds;
+}
+
+Processor::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
 {
     // Figure out which table we should be looking in for the next opcode.
     auto & table = (CB_PREFIX == opcode) ? CB_OPCODES : OPCODES;
@@ -67,7 +128,7 @@ Processor::Operation *Processor::lookup(uint8_t opcode)
     if (CB_PREFIX == opcode) {
         prefix = opcode;
         
-        opcode = m_memory.read(m_pc++);
+        opcode = m_memory.read(pc++);
     }
 
     // Lookup the opcode in the table that we just selected.  If we couldn't find it,
@@ -77,10 +138,12 @@ Processor::Operation *Processor::lookup(uint8_t opcode)
     if (iterator == table.end()) {
         history();
 
-        LOG("Unknown opcode: (0x%02x ==> 0x%02x)\n", prefix, opcode);
-        assert(0);
-
-        return &(OPCODES[0x00]);
+        if (CB_PREFIX == prefix) {
+            LOG("Unknown opcode: 0x%04x - (0x%02x ==> 0x%02x)\n", m_instr, prefix, opcode);
+        } else {
+            LOG("Unknown opcode: 0x%04x - (0x%02x)\n", m_instr, opcode);
+        }
+        return nullptr;
     }
 
     return &(iterator->second);
@@ -136,6 +199,9 @@ bool Processor::interrupt()
     
 void Processor::cycle()
 {
+    // Let the timer module do its thing
+    m_timer.cycle();
+
     // We are actually doing everything in one cycle, so to maintain the same timing
     // as the processor, we are going to just return until we have burned the same
     // number of cycles as the opcode takes on the actual hardware.
@@ -161,19 +227,17 @@ void Processor::cycle()
     // Look up the handler in our opcode table.  If the length of our command is greater
     // than 1, then we also need to grab the next length - 1 bytes as they are the
     // arguments to the next operation that we are going to execute.
-    Operation *operation = lookup(opcode);
+    Operation *operation = lookup(m_pc, opcode);
+    if (!operation) { assert(0); return; }
 
+    // If we have any operands, we need to read them in and increment the PC.
     for (uint8_t i = 0; i < operation->length - 1; i++) {
         m_operands[i] = m_memory.read(m_pc++);
     }
 
-    if (m_executed.size() == 100) {
-        m_executed.pop_front();
-    }
-
 #ifdef DEBUG
     log(opcode, operation);
-    //logRegisters();
+    logRegisters();
 #endif
     
     // Call the function pointer in our Operation struct.  Any arguments to the function
@@ -194,7 +258,7 @@ void Processor::cycle()
 
 void Processor::log(uint8_t opcode, const Operation *operation)
 {
-    if (m_executed.size() == 100) {
+    if (m_executed.size() == HISTORY_SIZE) {
         m_executed.pop_front();
     }
 
@@ -210,7 +274,7 @@ void Processor::log(uint8_t opcode, const Operation *operation)
     }
 }
 
-void Processor::logRegisters()
+void Processor::logRegisters() const
 {
     stringstream stream;
     stream << ((isZeroFlagSet())      ? "Z" : "-");
@@ -257,7 +321,8 @@ void Processor::or8(uint8_t value)
 
 void Processor::inc(uint8_t & reg)
 {
-    (0xF == (reg & 0xF)) ? setHalfCarryFlag() : clrHalfCarryFlag();
+    const uint8_t mask = 0x0F;
+    (mask == (reg & mask)) ? setHalfCarryFlag() : clrHalfCarryFlag();
 
     reg++;
     (!reg) ? setZeroFlag() : clrZeroFlag();
@@ -267,10 +332,11 @@ void Processor::inc(uint8_t & reg)
 
 void Processor::dec(uint8_t & reg)
 {
-    ((reg & 0x0F) == 0x00) ? setHalfCarryFlag() : clrHalfCarryFlag();
-
     reg--;
-    (0x00 == reg) ? setZeroFlag() : clrZeroFlag();
+    (!reg) ? setZeroFlag() : clrZeroFlag();
+
+    const uint8_t mask = 0x0F;
+    (mask == (reg & mask)) ? setHalfCarryFlag() : clrHalfCarryFlag();
 
     setNegFlag();
 }
@@ -364,22 +430,21 @@ void Processor::swap(uint8_t & reg)
 
     reg = (lower << 4) | upper;
 
-    if (0x00 == reg) { setZeroFlag(); }
+    if (!reg) { setZeroFlag(); }
 }
 
 void Processor::call()
 {
     push(m_pc);
 
-    m_pc = (m_operands[1] << 8) | m_operands[0];
+    m_pc = args();
 
     m_ticks = 3;
 }
 
 void Processor::jump()
 {
-    uint16_t address = (m_operands[1] << 8) | m_operands[0];
-    jump(address);
+    jump(args());
 }
 
 void Processor::jumprel()
@@ -392,6 +457,7 @@ void Processor::jumprel()
 
 void Processor::jump(uint16_t address)
 {
+    assert(address != 0xc1b9);
     m_pc = address;
 
     m_ticks = 1;
@@ -415,13 +481,11 @@ void Processor::compare(uint8_t value)
 
     setNegFlag();
 
-    if (m_gpr.a == value) {
-        setZeroFlag();
-    }
-    if (m_gpr.a < value) {
-        setCarryFlag();
-    }
-    if ((m_gpr.a & 0xF) < (value & 0xF)) {
+    if (m_gpr.a == value) { setZeroFlag();  }
+    if (m_gpr.a < value)  { setCarryFlag(); }
+
+    const uint8_t mask = 0xF;
+    if (((m_gpr.a - value) & mask) > (m_gpr.a & mask)) {
         setHalfCarryFlag();
     }
 }
@@ -596,11 +660,6 @@ void Processor::loadMem(uint16_t ptr, uint16_t value)
     m_memory.write(ptr + 1, upper);
 }
 
-void Processor::load(uint8_t & reg, uint8_t value)
-{
-    reg = value;
-}
-
 void Processor::load(uint16_t & reg)
 {
     load(reg, args());
@@ -638,6 +697,15 @@ void Processor::scf()
 
     clrHalfCarryFlag();
     clrNegFlag();
+}
+
+void Processor::stop()
+{
+    // TODO: prep for clock speed change in CGB mode only
+#if 0
+    if (!m_cgb) { return; }
+
+#endif
 }
 
 void Processor::daa()
@@ -782,8 +850,8 @@ Processor::Processor(MemoryController & memory)
         { 0x20, { "JR_NZ", [this]() { if (!isZeroFlagSet())  { jumprel(); }}, 2, 2 } },
         { 0x28, { "JR_Z",  [this]() { if (isZeroFlagSet())   { jumprel(); }}, 2, 2 } },
 
-        { 0x32, { "LDD_(hl)_a", [this]() { loadMem(m_gpr.hl--, m_gpr.a); }, 1, 2 } },
-        { 0x22, { "LDI_(hl)_a", [this]() { loadMem(m_gpr.hl++, m_gpr.a); }, 1, 2 } },
+        { 0x32, { "LDD_(hl)_a", [this]() { loadMem(m_gpr.hl--, m_gpr.a); }, 1, 3 } },
+        { 0x22, { "LDI_(hl)_a", [this]() { loadMem(m_gpr.hl++, m_gpr.a); }, 1, 3 } },
 
         ///////////
         { 0xEA, { "LD_(nn)_a",  [this]() { loadMem(m_gpr.a); }, 3, 1 } },
@@ -793,17 +861,17 @@ Processor::Processor(MemoryController & memory)
         { 0xE2, { "LD_(c)_a",   [this]() { loadMem(uint16_t(0xFF00 + m_gpr.c), m_gpr.a); }, 1, 1 } },
         { 0x12, { "LD_(de)_a",  [this]() { loadMem(m_gpr.de, m_gpr.a); }, 1, 1 } },
 
-        { 0x3E, { "LD_a_n",     [this]() { m_gpr.a = m_operands[0];                   }, 2, 1 } },
         { 0xFA, { "LD_a_(nn)",  [this]() { m_gpr.a = m_memory.read(args());           }, 3, 1 } },
         { 0x0A, { "LD_a_(bc)",  [this]() { m_gpr.a = m_memory.read(m_gpr.bc);         }, 1, 1 } },
         { 0xF2, { "LD_a_(c)",   [this]() { m_gpr.a = m_memory.read(0xFF00 + m_gpr.c); }, 1, 1 } },
         { 0x1A, { "LD_a_(de)",  [this]() { m_gpr.a = m_memory.read(m_gpr.de);         }, 1, 1 } },
-        { 0x7E, { "LD_a_(hl)",  [this]() { m_gpr.a = m_memory.read(m_gpr.hl);         }, 1, 1 } },
         { 0x3A, { "LDD_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl--);       }, 1, 1 } },
         { 0x2A, { "LDI_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl++);       }, 1, 1 } },
 
-        { 0xF0, { "LDH_a_(n)",   [this]() { m_gpr.a = m_memory.read(0xFF00 + m_operands[0]); }, 2, 1} },
+        { 0xF0, { "LDH_a_(n)", [this]() { m_gpr.a = m_memory.read(0xFF00 + m_operands[0]); }, 2, 3} },
 
+        { 0x3E, { "LD_a_n",   [this]() { m_gpr.a = m_operands[0]; }, 2, 2 } },
+        { 0x7E, { "LD_a_(hl)", [this]() { m_gpr.a = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x7F, { "LD_a_a",   [this]() { m_gpr.a = m_gpr.a;       }, 1, 1 } },
         { 0x78, { "LD_a_b",   [this]() { m_gpr.a = m_gpr.b;       }, 1, 1 } },
         { 0x79, { "LD_a_c",   [this]() { m_gpr.a = m_gpr.c;       }, 1, 1 } },
@@ -811,8 +879,8 @@ Processor::Processor(MemoryController & memory)
         { 0x7B, { "LD_a_e",   [this]() { m_gpr.a = m_gpr.e;       }, 1, 1 } },
         { 0x7C, { "LD_a_h",   [this]() { m_gpr.a = m_gpr.h;       }, 1, 1 } },
         { 0x7D, { "LD_a_l",   [this]() { m_gpr.a = m_gpr.l;       }, 1, 1 } },
-        { 0x06, { "LD_b_n",   [this]() { m_gpr.b = m_operands[0]; }, 2, 1 } },
-        { 0x46, { "LD_b_(hl)", [this]() { m_gpr.b = m_memory.read(m_gpr.hl); }, 1, 1 } },
+        { 0x06, { "LD_b_n",   [this]() { m_gpr.b = m_operands[0]; }, 2, 2 } },
+        { 0x46, { "LD_b_(hl)", [this]() { m_gpr.b = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x47, { "LD_b_a",   [this]() { m_gpr.b = m_gpr.a;       }, 1, 1 } },
         { 0x40, { "LD_b_b",   [this]() { m_gpr.b = m_gpr.b;       }, 1, 1 } },
         { 0x41, { "LD_b_c",   [this]() { m_gpr.b = m_gpr.c;       }, 1, 1 } },
@@ -821,8 +889,8 @@ Processor::Processor(MemoryController & memory)
         { 0x44, { "LD_b_h",   [this]() { m_gpr.b = m_gpr.h;       }, 1, 1 } },
         { 0x45, { "LD_b_l",   [this]() { m_gpr.b = m_gpr.l;       }, 1, 1 } },
         { 0x01, { "LD_bc_nn", [this]() { m_gpr.bc = args();       }, 3, 1 } },
-        { 0x0E, { "LD_c_n",   [this]() { m_gpr.c = m_operands[0]; }, 2, 1 } },
-        { 0x4E, { "LD_c_(hl)", [this]() { m_gpr.c = m_memory.read(m_gpr.hl); }, 1, 1 } },
+        { 0x0E, { "LD_c_n",   [this]() { m_gpr.c = m_operands[0]; }, 2, 2 } },
+        { 0x4E, { "LD_c_(hl)", [this]() { m_gpr.c = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x4F, { "LD_c_a",   [this]() { m_gpr.c = m_gpr.a;       }, 1, 1 } },
         { 0x48, { "LD_c_b",   [this]() { m_gpr.c = m_gpr.b;       }, 1, 1 } },
         { 0x49, { "LD_c_c",   [this]() { m_gpr.c = m_gpr.c;       }, 1, 1 } },
@@ -830,8 +898,8 @@ Processor::Processor(MemoryController & memory)
         { 0x4B, { "LD_c_e",   [this]() { m_gpr.c = m_gpr.e;       }, 1, 1 } },
         { 0x4C, { "LD_c_h",   [this]() { m_gpr.c = m_gpr.h;       }, 1, 1 } },
         { 0x4D, { "LD_c_l",   [this]() { m_gpr.c = m_gpr.l;       }, 1, 1 } },
-        { 0x16, { "LD_d_n",   [this]() { m_gpr.d = m_operands[0]; }, 2, 1 } },
-        { 0x56, { "LD_d_(hl)", [this]() { m_gpr.d = m_memory.read(m_gpr.hl); }, 1, 1 } },
+        { 0x16, { "LD_d_n",   [this]() { m_gpr.d = m_operands[0]; }, 2, 2 } },
+        { 0x56, { "LD_d_(hl)", [this]() { m_gpr.d = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x57, { "LD_d_a",   [this]() { m_gpr.d = m_gpr.a;       }, 1, 1 } },
         { 0x50, { "LD_d_b",   [this]() { m_gpr.d = m_gpr.b;       }, 1, 1 } },
         { 0x51, { "LD_d_c",   [this]() { m_gpr.d = m_gpr.c;       }, 1, 1 } },
@@ -840,8 +908,8 @@ Processor::Processor(MemoryController & memory)
         { 0x54, { "LD_d_h",   [this]() { m_gpr.d = m_gpr.h;       }, 1, 1 } },
         { 0x55, { "LD_d_l",   [this]() { m_gpr.d = m_gpr.l;       }, 1, 1 } },
         { 0x11, { "LD_de_nn", [this]() { m_gpr.de = args();       }, 3, 1 } },
-        { 0x1E, { "LD_e_n",   [this]() { m_gpr.e = m_operands[0]; }, 2, 1 } },
-        { 0x5E, { "LD_e_(hl)", [this]() { m_gpr.e = m_memory.read(m_gpr.hl); }, 1, 1 } },
+        { 0x1E, { "LD_e_n",   [this]() { m_gpr.e = m_operands[0]; }, 2, 2 } },
+        { 0x5E, { "LD_e_(hl)", [this]() { m_gpr.e = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x5F, { "LD_e_a",   [this]() { m_gpr.e = m_gpr.a;       }, 1, 1 } },
         { 0x58, { "LD_e_b",   [this]() { m_gpr.e = m_gpr.b;       }, 1, 1 } },
         { 0x59, { "LD_e_c",   [this]() { m_gpr.e = m_gpr.c;       }, 1, 1 } },
@@ -849,8 +917,8 @@ Processor::Processor(MemoryController & memory)
         { 0x5B, { "LD_e_e",   [this]() { m_gpr.e = m_gpr.e;       }, 1, 1 } },
         { 0x5C, { "LD_e_h",   [this]() { m_gpr.e = m_gpr.h;       }, 1, 1 } },
         { 0x5D, { "LD_e_l",   [this]() { m_gpr.e = m_gpr.l;       }, 1, 1 } },
-        { 0x26, { "LD_h_n",   [this]() { m_gpr.h = m_operands[0]; }, 2, 1 } },
-        { 0x66, { "LD_h_(hl)", [this]() { m_gpr.h = m_memory.read(m_gpr.hl); }, 1, 1 } },
+        { 0x26, { "LD_h_n",   [this]() { m_gpr.h = m_operands[0]; }, 2, 2 } },
+        { 0x66, { "LD_h_(hl)", [this]() { m_gpr.h = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x67, { "LD_h_a",   [this]() { m_gpr.h = m_gpr.a;       }, 1, 1 } },
         { 0x60, { "LD_h_b",   [this]() { m_gpr.h = m_gpr.b;       }, 1, 1 } },
         { 0x61, { "LD_h_c",   [this]() { m_gpr.h = m_gpr.c;       }, 1, 1 } },
@@ -858,8 +926,8 @@ Processor::Processor(MemoryController & memory)
         { 0x63, { "LD_h_e",   [this]() { m_gpr.h = m_gpr.e;       }, 1, 1 } },
         { 0x64, { "LD_h_h",   [this]() { m_gpr.h = m_gpr.h;       }, 1, 1 } },
         { 0x65, { "LD_h_l",   [this]() { m_gpr.h = m_gpr.l;       }, 1, 1 } },
-        { 0x2E, { "LD_l_n",   [this]() { m_gpr.l = m_operands[0]; }, 2, 1 } },
-        { 0x6E, { "LD_l_(hl)", [this]() { m_gpr.l = m_memory.read(m_gpr.hl); }, 1, 1 } },
+        { 0x2E, { "LD_l_n",   [this]() { m_gpr.l = m_operands[0]; }, 2, 2 } },
+        { 0x6E, { "LD_l_(hl)", [this]() { m_gpr.l = m_memory.read(m_gpr.hl); }, 1, 2 } },
         { 0x6F, { "LD_l_a",   [this]() { m_gpr.l = m_gpr.a;       }, 1, 1 } },
         { 0x68, { "LD_l_b",   [this]() { m_gpr.l = m_gpr.b;       }, 1, 1 } },
         { 0x69, { "LD_l_c",   [this]() { m_gpr.l = m_gpr.c;       }, 1, 1 } },
@@ -908,12 +976,12 @@ Processor::Processor(MemoryController & memory)
         { 0xD0, { "RET_NC", [this]() { if (!isCarryFlagSet()) { ret(false); }}, 1, 2 } },
         { 0xC0, { "RET_NZ", [this]() { if (!isZeroFlagSet())  { ret(false); }}, 1, 2 } },
         { 0xC8, { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 1, 2 } },
-        { 0xD9, { "RETI",   [this]() { ret(true);                            }, 1, 1 } },
+        { 0xD9, { "RETI",   [this]() { ret(true);                            }, 1, 4 } },
 
-        { 0x17, { "RLA",  [this]() { rotatel(m_gpr.a, true, true); }, 1, 1 } },
-        { 0x07, { "RLCA", [this]() { rlc(m_gpr.a, true); }, 1, 1 } },
-        { 0x1F, { "RRA",  [this]() { rotater(m_gpr.a, true, true); }, 1, 1 } },
-        { 0x0F, { "RRCA", [this]() { rrc(m_gpr.a, true); }, 1, 1 } },
+        { 0x17, { "RLA",  [this]() { rotatel(m_gpr.a, true, true); }, 1, 2} },
+        { 0x07, { "RLCA", [this]() { rlc(m_gpr.a, true); }, 1, 2 } },
+        { 0x1F, { "RRA",  [this]() { rotater(m_gpr.a, true, true); }, 1, 2 } },
+        { 0x0F, { "RRCA", [this]() { rrc(m_gpr.a, true); }, 1, 2 } },
 
         { 0xC7, { "RST_$00", [this]() { rst(0x00); }, 1, 4 } },
         { 0xCF, { "RST_$08", [this]() { rst(0x08); }, 1, 4 } },
@@ -926,7 +994,7 @@ Processor::Processor(MemoryController & memory)
 
         { 0x37, { "SCF", [this]() { scf(); }, 1, 1 } },
         
-        { 0x10, { "STOP", [this]() { }, 1, 1 } },
+        { 0x10, { "STOP", [this]() { stop(); }, 1, 1 } },
 
         { 0xDE, { "SBC_a_n",  [this]() { sbc(m_operands[0]); }, 2, 2 } },
         { 0x9F, { "SBC_a_a",  [this]() { sbc(m_gpr.a);       }, 1, 1 } },
@@ -1247,6 +1315,36 @@ Processor::Processor(MemoryController & memory)
             LOG("Warning: unimplemented CB opcode 0x%02x\n", i);
         }
     }
+
+    const unsigned char ticks[256] = {
+        2, 6, 4, 4, 2, 2, 4, 4, 10, 4, 4, 4, 2, 2, 4, 4, // 0x0_
+        2, 6, 4, 4, 2, 2, 4, 4,  4, 4, 4, 4, 2, 2, 4, 4, // 0x1_
+        0, 6, 4, 4, 2, 2, 4, 2,  0, 4, 4, 4, 2, 2, 4, 2, // 0x2_
+        4, 6, 4, 4, 6, 6, 6, 2,  0, 4, 4, 4, 2, 2, 4, 2, // 0x3_
+        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x4_
+        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x5_
+        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x6_
+        4, 4, 4, 4, 4, 4, 2, 4,  2, 2, 2, 2, 2, 2, 4, 2, // 0x7_
+        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x8_
+        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0x9_
+        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0xa_
+        2, 2, 2, 2, 2, 2, 4, 2,  2, 2, 2, 2, 2, 2, 4, 2, // 0xb_
+        0, 6, 0, 6, 0, 8, 4, 8,  0, 2, 0, 0, 0, 6, 4, 8, // 0xc_
+        0, 6, 0, 0, 0, 8, 4, 8,  0, 8, 0, 0, 0, 0, 4, 8, // 0xd_
+        6, 6, 4, 0, 0, 8, 4, 8,  8, 2, 8, 0, 0, 0, 4, 8, // 0xe_
+        6, 6, 4, 2, 0, 8, 4, 8,  6, 4, 8, 2, 0, 0, 4, 8  // 0xf_
+    };
+    for (const auto & instr : OPCODES) {
+        uint8_t opcode = instr.first;
+
+        const Operation & operation = instr.second;
+
+        uint8_t expected = ticks[opcode]/2;
+        if (operation.cycles != expected) {
+            LOG("%s: expected = %d | actual = %d\n", operation.name.c_str(), expected, operation.cycles);
+        }
+    }
+    assert(0);
 #endif
 }
 
