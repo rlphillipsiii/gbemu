@@ -33,6 +33,11 @@ public:
 
     void saveBIOS(const std::string & filename);
 
+    inline bool isRtcResetRequested() const
+        { return m_io.isRtcResetRequested(); }
+
+    inline void clearRtcReset() { m_io.clearRtcReset(); }
+    
 private:
     static uint8_t DUMMY;
     static const std::vector<uint8_t> BIOS_REGION;
@@ -83,9 +88,15 @@ private:
             { reg = ((reg & ~mask) | (value & mask)); }
 
         inline uint8_t resetValue() const override { return 0xFF; }
-        
+
+        inline bool isRtcResetRequested() const { return m_rtcReset; }
+
+        inline void clearRtcReset() { m_rtcReset = false; }
+
     private:
         MemoryController & m_parent;
+
+        bool m_rtcReset;
     };
     ////////////////////////////////////////////////////////////////////////////////
 
@@ -126,7 +137,7 @@ private:
     Region m_graphics;
     MemoryMappedIO m_io;
     Region m_zero;
-
+    
     std::list<Region*> m_memory;
 
     Region *find(uint16_t address) const;

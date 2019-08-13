@@ -122,7 +122,7 @@ Processor::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
     auto & table = (CB_PREFIX == opcode) ? CB_OPCODES : OPCODES;
 
     // If this isn't the CB prefix, we don't really care about our prefix.  If it
-    // is then we need to grab the next by as that is our actual opcode, and then
+    // is, then we need to grab the next by as that is our actual opcode, and then
     // save the prefix for debugging purposes.
     uint8_t prefix = 0x00;
     if (CB_PREFIX == opcode) {
@@ -131,9 +131,9 @@ Processor::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
         opcode = m_memory.read(pc++);
     }
 
-    // Lookup the opcode in the table that we just selected.  If we couldn't find it,
-    // then there's a bug and we have a fatal error.  Debug builds will assert and print
-    // an error out.  Release builds will return the noop handler.
+    // Lookup the opcode in the table that we just selected.  If we can't find it,
+    // we are just going to print out a warning on debug builds and return a
+    // nullptr to any upstream code.
     auto iterator = table.find(opcode);
     if (iterator == table.end()) {
         history();
@@ -209,6 +209,7 @@ void Processor::cycle()
 
     bool interrupted = interrupt();
     if (m_halted && !interrupted) {
+        m_ticks = 1;
         return;
     }
 
@@ -250,7 +251,8 @@ void Processor::cycle()
     // executing the command (i.e. call if z will set ticks to 3 if the call was made
     // and leave it at 0 if it was not).
     m_ticks += operation->cycles;
-
+    m_ticks *= 4;
+    
     // The flags register only uses the upper 4 bits, so let's go ahead and make sure
     // that the lower nibble is always 0.
     m_flags &= 0xF0;
@@ -282,8 +284,8 @@ void Processor::logRegisters() const
     stream << ((isHalfCarryFlagSet()) ? "H" : "-");
     stream << ((isCarryFlagSet())     ? "C" : "-");
 
-    LOG("PC:0x%04x SP:0x%04x A:0x%02x F:%s BC:0x%04x DE:0x%04x HL:0x%04x | ",
-        m_instr, m_sp, m_gpr.a, stream.str().c_str(), m_gpr.bc, m_gpr.de, m_gpr.hl);
+    LOG("PC:0x%04x SP:0x%04x IME:%d A:0x%02x F:%s BC:0x%04x DE:0x%04x HL:0x%04x | ",
+        m_instr, m_sp, int(m_interrupts.enable), m_gpr.a, stream.str().c_str(), m_gpr.bc, m_gpr.de, m_gpr.hl);
 
     const Command & c = m_executed.back();
     LOG("%s (0x%02x): ", c.operation->name.c_str(), c.opcode);

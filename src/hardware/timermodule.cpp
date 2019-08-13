@@ -15,10 +15,10 @@ using std::unordered_map;
 
 const uint16_t TimerModule::RTC_INCREMENT = 488;
 
-const uint16_t TimerModule::TIMEOUT_4K   = 1953;
-const uint16_t TimerModule::TIMEOUT_252K = 31;
-const uint16_t TimerModule::TIMEOUT_65K  = 122;
-const uint16_t TimerModule::TIMEOUT_16K  = 488;
+const uint16_t TimerModule::TIMEOUT_4K   = 1024;
+const uint16_t TimerModule::TIMEOUT_252K = 16;
+const uint16_t TimerModule::TIMEOUT_65K  = 64;
+const uint16_t TimerModule::TIMEOUT_16K  = 256;
 
 const unordered_map<uint8_t, uint16_t> TimerModule::TIMEOUT_MAP = {
     { 0x00, TIMEOUT_4K  }, { 0x01, TIMEOUT_252K },
@@ -44,6 +44,12 @@ void TimerModule::reset()
 
 void TimerModule::cycle()
 {
+    if (m_memory.isRtcResetRequested()) {
+        m_divider = 0x00;
+
+        m_memory.clearRtcReset();
+    }
+
     if (!(m_control & TIMER_ENABLE)) { return; }
 
     auto entry = TIMEOUT_MAP.find(m_control & TIMER_FREQUENCY);
@@ -61,7 +67,7 @@ void TimerModule::cycle()
     
     m_timeout = entry->second;
     if (m_timeout == m_ticks++) {
-        if (++m_counter == 0) {
+        if (0xFF == m_counter++) {
             Interrupts::set(m_memory, InterruptMask::TIMER);
 
             m_counter = m_modulo;

@@ -122,7 +122,6 @@ void MemoryController::ReadOnly::write(uint16_t address, uint8_t value)
     }
     Region::write(address, value);
 }
-
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -131,7 +130,8 @@ MemoryController::MemoryMappedIO::MemoryMappedIO(
     uint16_t size,
     uint16_t offset)
     : Region(size, offset),
-      m_parent(parent)
+      m_parent(parent),
+      m_rtcReset(false)
 {
     Region::write(JOYPAD_INPUT_ADDRESS, 0xFF);
 }
@@ -151,6 +151,11 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
     case INTERRUPT_MASK_ADDRESS:    writeBytes(address, value, 0x1F); break;
     case INTERRUPT_FLAGS_ADDRESS:   writeBytes(address, value, 0x1F); break;
     case CPU_TIMER_CONTROL_ADDRESS: writeBytes(address, value, 0x07); break;
+
+    case CPU_TIMER_DIV_ADDRESS: {
+        m_rtcReset = true;
+        break;
+    }
         
     case GPU_OAM_DMA: {
         uint16_t source = uint16_t(value) * 0x0100;
@@ -243,10 +248,6 @@ void MemoryController::write(uint16_t address, uint8_t value)
 {
     Region *region = find(address);
 
-    if (address == 0xd65e) {
-        printf(" ");
-    }
-
     if (region) {
         region->write(address, value);
     } else {
@@ -258,11 +259,6 @@ void MemoryController::write(uint16_t address, uint8_t value)
 uint8_t & MemoryController::read(uint16_t address)
 {
     Region *region = find(address);
-
-    if (address == 0xd65e) {
-        printf(" ");
-    }
-
     if (region) {
         return region->read(address);
     }
