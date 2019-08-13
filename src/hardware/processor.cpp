@@ -151,7 +151,7 @@ Processor::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
 
 bool Processor::interrupt()
 {
-    if (!m_interrupts.enable) { return false; }
+    if (!m_interrupts.enable && !m_halted) { return false; }
 
     InterruptVector vector = InterruptVector::INVALID;
 
@@ -161,36 +161,30 @@ bool Processor::interrupt()
     // set.  The if statements are in order of interrput priority.
     if (status & uint8_t(InterruptMask::VBLANK)) {
         vector = InterruptVector::VBLANK;
-
-        m_interrupts.status &= ~uint8_t(InterruptMask::VBLANK);
     } else if (status & uint8_t(InterruptMask::LCD)) {
         vector = InterruptVector::LCD;
-
-        m_interrupts.status &= ~uint8_t(InterruptMask::LCD);
     } else if (status & uint8_t(InterruptMask::TIMER)) {
         vector = InterruptVector::TIMER;
-
-        m_interrupts.status &= ~uint8_t(InterruptMask::TIMER);
     } else if (status & uint8_t(InterruptMask::SERIAL)) {
         vector = InterruptVector::SERIAL;
-
-        m_interrupts.status &= ~uint8_t(InterruptMask::SERIAL);
     } else if (status & uint8_t(InterruptMask::JOYPAD)) {
         vector = InterruptVector::JOYPAD;
-
-        m_interrupts.status &= ~uint8_t(InterruptMask::JOYPAD);
     }
 
     // If we found an interrupt that needs to be serviced, push the pc
     // on to the stack and then set the pc to the address of the interrupt
     // vector.
     if (InterruptVector::INVALID != vector) {
-        push(m_pc);
+        if (m_interrupts.enable) {
+            push(m_pc);
 
-        m_pc = uint16_t(vector);
+            m_pc = uint16_t(vector);
 
-        // We are jumping to an ISR, so turn disable interrupts.
-        m_interrupts.enable = false;
+            // We are jumping to an ISR, so disable interrupts and clear the
+            // flag in the interrupt status register.
+            m_interrupts.status &= ~uint8_t(Interrupts::toMask(vector));
+            m_interrupts.enable = false;
+        }
         return true;
     }
 
@@ -238,7 +232,7 @@ void Processor::cycle()
 
 #ifdef DEBUG
     log(opcode, operation);
-    logRegisters();
+    //logRegisters();
 #endif
     
     // Call the function pointer in our Operation struct.  Any arguments to the function

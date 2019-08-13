@@ -58,6 +58,19 @@ struct Interrupts {
 
         current &= uint8_t(interrupt);
     }
+
+    static InterruptMask toMask(InterruptVector vector)
+    {
+        switch (vector) {
+        case InterruptVector::VBLANK: return InterruptMask::VBLANK;
+        case InterruptVector::LCD:    return InterruptMask::LCD;
+        case InterruptVector::TIMER:  return InterruptMask::TIMER;
+        case InterruptVector::SERIAL: return InterruptMask::SERIAL;
+        case InterruptVector::JOYPAD: return InterruptMask::JOYPAD;
+
+        default: return (InterruptMask)0x00;
+        }
+    }
 };
 
 #endif /* INTERRUPT_H_ */
