@@ -35,12 +35,12 @@ public:
     void setButton(JoyPadButton button) override { m_joypad.set(button); }
     void clrButton(JoyPadButton button) override { m_joypad.clr(button); }
 
-    void advance() override;
-    
-    ColorArray getRGB() override { return m_gpu.getColorMap(); }
+    inline ColorArray getRGB() override
+    {
+        std::lock_guard<std::mutex> lock(m_sync);
+        return std::move(m_screen);
+    }
 
-    bool idle() const override { return !m_running.load(); }
-    
 private:
     static const uint16_t ROM_HEADER_LENGTH;
     static const uint16_t ROM_NAME_OFFSET;
@@ -59,6 +59,8 @@ private:
     Processor m_cpu;
     GPU m_gpu;
     JoyPad m_joypad;
+
+    ColorArray m_screen;
     
     std::condition_variable m_wait;
     std::mutex m_sync;

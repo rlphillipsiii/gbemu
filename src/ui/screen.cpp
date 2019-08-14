@@ -45,7 +45,7 @@ Screen::Screen(QQuickItem *parent)
 
     QObject::connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
 
-    m_timer.setInterval(30);
+    m_timer.setInterval(10);
     m_timer.start();
 
     QStringList args = QCoreApplication::arguments();
@@ -86,32 +86,22 @@ void Screen::keyReleaseEvent(QKeyEvent *event)
 
 void Screen::paint(QPainter *painter)
 {
-    while (!m_console->idle());
-    
+    painter->drawImage(0, 0, m_canvas.scaled(width(), height()));
+}
+
+void Screen::onTimeout()
+{
     ColorArray rgb = m_console->getRGB();
-    m_console->advance();
+    if (rgb.empty()) { return; }
     
     for (size_t i = 0; i < rgb.size(); i++) {
         shared_ptr<GB::RGB> color = rgb.at(i);
 
         int x = i % m_width;
         int y = i / m_width;
-
-#ifdef DEBUG
-        if (!color) {
-            LOG("Invalid color at (%d, %d)\n", x, y);
-            assert(0);
-        }
-#endif
-
         m_canvas.setPixel(x, y, qRgba(color->red, color->green, color->blue, color->alpha));
     }
 
-    painter->drawImage(0, 0, m_canvas.scaled(width(), height()));
-}
-
-void Screen::onTimeout()
-{
     update();
 }
 

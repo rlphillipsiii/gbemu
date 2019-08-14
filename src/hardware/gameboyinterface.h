@@ -92,10 +92,6 @@ public:
     virtual void clrButton(JoyPadButton button) = 0;
     
     virtual ColorArray getRGB() = 0;
-
-    virtual void advance() = 0;
-
-    virtual bool idle() const = 0;
 };
 
 #endif /* GAMEBOYINTERFACE_H_ */

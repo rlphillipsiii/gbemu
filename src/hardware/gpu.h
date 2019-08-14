@@ -179,6 +179,8 @@ private:
     
     bool m_cgb;
 
+    ColorArray m_screen;
+    
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
     
     ColorArray lookup(TileMapIndex mIndex, TileSetIndex sIndex);

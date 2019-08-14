@@ -18,6 +18,7 @@
 #include "gameboy.h"
 #include "memmap.h"
 #include "logging.h"
+#include "profiler.h"
 
 using std::string;
 using std::vector;
@@ -25,6 +26,7 @@ using std::ifstream;
 using std::chrono::high_resolution_clock;
 using std::unique_lock;
 using std::mutex;
+using std::lock_guard;
 
 const uint16_t GameBoy::ROM_HEADER_LENGTH   = 0x0180;
 const uint16_t GameBoy::ROM_NAME_OFFSET     = 0x0134;
@@ -127,23 +129,29 @@ void GameBoy::run()
     int count = 0;
     
     while (m_run.load()) {
-        while (count++ < 133333) {
-            m_cpu.cycle();
+        {
+            TimeProfiler p("Clock Cycle Loop");
+            while (count++ < 133333) {
+                m_cpu.cycle();
 
-            m_gpu.cycle();
+                m_gpu.cycle();
 
-            m_joypad.cycle();
+                m_joypad.cycle();
+            }
         }
 
         count = 0;
 
-        m_running = false;
-        
-        unique_lock<mutex> lock(m_sync);
-        m_wait.wait(lock, [this]() { return m_advance.load(); });
-
-        m_running = true;
-        m_advance = false;
+        // TODO: need to move this up in to the loop somewhere so that
+        //       it only happens during VBLANK so that the GPU ram is in
+        //       a complete state
+        {
+            lock_guard<mutex> lock(m_sync);
+            {
+                TimeProfiler p("Render Operation");
+                m_screen = m_gpu.getColorMap();
+            }
+        }
     }
 }
 
@@ -151,17 +159,8 @@ void GameBoy::stop()
 {
     m_run = false;
 
-    advance();
-    
     if (m_thread.joinable()) {
         m_thread.join();
     }
 }
 
-void GameBoy::advance()
-{
-#ifndef STATIC_MEMORY
-    m_advance = true;
-    m_wait.notify_one();
-#endif
-}

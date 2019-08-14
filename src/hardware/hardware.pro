@@ -13,6 +13,7 @@ DEFINES += HARDWARE_EXPORT
 TARGET = hardware
 
 PUBLIC_HEADERS += logging.h
+PUBLIC_HEADERS += profiler.h
 PUBLIC_HEADERS += gameboyinterface.h
 
 HEADERS += processor.h
