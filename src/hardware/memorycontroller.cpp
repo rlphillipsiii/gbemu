@@ -190,7 +190,8 @@ MemoryController::MemoryController()
       m_working(WORKING_RAM_SIZE, WORKING_RAM_OFFSET),
       m_graphics(GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
       m_io(*this, IO_SIZE, IO_OFFSET),
-      m_zero(ZRAM_SIZE, ZRAM_OFFSET)
+      m_zero(ZRAM_SIZE, ZRAM_OFFSET),
+      m_unusable(UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET)
 {
     reset();
 
@@ -212,7 +213,9 @@ void MemoryController::reset()
     m_memory = { &m_bios, &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_io, &m_zero };
 #endif
     
-    m_memory = { &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_graphics, &m_io, &m_zero };
+    m_memory = {
+        &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_graphics, &m_unusable, &m_io, &m_zero
+    };
 
     for (Region *region : m_memory) {
         if (&m_bios == region) {

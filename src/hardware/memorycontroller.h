@@ -128,6 +128,20 @@ private:
     };
     ////////////////////////////////////////////////////////////////////////////////
 
+    ////////////////////////////////////////////////////////////////////////////////
+    class Unusable : public Region {
+    public:
+        explicit Unusable(uint16_t size, uint16_t offset)
+            : Region(size, offset), m_dummy(0xFF) { }
+        ~Unusable() = default;
+
+        void write(uint16_t, uint8_t) override { }
+        uint8_t & read(uint16_t) override { return m_dummy; }
+
+    private:
+        uint8_t m_dummy;
+    };
+
     ReadOnly m_bios;
     ReadOnly m_rom_0;
     ReadOnly m_rom_1;
@@ -137,6 +151,7 @@ private:
     Region m_graphics;
     MemoryMappedIO m_io;
     Region m_zero;
+    Unusable m_unusable;
     
     std::list<Region*> m_memory;
 

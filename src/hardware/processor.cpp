@@ -232,7 +232,11 @@ void Processor::cycle()
 
 #ifdef DEBUG
     log(opcode, operation);
-    //logRegisters();
+
+    static bool trace = false;
+    if (trace) {
+        logRegisters();
+    }
 #endif
     
     // Call the function pointer in our Operation struct.  Any arguments to the function
