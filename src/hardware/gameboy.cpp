@@ -77,11 +77,10 @@ bool GameBoy::load(const string & filename)
 
     RomHeader info = parseHeader(data);
     LOG("ROM name: %s\n", info.name.c_str());
+    LOG("ROM Size: 0x%lx\n", data.size());
 
-    for (size_t i = 0; i < data.size(); i++) {
-        m_memory.initialize(ROM_0_OFFSET + i, data.at(i));
-    }
-
+    m_memory.setCartridge(data);
+    
     m_assembly = m_cpu.disassemble();
 #if 0
     for (const Processor::Command & cmd : m_assembly) {

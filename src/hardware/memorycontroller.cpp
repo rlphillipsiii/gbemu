@@ -191,7 +191,8 @@ MemoryController::MemoryController()
       m_graphics(GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
       m_io(*this, IO_SIZE, IO_OFFSET),
       m_zero(ZRAM_SIZE, ZRAM_OFFSET),
-      m_unusable(UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET)
+      m_unusable(UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET),
+      m_mbc(MBC1)
 {
     reset();
 
@@ -222,6 +223,15 @@ void MemoryController::reset()
             continue;
         }
         region->reset();
+    }
+}
+
+void MemoryController::setCartridge(const vector<uint8_t> & cartridge)
+{
+    m_cartridge = cartridge;
+
+    for (uint32_t i = 0; i < ROM_0_SIZE + ROM_1_SIZE; i++) {
+        initialize(i, m_cartridge.at(i));
     }
 }
 

@@ -28,7 +28,8 @@ public:
     uint8_t & read(uint16_t address);
 
     void reset();
-
+    void setCartridge(const std::vector<uint8_t> & cartridge);
+    
     void unlockBiosRegion();
 
     void saveBIOS(const std::string & filename);
@@ -37,11 +38,13 @@ public:
         { return m_io.isRtcResetRequested(); }
 
     inline void clearRtcReset() { m_io.clearRtcReset(); }
-    
+
 private:
     static uint8_t DUMMY;
     static const std::vector<uint8_t> BIOS_REGION;
 
+    enum BankType { MBC1, MBC2, MBC3 };
+    
     ////////////////////////////////////////////////////////////////////////////////
     class Region {
     public:
@@ -141,6 +144,7 @@ private:
     private:
         uint8_t m_dummy;
     };
+    ////////////////////////////////////////////////////////////////////////////////
 
     ReadOnly m_bios;
     ReadOnly m_rom_0;
@@ -152,9 +156,13 @@ private:
     MemoryMappedIO m_io;
     Region m_zero;
     Unusable m_unusable;
+
+    BankType m_mbc;
     
     std::list<Region*> m_memory;
 
+    std::vector<uint8_t> m_cartridge;
+    
     Region *find(uint16_t address) const;
 };
 

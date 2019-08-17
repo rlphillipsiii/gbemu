@@ -18,6 +18,7 @@ PUBLIC_HEADERS += gameboyinterface.h
 
 HEADERS += processor.h
 HEADERS += memorycontroller.h
+HEADERS += membankcontroller.h
 HEADERS += gpu.h
 HEADERS += timermodule.h
 HEADERS += gameboy.h
@@ -29,6 +30,7 @@ HEADERS += $$PUBLIC_HEADERS
 
 SOURCES += gpu.cpp
 SOURCES += memorycontroller.cpp
+SOURCES += membankcontroller.cpp
 SOURCES += processor.cpp
 SOURCES += timermodule.cpp
 SOURCES += gameboy.cpp
