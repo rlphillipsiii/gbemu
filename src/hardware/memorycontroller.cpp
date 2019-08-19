@@ -22,6 +22,8 @@ using std::ofstream;
 
 uint8_t MemoryController::DUMMY = 0xFF;
 
+const uint16_t MemoryController::MBC_TYPE_ADDRESS = 0x0147;
+
 const vector<uint8_t> MemoryController::BIOS_REGION = {
     0x31, 0xFE, 0xFF, 0xAF, 0x21, 0xFF, 0x9F, 0x32, 0xCB, 0x7C, 0x20, 0xFB, 0x21, 0x26, 0xFF, 0x0E,
     0x11, 0x3E, 0x80, 0x32, 0xE2, 0x0C, 0x3E, 0xF3, 0xE2, 0x32, 0x3E, 0x77, 0x77, 0x3E, 0xFC, 0xE0,
@@ -191,8 +193,7 @@ MemoryController::MemoryController()
       m_graphics(GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
       m_io(*this, IO_SIZE, IO_OFFSET),
       m_zero(ZRAM_SIZE, ZRAM_OFFSET),
-      m_unusable(UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET),
-      m_mbc(MBC1)
+      m_unusable(UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET)
 {
     reset();
 
@@ -226,13 +227,31 @@ void MemoryController::reset()
     }
 }
 
+void MemoryController::initMemoryBank()
+{
+    uint32_t offset = ROM_0_SIZE * m_mbc.bank;
+
+    for (uint32_t i = 0; i < ROM_1_SIZE; i++) {
+        initialize(ROM_0_SIZE + i, m_cartridge.at(offset + i));
+    }
+}
+
 void MemoryController::setCartridge(const vector<uint8_t> & cartridge)
 {
     m_cartridge = cartridge;
 
-    for (uint32_t i = 0; i < ROM_0_SIZE + ROM_1_SIZE; i++) {
+    for (uint16_t i = 0; i < ROM_0_SIZE; i++) {
         initialize(i, m_cartridge.at(i));
     }
+
+    m_mbc.type  = (BankType)read(MBC_TYPE_ADDRESS);
+    m_mbc.ramEn = false;
+    m_mbc.bank  = 0x01;
+    m_mbc.mode  = MBC_ROM;
+    
+    initMemoryBank();
+
+    LOG("MBC Type: %d\n", int(m_mbc.type));
 }
 
 MemoryController::Region *MemoryController::find(uint16_t address) const
@@ -261,10 +280,33 @@ void MemoryController::write(uint16_t address, uint8_t value)
 {
     Region *region = find(address);
 
-    if (region) {
+    if (region && region->isWritable()) {
         region->write(address, value);
+
+        return;
+    } 
+
+    if (address <= 0x1FFF) {
+        m_mbc.ramEn = ((value & 0x0F) == 0x0A);
+    } else if (address <= 0x3FFF) {
+        uint8_t bank = (value & 0x1F);
+        if ((0x00 == bank) || (0x20 == bank) || (0x40 == bank) || (0x60 == bank)) {
+            bank |= 0x01;
+        }
+        m_mbc.bank = ((m_mbc.bank & 0xE0) | bank);
+
+        initMemoryBank();
+    } else if (address <= 0x5FFF) {
+        if (MBC_ROM == m_mbc.mode) {
+            m_mbc.bank = (((value << 5) & 0xE0) | m_mbc.bank);
+
+            initMemoryBank();
+        } else {
+            m_mbc.bank = (value & 0x07);
+        }
+    } else if (address <= 0x7FFF) {
+        m_mbc.mode = (0x00 == value) ? MBC_ROM : MBC_RAM;
     } else {
-        LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
         assert(0);
     }
 }

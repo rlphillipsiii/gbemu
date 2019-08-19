@@ -41,9 +41,12 @@ public:
 
 private:
     static uint8_t DUMMY;
+    static const uint16_t MBC_TYPE_ADDRESS;
+    
     static const std::vector<uint8_t> BIOS_REGION;
 
-    enum BankType { MBC1, MBC2, MBC3 };
+    enum BankType { MBC_NONE, MBC1, MBC2, MBC3 };
+    enum BankMode { MBC_ROM, MBC_RAM };
     
     ////////////////////////////////////////////////////////////////////////////////
     class Region {
@@ -55,7 +58,8 @@ private:
         Region(const Region &) = delete;
 
         virtual bool isAddressed(uint16_t address) const;
-
+        virtual inline bool isWritable() const { return true; }
+        
         virtual void write(uint16_t address, uint8_t value);
         virtual uint8_t & read(uint16_t address);
 
@@ -127,6 +131,8 @@ private:
     public:
         explicit ReadOnly(uint16_t size, uint16_t offset);
 
+        inline bool isWritable() const override { return false; }
+
         void write(uint16_t address, uint8_t value) override;
     };
     ////////////////////////////////////////////////////////////////////////////////
@@ -157,13 +163,20 @@ private:
     Region m_zero;
     Unusable m_unusable;
 
-    BankType m_mbc;
+    struct {
+        BankType type;
+        bool ramEn;
+        uint8_t bank;
+        BankMode mode;
+    } m_mbc;
     
     std::list<Region*> m_memory;
 
     std::vector<uint8_t> m_cartridge;
     
     Region *find(uint16_t address) const;
+
+    void initMemoryBank();
 };
 
 #endif /* SRC_MEMORYCONTROLLER_H_ */
