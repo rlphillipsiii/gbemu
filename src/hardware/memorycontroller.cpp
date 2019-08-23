@@ -169,10 +169,6 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
     }
 
     case SERIAL_TX_CONTROL_ADDRESS: {
-        if (value & 0x80) {
-            char c = m_parent.read(SERIAL_TX_DATA_ADDRESS);
-            LOG("%c", c);
-        }
         break;
     }
 
@@ -211,12 +207,10 @@ MemoryController::MemoryController()
 
 void MemoryController::reset()
 {
-#if 0
-    m_memory = { &m_bios, &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_io, &m_zero };
-#endif
-    
     m_memory = {
-        &m_rom_0, &m_rom_1, &m_gram, &m_ext, &m_working, &m_graphics, &m_unusable, &m_io, &m_zero
+        &m_bios, &m_rom_0, &m_rom_1, &m_gram, &m_ext,
+        &m_working, &m_graphics, &m_unusable, &m_io,
+        &m_zero
     };
 
     for (Region *region : m_memory) {
@@ -240,10 +234,21 @@ void MemoryController::setCartridge(const vector<uint8_t> & cartridge)
 {
     m_cartridge = cartridge;
 
+    // Check to see if the BIOS region is still active.  If so, we need to
+    // deactivate it so that we can initialize the first 256 bytes of the
+    // ROM region.
+    if (m_memory.front() == &m_bios) {
+        m_memory.pop_front();
+    }
+
     for (uint16_t i = 0; i < ROM_0_SIZE; i++) {
         initialize(i, m_cartridge.at(i));
     }
 
+    // We're done writing to any areas that would contain the BIOS, so we can
+    // active the BIOS region again.
+    m_memory.push_front(&m_bios);
+    
     m_mbc.type  = (BankType)read(MBC_TYPE_ADDRESS);
     m_mbc.ramEn = false;
     m_mbc.bank  = 0x01;
@@ -322,11 +327,6 @@ uint8_t & MemoryController::read(uint16_t address)
     assert(0);
 
     return DUMMY;
-}
-
-void MemoryController::unlockBiosRegion()
-{
-    m_memory.pop_front();
 }
 
 void MemoryController::saveBIOS(const string & filename)

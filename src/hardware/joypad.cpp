@@ -32,7 +32,7 @@ JoyPad::JoyPad(MemoryController & memory)
     m_shadow[0] = m_shadow[1] = 0x0F;
 }
 
-void JoyPad::cycle()
+void JoyPad::cycle(uint8_t)
 {
     lock_guard<mutex> guard(m_lock);
 

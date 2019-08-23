@@ -24,21 +24,23 @@ const uint8_t Processor::CB_PREFIX = 0xCB;
 
 const uint16_t Processor::HISTORY_SIZE = 100;
 
+const uint16_t Processor::ROM_ENTRY_POINT = 0x0100;
+
 void Processor::reset()
 {
-    m_pc = 0x0100;
+    m_pc = 0x0000;
     m_sp = 0xFFFE;
 
     m_flags = 0x00;
 
-    m_gpr.a = 0x01;
-    m_gpr.f = 0xB0;
+    m_gpr.a = 0x00;
+    m_gpr.f = 0x00;
     m_gpr.b = 0x00;
-    m_gpr.c = 0x13;
+    m_gpr.c = 0x00;
     m_gpr.d = 0x00;
-    m_gpr.e = 0xD8;
-    m_gpr.h = 0x01;
-    m_gpr.l = 0x4D;
+    m_gpr.e = 0x00;
+    m_gpr.h = 0x00;
+    m_gpr.l = 0x00;
 
     m_interrupts.reset();
     m_timer.reset();
@@ -190,22 +192,10 @@ bool Processor::interrupt()
 
     return false;
 }
-    
-void Processor::cycle()
+
+uint8_t Processor::execute()
 {
-    // Let the timer module do its thing
-    m_timer.cycle();
-
-    // We are actually doing everything in one cycle, so to maintain the same timing
-    // as the processor, we are going to just return until we have burned the same
-    // number of cycles as the opcode takes on the actual hardware.
-    if (--m_ticks != 0) { return; }
-
-    bool interrupted = interrupt();
-    if (m_halted && !interrupted) {
-        m_ticks = 1;
-        return;
-    }
+    m_ticks = 0;
 
     // If we've gotten to this point, then we were either never halted in the first
     // place, or we just executed an interrupt and were woken up.
@@ -217,13 +207,19 @@ void Processor::cycle()
 
     // The program counter points to our next opcode.
     m_instr = m_pc;
+
+    // If our PC is set to the ROM's entry point, we need to swap out the BIOS memory
+    // with the ROM memory because we would have already executed the BIOS if we've
+    // gotten to this address.  This is a noop of the BIOs region is already disabled.
+    if (ROM_ENTRY_POINT == m_pc) { m_memory.unlockBiosRegion(); }
+
     uint8_t opcode = m_memory.read(m_pc++);
 
     // Look up the handler in our opcode table.  If the length of our command is greater
     // than 1, then we also need to grab the next length - 1 bytes as they are the
     // arguments to the next operation that we are going to execute.
     Operation *operation = lookup(m_pc, opcode);
-    if (!operation) { assert(0); return; }
+    if (!operation) { assert(0); return 1; }
 
     // If we have any operands, we need to read them in and increment the PC.
     for (uint8_t i = 0; i < operation->length - 1; i++) {
@@ -254,6 +250,18 @@ void Processor::cycle()
     // The flags register only uses the upper 4 bits, so let's go ahead and make sure
     // that the lower nibble is always 0.
     m_flags &= 0xF0;
+
+    return m_ticks;
+}
+
+uint8_t Processor::cycle()
+{
+    bool interrupted = interrupt();
+
+    uint8_t ticks = (m_halted && !interrupted) ? 1 : execute();
+
+    m_timer.cycle(ticks);
+    return ticks;
 }
 
 void Processor::log(uint8_t opcode, const Operation *operation)
@@ -457,7 +465,6 @@ void Processor::jumprel()
 
 void Processor::jump(uint16_t address)
 {
-    assert(address != 0xc1b9);
     m_pc = address;
 
     m_ticks = 1;

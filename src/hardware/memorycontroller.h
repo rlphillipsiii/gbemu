@@ -29,15 +29,14 @@ public:
 
     void reset();
     void setCartridge(const std::vector<uint8_t> & cartridge);
-    
-    void unlockBiosRegion();
 
     void saveBIOS(const std::string & filename);
 
     inline bool isRtcResetRequested() const
         { return m_io.isRtcResetRequested(); }
 
-    inline void clearRtcReset() { m_io.clearRtcReset(); }
+    inline void clearRtcReset()    { m_io.clearRtcReset(); }
+    inline void unlockBiosRegion() { m_memory.pop_front(); }
 
 private:
     static uint8_t DUMMY;

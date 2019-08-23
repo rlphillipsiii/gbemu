@@ -46,7 +46,7 @@ public:
     ~Processor() = default;
 
     void reset();
-    void cycle();
+    uint8_t cycle();
 
     std::vector<Command> disassemble();
     
@@ -58,6 +58,8 @@ private:
     static const uint16_t HISTORY_SIZE;
     
     static const uint8_t CB_PREFIX;
+
+    static const uint16_t ROM_ENTRY_POINT;
     
     enum FlagMask {
         ZERO_FLAG_MASK       = 0x80,
@@ -175,6 +177,8 @@ private:
     
     bool interrupt();
 
+    uint8_t execute();
+    
     void history() const;
 
     void log(uint8_t opcode, const Operation *operation);

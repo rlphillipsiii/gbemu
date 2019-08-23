@@ -133,31 +133,36 @@ GPU::RenderState GPU::next()
 {
     switch (m_state) {
     case HBLANK: {
-        if (HBLANK_TICKS == m_ticks) {
-            if (!isDisplayEnabled()) {
-                return VBLANK;
-            }
-            return (PIXELS_PER_COL == m_scanline) ? VBLANK : OAM;
+        if (m_ticks < HBLANK_TICKS) {
+            break;
         }
-        break;
+        m_ticks -= HBLANK_TICKS;
+
+        return (PIXELS_PER_COL == m_scanline) ? VBLANK : OAM;
     }
     case VBLANK: {
-        if (VBLANK_TICKS == m_ticks) {
-            return (isDisplayEnabled() && (SCANLINE_MAX == m_scanline)) ? HBLANK : VBLANK;
+        if (m_ticks < VBLANK_TICKS) {
+            break;
         }
-        break;
+        m_ticks -= VBLANK_TICKS;
+
+        return (SCANLINE_MAX == m_scanline) ? HBLANK : VBLANK;
     }
     case OAM: {
-        if (OAM_TICKS == m_ticks) {
-            return (isDisplayEnabled()) ? VRAM : VBLANK;
+        if (m_ticks < OAM_TICKS) {
+            break;
         }
-        break;
+        m_ticks -= OAM_TICKS;
+
+        return VRAM;
     }
     case VRAM: {
-        if (VRAM_TICKS == m_ticks) {
-            return (isDisplayEnabled()) ? HBLANK : VBLANK;
+        if (m_ticks < VRAM_TICKS) {
+            break;
         }
-        break;
+        m_ticks -= VRAM_TICKS;
+
+        return HBLANK;
     }
     default: {
         LOG("GPU::next() : Unknown render state %d\n", m_state);
@@ -167,12 +172,14 @@ GPU::RenderState GPU::next()
     }
     }
     
-    return (isDisplayEnabled()) ? m_state : VBLANK;
+    return m_state;
 }
 
-void GPU::cycle()
+void GPU::cycle(uint8_t ticks)
 {
-    m_ticks++;
+    if (!isDisplayEnabled()) { return; }
+    
+    m_ticks += ticks;
 
     switch (m_state) {
     case HBLANK: handleHBlank(); break;
@@ -185,16 +192,7 @@ void GPU::cycle()
         return;
     }
     
-    RenderState current = m_state;
     m_state = next();
-
-    // If the display is turned off or we just changed states, then we need to
-    // reset the tick counter back to 0.
-    if (!isDisplayEnabled() || (current != m_state)) {
-        m_ticks = 0;
-    }
-
-    if (!isDisplayEnabled()) { m_scanline = PIXELS_PER_COL; }
 }
 
 void GPU::handleHBlank()
@@ -403,8 +401,10 @@ ColorArray GPU::constrain(const vector<ColorArray> & display) const
 {
     uint16_t index = 0;
 
+#ifdef DEBUG
     uint16_t yTemp = m_y, xTemp = m_x;
-    
+#endif
+
     // We have an array of the whole map, so now we need to build a flat array of the
     // pixels that we need to display on screen.  The x and y scroll registers determine
     // where in the 32x32 map that we should place the top left corner.

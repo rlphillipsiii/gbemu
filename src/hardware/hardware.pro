@@ -8,6 +8,9 @@ CONFIG -= qt
 CONFIG -= core
 CONFIG -= gui
 
+CONFIG (profiling): DEFINES += PROFILING
+CONFIG (staticmem): DEFINES += STATIC_MEMORY
+
 DEFINES += HARDWARE_EXPORT
 
 TARGET = hardware

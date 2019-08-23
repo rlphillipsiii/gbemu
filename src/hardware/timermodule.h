@@ -26,7 +26,7 @@ public:
 
     void reset();
 
-    void cycle();
+    void cycle(uint8_t ticks);
 
 private:
     static const uint16_t RTC_INCREMENT;

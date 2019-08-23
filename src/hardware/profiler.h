@@ -11,7 +11,9 @@ public:
     TimeProfiler(const std::string & message)
         : m_message(message)
     {
+#ifdef PROFILING        
         m_start = std::chrono::high_resolution_clock::now();
+#endif        
     }
 
     ~TimeProfiler()
@@ -20,7 +22,7 @@ public:
         auto finish = std::chrono::high_resolution_clock::now();
 
         int ms = std::chrono::duration_cast<std::chrono::milliseconds>(finish - m_start).count();
-        LOG("%s: %dms\n", m_message.c_str(), ms);
+        TRACE("%s: %dms\n", m_message.c_str(), ms);
 #endif
     }
 

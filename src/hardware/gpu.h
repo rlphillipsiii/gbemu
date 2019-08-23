@@ -31,7 +31,7 @@ public:
     explicit GPU(MemoryController & memory);
     ~GPU() = default;
 
-    void cycle();
+    void cycle(uint8_t ticks);
     void reset();
 
     ColorArray getColorMap();

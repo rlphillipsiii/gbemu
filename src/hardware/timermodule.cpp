@@ -13,7 +13,7 @@
 
 using std::unordered_map;
 
-const uint16_t TimerModule::RTC_INCREMENT = 488;
+const uint16_t TimerModule::RTC_INCREMENT = 512;
 
 const uint16_t TimerModule::TIMEOUT_4K   = 1024;
 const uint16_t TimerModule::TIMEOUT_252K = 16;
@@ -42,16 +42,32 @@ void TimerModule::reset()
     m_divider = m_counter = m_modulo = m_control = 0x00;
 }
 
-void TimerModule::cycle()
+void TimerModule::cycle(uint8_t ticks)
 {
+    // Check to see if the memory module has a pending request for a reset of
+    // the real time clock.  If so, we need to reset the rtc counter and then
+    // clear the request.
     if (m_memory.isRtcResetRequested()) {
-        m_divider = 0x00;
+        m_divider = m_rtc = 0x00;
 
         m_memory.clearRtcReset();
     }
 
+    m_rtc += ticks;
+    
+    // Check to see if the number of ticks corresponding to 1 increment of
+    // the RTC has elapsed and increment it if so.
+    if (m_rtc >= RTC_INCREMENT) {
+        m_divider++;
+        
+        m_rtc -= RTC_INCREMENT;
+    }
+
     if (!(m_control & TIMER_ENABLE)) { return; }
 
+    // Read the frequency bits in the control register and look up how many
+    // clock cycles need to elapse until we need to increment the counter
+    // register.
     auto entry = TIMEOUT_MAP.find(m_control & TIMER_FREQUENCY);
     if (TIMEOUT_MAP.end() == entry) {
         assert(0);
@@ -59,19 +75,20 @@ void TimerModule::cycle()
         entry = TIMEOUT_MAP.begin();
     }
 
-    if (RTC_INCREMENT == m_rtc++) {
-        m_divider++;
-        
-        m_rtc = 0;
-    }
+    m_ticks += ticks;
     
     m_timeout = entry->second;
-    if (m_timeout == m_ticks++) {
+    if (m_ticks >= m_timeout) {
+        // We've got the correct number of ticks to increment the actual
+        // counter, so increment it now.  If the register is set to 0xFF,
+        // then this increment is going to overflow the register, so we
+        // need to set the timer interrupt bit and set the counter back to
+        // its initial value.
         if (0xFF == m_counter++) {
             Interrupts::set(m_memory, InterruptMask::TIMER);
 
             m_counter = m_modulo;
         }
-        m_ticks = 0;
+        m_ticks -= m_timeout;
     }
 }

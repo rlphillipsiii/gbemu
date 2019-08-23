@@ -15,7 +15,7 @@ public:
     explicit JoyPad(MemoryController & memory);
     ~JoyPad() = default;
 
-    void cycle();
+    void cycle(uint8_t ticks);
     
     void set(GameBoyInterface::JoyPadButton button);
     void clr(GameBoyInterface::JoyPadButton button);
