@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <string>
 #include <iostream>
+#include <cmath>
 
 #include "gpu.h"
 #include "processor.h"
@@ -358,20 +359,25 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
 
 ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
 {
-    vector<ColorArray> colors;
+    ColorArray colors(PIXELS_PER_COL * PIXELS_PER_ROW);
 
-    // Reserve enough space to fit our 32x32 RGBA pixel matrix.
-    colors.resize(TILE_MAP_COLUMNS * TILE_PIXELS_PER_COL);
-    for (ColorArray & row : colors) {
-        row.resize(TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
-    }
+    // Figure out the first tile that we need to read in based on the x and y registers,
+    // which define the upper left hand corner of the screen.
+    uint16_t xTileOffset = m_x / TILE_PIXELS_PER_ROW;
+    uint16_t yTileOffset = m_y / TILE_PIXELS_PER_COL;
 
-    // Loop through our map.  We can't display the whole screen, but we are going to
-    // build the whole map anyway and shift around the screen portion later.
-    for (uint16_t i = 0; i < TILE_MAP_ROWS; i++) {
-        for (uint16_t j = 0; j < TILE_MAP_COLUMNS; j++) {
+    // Figure out the last tile that needs to be read in by offseting the pixels per
+    // each column and row and dividing each of those numbers by the number of pixels
+    // each column and row.  The ceiling of that operation is the index of the last
+    // tile.
+    uint16_t xEnd = (uint16_t)std::ceil(double(m_x + PIXELS_PER_ROW) / TILE_PIXELS_PER_ROW);
+    uint16_t yEnd = (uint16_t)std::ceil(double(m_y + PIXELS_PER_COL) / TILE_PIXELS_PER_COL);
+
+    for (uint16_t i = yTileOffset; i < yEnd; i++) {
+        for (uint16_t j = xTileOffset; j < xEnd; j++) {
             // Lookup the tile that we want and translate it to RGB.
-            ColorArray rgb = toRGB(m_palette, lookup(mIndex, sIndex, j, i), true);
+            ColorArray rgb = toRGB(m_palette,
+                lookup(mIndex, sIndex, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS), true);
 
             // Each tile is 8x8, so we first need to figure out the coordinates
             // of the top left corner of the tile we are translating.
@@ -383,60 +389,19 @@ ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
             for (size_t k = 0; k < rgb.size(); k++) {
                 // These are 8x8 chunks, so we need to calculate a new x, y each time
                 // we go through this loop and have a new pixel.
-                uint16_t x = xOffset + (k % TILE_PIXELS_PER_ROW);
-                uint16_t y = yOffset + (k / TILE_PIXELS_PER_ROW);
+                uint16_t x = (xOffset + (k % TILE_PIXELS_PER_ROW)) - m_x;
+                uint16_t y = (yOffset + (k / TILE_PIXELS_PER_ROW)) - m_y;
 
-                colors[y][x] = std::move(rgb[k]);
+                if ((x < PIXELS_PER_ROW) && (y < PIXELS_PER_COL)) {
+                    uint16_t index = (y * PIXELS_PER_ROW) + x;
+                    colors[index] = std::move(rgb[k]);
+                }
             }
         }
     }
 
-    ColorArray screen = constrain(colors);
-    drawSprites(screen);
-
-    return screen;
-}
-
-ColorArray GPU::constrain(const vector<ColorArray> & display) const
-{
-    uint16_t index = 0;
-
-#ifdef DEBUG
-    uint16_t yTemp = m_y, xTemp = m_x;
-#endif
-
-    // We have an array of the whole map, so now we need to build a flat array of the
-    // pixels that we need to display on screen.  The x and y scroll registers determine
-    // where in the 32x32 map that we should place the top left corner.
-    ColorArray screen(PIXELS_PER_ROW * PIXELS_PER_COL);
-    for (uint16_t y = m_y; y < m_y + PIXELS_PER_COL; y++) {
-        for (uint16_t x = m_x; x < m_x + PIXELS_PER_ROW; x++) {
-            uint16_t yIndex = y % display.size();
-            uint16_t xIndex = x % display[yIndex].size();
-
-#ifdef DEBUG
-            bool error = (yIndex >= display.size());
-            error |= (xIndex >= display[yIndex].size());
-            error |= (index >= screen.size());
-            
-            if (error) {
-                LOG("Coordinates:   (%d, %d)\n", x, y);
-                LOG("Display Index: (%d, %d) ==> xMax %d - yMax %d\n",
-                    xIndex, yIndex, int(display.size()), int(display[yIndex].size()));
-                LOG("Screen Index:  %d ==> %d\n", index, int(screen.size()));
-                assert(0);
-            }
-
-            assert((xTemp == m_x) && (yTemp == m_y));
-            xTemp = m_x; yTemp = m_y;
-#endif
-
-            assert(display[yIndex][xIndex]);
-            screen[index++] = std::move(display[yIndex][xIndex]);
-        }
-    }
-
-    return screen;
+    drawSprites(colors);
+    return colors;
 }
 
 void GPU::readSprite(SpriteData & data)

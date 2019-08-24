@@ -188,7 +188,6 @@ private:
     Tile lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
     ColorArray toRGB(const uint8_t & pal, const Tile & tile, bool white) const;
-    ColorArray constrain(const std::vector<ColorArray> & display) const;
     
     std::shared_ptr<GB::RGB> palette(const uint8_t & pal, uint8_t pixel, bool white) const;
 
