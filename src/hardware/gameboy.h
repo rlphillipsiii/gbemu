@@ -32,8 +32,8 @@ public:
     void start() override;
     void stop() override;
 
-    void setButton(JoyPadButton button) override { m_joypad.set(button); }
-    void clrButton(JoyPadButton button) override { m_joypad.clr(button); }
+    inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
+    inline void clrButton(JoyPadButton button) override { m_joypad.clr(button); }
 
     inline ColorArray getRGB() override
     {
@@ -42,19 +42,6 @@ public:
     }
 
 private:
-    static const uint16_t ROM_HEADER_LENGTH;
-    static const uint16_t ROM_NAME_OFFSET;
-    static const uint16_t ROM_TYPE_OFFSET;
-    static const uint16_t ROM_SIZE_OFFSET;
-    static const uint16_t ROM_RAM_SIZE_OFFSET;
-    static const uint8_t ROM_NAME_MAX_LENGTH;
-    
-    struct RomHeader {
-        std::string name;
-        
-        uint16_t length;
-    };
-    
     MemoryController m_memory;
     Processor m_cpu;
     GPU m_gpu;
@@ -74,7 +61,6 @@ private:
     std::vector<Processor::Command> m_assembly;
     
     void run();
-    RomHeader parseHeader(const std::vector<uint8_t> & header);
 };
 
 

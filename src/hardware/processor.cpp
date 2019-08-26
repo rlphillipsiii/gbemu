@@ -256,6 +256,8 @@ uint8_t Processor::execute()
 
 uint8_t Processor::cycle()
 {
+    if (!m_memory.inBios() && !m_memory.isCartridgeValid()) { return 1; }
+    
     bool interrupted = interrupt();
 
     uint8_t ticks = (m_halted && !interrupted) ? 1 : execute();

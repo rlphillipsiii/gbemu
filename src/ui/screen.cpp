@@ -11,6 +11,7 @@
 #include <vector>
 #include <iostream>
 #include <unordered_map>
+#include <string>
 
 #include "screen.h"
 #include "logging.h"
@@ -19,6 +20,7 @@
 using std::vector;
 using std::shared_ptr;
 using std::unordered_map;
+using std::string;
 
 const unordered_map<int, GameBoyInterface::JoyPadButton> Screen::BUTTON_MAP = {
     { Qt::Key_Left,  GameBoyInterface::JOYPAD_LEFT   },
@@ -49,8 +51,9 @@ Screen::Screen(QQuickItem *parent)
     m_timer.start();
 
     QStringList args = QCoreApplication::arguments();
-    
-    m_console->load(args.at(1).toStdString());
+
+    string filename = (args.size() < 2) ? "" : args.at(1).toStdString();
+    m_console->load(filename);
     m_console->start();
 }
 

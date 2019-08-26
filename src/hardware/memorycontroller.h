@@ -14,8 +14,9 @@
 #include <list>
 #include <string>
 #include <algorithm>
+#include <memory>
 
-class GPU;
+class Cartridge;
 
 class MemoryController {
 public:
@@ -28,7 +29,9 @@ public:
     uint8_t & read(uint16_t address);
 
     void reset();
-    void setCartridge(const std::vector<uint8_t> & cartridge);
+    void setCartridge(const std::string & filename);
+
+    bool isCartridgeValid() const;
 
     void saveBIOS(const std::string & filename);
 
@@ -38,6 +41,8 @@ public:
     inline void clearRtcReset()    { m_io.clearRtcReset(); }
     inline void unlockBiosRegion() { m_memory.pop_front(); }
 
+    inline bool inBios() const { return (m_memory.front() == &m_bios); }
+    
 private:
     static uint8_t DUMMY;
     static const uint16_t MBC_TYPE_ADDRESS;
@@ -140,7 +145,7 @@ private:
     class Unusable : public Region {
     public:
         explicit Unusable(uint16_t size, uint16_t offset)
-            : Region(size, offset), m_dummy(0xFF) { }
+            : Region(size, offset), m_dummy(0xFF) { m_memory.resize(0); }
         ~Unusable() = default;
 
         void write(uint16_t, uint8_t) override { }
@@ -171,7 +176,7 @@ private:
     
     std::list<Region*> m_memory;
 
-    std::vector<uint8_t> m_cartridge;
+    std::shared_ptr<Cartridge> m_cartridge;
     
     Region *find(uint16_t address) const;
 

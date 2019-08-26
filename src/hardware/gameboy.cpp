@@ -28,14 +28,6 @@ using std::unique_lock;
 using std::mutex;
 using std::lock_guard;
 
-const uint16_t GameBoy::ROM_HEADER_LENGTH   = 0x0180;
-const uint16_t GameBoy::ROM_NAME_OFFSET     = 0x0134;
-const uint16_t GameBoy::ROM_TYPE_OFFSET     = 0x0147;
-const uint16_t GameBoy::ROM_SIZE_OFFSET     = 0x0148;
-const uint16_t GameBoy::ROM_RAM_SIZE_OFFSET = 0x0149;
-
-const uint8_t GameBoy::ROM_NAME_MAX_LENGTH = 0x10;
-
 GameBoy::GameBoy()
     : m_cpu(m_memory),
       m_gpu(m_memory),
@@ -59,25 +51,7 @@ GameBoy::GameBoy()
 
 bool GameBoy::load(const string & filename)
 {
-    ifstream input(filename, std::ios::in | std::ios::binary);
-    if (!input.is_open()) { return false; }
-
-    input.seekg(0, input.end);
-    size_t length = input.tellg();
-    input.seekg(0, input.beg);
-
-    if (length < ROM_HEADER_LENGTH) {
-        return false;
-    }
-    
-    vector<uint8_t> data(length);
-    input.read(reinterpret_cast<char*>(data.data()), data.size());
-
-    RomHeader info = parseHeader(data);
-    LOG("ROM name: %s\n", info.name.c_str());
-    LOG("ROM Size: 0x%lx\n", data.size());
-
-    m_memory.setCartridge(data);
+    m_memory.setCartridge(filename);
     
     m_assembly = m_cpu.disassemble();
 #if 0
@@ -86,26 +60,6 @@ bool GameBoy::load(const string & filename)
     }
 #endif    
     return true;
-}
-
-GameBoy::RomHeader GameBoy::parseHeader(const vector<uint8_t> & header)
-{
-    RomHeader info;
-
-    for (uint8_t i = 0; i < ROM_NAME_MAX_LENGTH; i++) {
-        uint8_t entry = header.at(ROM_NAME_OFFSET + i);
-
-        if ((0x80 == entry) || (0xC0 == entry)) {
-            break;
-        }
-
-        info.name += char(entry);
-    }
-
-    uint8_t size = header.at(ROM_SIZE_OFFSET);
-    (void)size;
-    
-    return info;
 }
 
 void GameBoy::start()

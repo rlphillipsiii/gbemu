@@ -22,18 +22,6 @@ using std::ifstream;
 
 int main(int argc, char **argv)
 {
-    if (argc < 2) {
-        LOG("USAGE: %s <rom>\n", argv[0]);
-        return -1;
-    }
-
-    ifstream file(argv[1], std::ios::in | std::ios::binary);
-    if (!file.is_open()) {
-        LOG("Failed to open file \"%s\"\n", argv[1]);
-        return -1;
-    }
-    file.close();
-    
     QGuiApplication app(argc, argv);
 
     qmlRegisterType<Screen>("GameBoy.Screen", 1, 0, "Screen");

@@ -15,6 +15,7 @@
 #include "memmap.h"
 #include "gpu.h"
 #include "logging.h"
+#include "cartridge.h"
 
 using std::vector;
 using std::string;
@@ -223,16 +224,14 @@ void MemoryController::reset()
 
 void MemoryController::initMemoryBank()
 {
-    uint32_t offset = ROM_0_SIZE * m_mbc.bank;
-
     for (uint32_t i = 0; i < ROM_1_SIZE; i++) {
-        initialize(ROM_0_SIZE + i, m_cartridge.at(offset + i));
+        initialize(ROM_0_SIZE + i, m_cartridge->readBank(i));
     }
 }
 
-void MemoryController::setCartridge(const vector<uint8_t> & cartridge)
+void MemoryController::setCartridge(const string & filename)
 {
-    m_cartridge = cartridge;
+    m_cartridge = std::make_shared<Cartridge>(filename);
 
     // Check to see if the BIOS region is still active.  If so, we need to
     // deactivate it so that we can initialize the first 256 bytes of the
@@ -242,21 +241,19 @@ void MemoryController::setCartridge(const vector<uint8_t> & cartridge)
     }
 
     for (uint16_t i = 0; i < ROM_0_SIZE; i++) {
-        initialize(i, m_cartridge.at(i));
+        initialize(i, m_cartridge->at(i));
     }
 
     // We're done writing to any areas that would contain the BIOS, so we can
     // active the BIOS region again.
     m_memory.push_front(&m_bios);
     
-    m_mbc.type  = (BankType)read(MBC_TYPE_ADDRESS);
-    m_mbc.ramEn = false;
-    m_mbc.bank  = 0x01;
-    m_mbc.mode  = MBC_ROM;
-    
     initMemoryBank();
+}
 
-    LOG("MBC Type: %d\n", int(m_mbc.type));
+bool MemoryController::isCartridgeValid() const
+{
+    return m_cartridge->isValid();
 }
 
 MemoryController::Region *MemoryController::find(uint16_t address) const
