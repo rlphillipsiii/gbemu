@@ -32,7 +32,7 @@ const vector<uint8_t> Cartridge::NINTENDO_LOGO = {
 Cartridge::Cartridge(const string & path)
     : m_path(path),
       m_valid(false),
-      m_empty(0x00)
+      m_ram(EXT_RAM_SIZE)
 {
     ifstream input(m_path, std::ios::in | std::ios::binary);
     if (!input.is_open()) { return; }
@@ -72,12 +72,29 @@ Cartridge::Cartridge(const string & path)
     m_valid = true;
 }
 
+uint8_t & Cartridge::read(uint16_t address)
+{
+    if (address < (ROM_0_OFFSET + ROM_0_SIZE)) {
+        return m_memory[address];
+    }
+    if (address < (ROM_1_OFFSET + ROM_1_SIZE)) {
+        return m_memory[address + (m_info.mbc.bank * ROM_1_SIZE) - ROM_1_OFFSET];
+    }
+    if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
+        return m_ram[address - EXT_RAM_OFFSET];
+    }
+
+    assert(0);
+    static uint8_t EMPTY = 0xFF;
+    return EMPTY;
+}
+
 void Cartridge::write(uint16_t address, uint8_t value)
 {
     if (address < (ROM_0_OFFSET + ROM_0_SIZE)) {
         writeROM(address, value);
-    } else {
-
+    } else if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
+        writeRAM(address, value);
     }
 }
 
@@ -107,7 +124,7 @@ void Cartridge::writeROM(uint16_t address, uint8_t value)
 
 void Cartridge::writeRAM(uint16_t address, uint8_t value)
 {
-    (void)address; (void)value;
+    m_ram[address - EXT_RAM_OFFSET] = value;
 }
 
 

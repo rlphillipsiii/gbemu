@@ -12,20 +12,12 @@ public:
     explicit Cartridge(const std::string & path);
     ~Cartridge() = default;
 
-    inline uint8_t & operator[](int index)
-        { return (size_t(index) < m_memory.size()) ? m_memory[index] : m_empty; }
-
-    inline uint8_t at(int index) const
-        { return (size_t(index) < m_memory.size()) ? m_memory.at(index) : m_empty; }
-
-    inline uint8_t & readBank(uint16_t offset)
-        { return m_memory.at(offset + (ROM_0_SIZE * m_info.mbc.bank)); }
-
     inline bool isValid() const { return m_valid; }
 
     inline uint8_t bank() const { return m_info.mbc.bank; }
 
     void write(uint16_t address, uint8_t value);
+    uint8_t & read(uint16_t address);
     
 private:
     static const uint16_t NINTENDO_LOGO_OFFSET;
@@ -52,8 +44,6 @@ private:
 
     bool m_valid;
 
-    uint8_t m_empty;
-
     struct {
         std::string name;
         uint32_t size;
@@ -67,7 +57,8 @@ private:
     } m_info;
     
     std::vector<uint8_t> m_memory;
-
+    std::vector<uint8_t> m_ram;
+    
     void writeROM(uint16_t address, uint8_t value);
     void writeRAM(uint16_t address, uint8_t value);
 };

@@ -128,6 +128,42 @@ void MemoryController::ReadOnly::write(uint16_t address, uint8_t value)
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
+uint8_t MemoryController::Removable::EMPTY = 0xFF;
+
+void MemoryController::Removable::load(const string & filename)
+{
+    m_cartridge = std::make_shared<Cartridge>(filename);
+}
+
+void MemoryController::Removable::write(uint16_t address, uint8_t value)
+{
+    if (m_cartridge && m_cartridge->isValid()) {
+        m_cartridge->write(address, value);
+    }
+}
+
+uint8_t & MemoryController::Removable::read(uint16_t address)
+{
+    return (m_cartridge) ? m_cartridge->read(address) : EMPTY;
+}
+
+bool MemoryController::Removable::isAddressed(uint16_t address) const
+{
+    if (address < (ROM_0_OFFSET + ROM_0_SIZE)) {
+        return true;
+    }
+    if ((address >= ROM_1_OFFSET) && (address < (ROM_1_OFFSET + ROM_1_SIZE))) {
+        return true;
+    }
+    if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
+        return true;
+    }
+    
+    return false;
+}
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
 MemoryController::MemoryMappedIO::MemoryMappedIO(
     MemoryController & parent,
     uint16_t size,
@@ -182,10 +218,7 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 
 MemoryController::MemoryController()
     : m_bios(BIOS_SIZE, BIOS_OFFSET),
-      m_rom_0(ROM_0_SIZE, ROM_0_OFFSET),
-      m_rom_1(ROM_1_SIZE, ROM_1_OFFSET),
       m_gram(GPU_RAM_SIZE, GPU_RAM_OFFSET),
-      m_ext(EXT_RAM_SIZE, EXT_RAM_OFFSET),
       m_working(WORKING_RAM_SIZE, WORKING_RAM_OFFSET),
       m_graphics(GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
       m_io(*this, IO_SIZE, IO_OFFSET),
@@ -209,9 +242,7 @@ MemoryController::MemoryController()
 void MemoryController::reset()
 {
     m_memory = {
-        &m_bios, &m_rom_0, &m_rom_1, &m_gram, &m_ext,
-        &m_working, &m_graphics, &m_unusable, &m_io,
-        &m_zero
+        &m_bios, &m_cartridge, &m_gram, &m_working, &m_graphics, &m_unusable, &m_io, &m_zero
     };
 
     for (Region *region : m_memory) {
@@ -222,38 +253,14 @@ void MemoryController::reset()
     }
 }
 
-void MemoryController::initMemoryBank()
-{
-    for (uint32_t i = 0; i < ROM_1_SIZE; i++) {
-        initialize(ROM_0_SIZE + i, m_cartridge->readBank(i));
-    }
-}
-
 void MemoryController::setCartridge(const string & filename)
 {
-    m_cartridge = std::make_shared<Cartridge>(filename);
-
-    // Check to see if the BIOS region is still active.  If so, we need to
-    // deactivate it so that we can initialize the first 256 bytes of the
-    // ROM region.
-    if (m_memory.front() == &m_bios) {
-        m_memory.pop_front();
-    }
-
-    for (uint16_t i = 0; i < ROM_0_SIZE; i++) {
-        initialize(i, m_cartridge->at(i));
-    }
-
-    // We're done writing to any areas that would contain the BIOS, so we can
-    // active the BIOS region again.
-    m_memory.push_front(&m_bios);
-    
-    initMemoryBank();
+    m_cartridge.load(filename);
 }
 
 bool MemoryController::isCartridgeValid() const
 {
-    return m_cartridge->isValid();
+    return m_cartridge.isValid();
 }
 
 MemoryController::Region *MemoryController::find(uint16_t address) const
@@ -284,33 +291,11 @@ void MemoryController::write(uint16_t address, uint8_t value)
 
     if (region && region->isWritable()) {
         region->write(address, value);
-
         return;
     } 
 
-    if (address <= 0x1FFF) {
-        m_mbc.ramEn = ((value & 0x0F) == 0x0A);
-    } else if (address <= 0x3FFF) {
-        uint8_t bank = (value & 0x1F);
-        if ((0x00 == bank) || (0x20 == bank) || (0x40 == bank) || (0x60 == bank)) {
-            bank |= 0x01;
-        }
-        m_mbc.bank = ((m_mbc.bank & 0xE0) | bank);
-
-        initMemoryBank();
-    } else if (address <= 0x5FFF) {
-        if (MBC_ROM == m_mbc.mode) {
-            m_mbc.bank = (((value << 5) & 0xE0) | m_mbc.bank);
-
-            initMemoryBank();
-        } else {
-            m_mbc.bank = (value & 0x07);
-        }
-    } else if (address <= 0x7FFF) {
-        m_mbc.mode = (0x00 == value) ? MBC_ROM : MBC_RAM;
-    } else {
-        assert(0);
-    }
+    LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
+    assert(0);
 }
 
 uint8_t & MemoryController::read(uint16_t address)

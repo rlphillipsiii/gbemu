@@ -16,7 +16,7 @@
 #include <algorithm>
 #include <memory>
 
-class Cartridge;
+#include "cartridge.h"
 
 class MemoryController {
 public:
@@ -156,11 +156,32 @@ private:
     };
     ////////////////////////////////////////////////////////////////////////////////
 
+    ////////////////////////////////////////////////////////////////////////////////
+    class Removable : public Region {
+    public:
+        explicit Removable() : Region(0, 0) { }
+        ~Removable() = default;
+
+        void write(uint16_t address, uint8_t value) override;
+        uint8_t & read(uint16_t address) override;
+
+        bool isAddressed(uint16_t address) const override;
+
+        void load(const std::string & filename);
+
+        inline void reset() override { }
+        inline bool isValid() const { return m_cartridge->isValid(); }
+        
+    private:
+        static uint8_t EMPTY;
+        
+        std::shared_ptr<Cartridge> m_cartridge;
+    };
+    ////////////////////////////////////////////////////////////////////////////////
+
     ReadOnly m_bios;
-    ReadOnly m_rom_0;
-    ReadOnly m_rom_1;
+    Removable m_cartridge;
     Region m_gram;
-    Region m_ext;
     WorkingRam m_working;
     Region m_graphics;
     MemoryMappedIO m_io;
@@ -175,8 +196,6 @@ private:
     } m_mbc;
     
     std::list<Region*> m_memory;
-
-    std::shared_ptr<Cartridge> m_cartridge;
     
     Region *find(uint16_t address) const;
 
