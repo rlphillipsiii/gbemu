@@ -95,26 +95,42 @@ GPU::GPU(MemoryController & memory)
       m_sPalette1(m_memory.read(GPU_OBP2_ADDRESS)),
       m_x(m_memory.read(GPU_SCROLLX_ADDRESS)),
       m_y(m_memory.read(GPU_SCROLLY_ADDRESS)),
+      m_winX(m_memory.read(GPU_WINDOW_X_ADDRESS)),
+      m_winY(m_memory.read(GPU_WINDOW_Y_ADDRESS)),
       m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
       m_cgb(false)
 {
     reset();
-
+ 
     for (size_t i = 0; i < m_sprites.size(); i++) {
         uint16_t address = SPRITE_ATTRIBUTES_TABLE + (i * SPRITE_BYTES_PER_ATTRIBUTE);
 
-        uint8_t & y     = m_memory.read(address);
-        uint8_t & x     = m_memory.read(address + 1);
-        uint8_t & flags = m_memory.read(address + 3);
+        const uint8_t & y     = m_memory.read(address);
+        const uint8_t & x     = m_memory.read(address + 1);
+        const uint8_t & tile  = m_memory.read(address + 2);
+        const uint8_t & flags = m_memory.read(address + 3);
 
-        shared_ptr<SpriteData> data(new SpriteData(x, y, flags, m_sPalette0, m_sPalette1));
+        shared_ptr<SpriteData> data(new SpriteData(x, y, tile, flags, m_sPalette0, m_sPalette1));
         assert(data);
 
         data->address = address;
-        data->pointer = GPU_RAM_OFFSET;
         data->height  = SPRITE_HEIGHT_NORMAL;
         
         m_sprites[i] = data;
+    }
+
+    for (uint16_t i = 0; i < TILES_PER_SET; i++) {
+        uint16_t address = TILE_SET_0_OFFSET + (i * TILE_SIZE);
+        for (uint8_t j = 0; j < TILE_SIZE; j++) {
+            m_tiles[TILESET_0][i].push_back(&m_memory.read(address + j));
+        }
+
+        union { uint8_t uVal; int8_t sVal; } offset = { .uVal = uint8_t(i) };
+
+        address = TILE_SET_0_OFFSET + (TILES_PER_SET * TILE_SIZE) + (offset.sVal * TILE_SIZE);
+        for (uint8_t j = 0; j < TILE_SIZE; j++) {
+            m_tiles[TILESET_1][i].push_back(&m_memory.read(address + j));
+        }
     }
 }
 
@@ -134,35 +150,27 @@ GPU::RenderState GPU::next()
 {
     switch (m_state) {
     case HBLANK: {
-        if (m_ticks < HBLANK_TICKS) {
-            break;
-        }
-        m_ticks -= HBLANK_TICKS;
+        if (m_ticks < HBLANK_TICKS) { break; }
 
+        m_ticks -= HBLANK_TICKS;
         return (PIXELS_PER_COL == m_scanline) ? VBLANK : OAM;
     }
     case VBLANK: {
-        if (m_ticks < VBLANK_TICKS) {
-            break;
-        }
-        m_ticks -= VBLANK_TICKS;
+        if (m_ticks < VBLANK_TICKS) { break; }
 
+        m_ticks -= VBLANK_TICKS;
         return (SCANLINE_MAX == m_scanline) ? HBLANK : VBLANK;
     }
     case OAM: {
-        if (m_ticks < OAM_TICKS) {
-            break;
-        }
-        m_ticks -= OAM_TICKS;
+        if (m_ticks < OAM_TICKS) { break; }
 
+        m_ticks -= OAM_TICKS;
         return VRAM;
     }
     case VRAM: {
-        if (m_ticks < VRAM_TICKS) {
-            break;
-        }
-        m_ticks -= VRAM_TICKS;
+        if (m_ticks < VRAM_TICKS) { break; }
 
+        m_ticks -= VRAM_TICKS;
         return HBLANK;
     }
     default: {
@@ -254,31 +262,17 @@ void GPU::handleVRAM()
     }
 }
 
-Tile GPU::lookup(uint16_t address)
-{
-    Tile tile(TILE_SIZE);
-    for (size_t i = 0; i < tile.size(); i++) {
-        tile[i] = m_memory.read(address + i);
-    }
-
-    return tile;
-}
-
 ColorArray GPU::getColorMap()
 {
-    if (isWindowEnabled()) {
-
-    } else {
-
-    }
-
     TileMapIndex mIndex = (m_control & TILE_SET_SELECT) ? TILEMAP_0 : TILEMAP_1;
-    TileSetIndex sIndex = (m_control & BACKGROUND_MAP) ? TILESET_1 : TILESET_0;
-
-    return lookup(mIndex, sIndex);
+    
+    TileSetIndex bg     = (m_control & BACKGROUND_MAP) ? TILESET_1 : TILESET_0;
+    TileSetIndex window = (m_control & WINDOW_MAP) ? TILESET_1 : TILESET_0;
+    
+    return lookup(mIndex, bg, window);
 }
 
-Tile GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
+const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
 {
     // We have two maps, so figure out which offset we need to use for our address
     uint16_t offset = (TILEMAP_0 == mIndex) ? TILE_MAP_0_OFFSET : TILE_MAP_1_OFFSET;
@@ -287,25 +281,7 @@ Tile GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t 
     // needing to look up.
     uint16_t address = offset + ((y * TILE_MAP_COLUMNS) + x);
 
-    // We have the address, so let's read out our actual value and shove it in to a
-    // tile pointer object.  This will let us interpret the number that comes out as
-    // either a signed integer (in the case of map 1) or an unsigned integer (in the
-    // case of map 2).
-    union { uint8_t tile0; int8_t tile1; } tptr = { .tile0 = m_memory.read(address) };
-
-    // Now that we have our union initialized, we need to figure out the offset we
-    // need to use in order to figure out the location of our tile in memory.
-    int16_t toffset = (TILESET_0 == sIndex) ?
-        int16_t(tptr.tile0) * TILE_SIZE : int16_t(tptr.tile1) * TILE_SIZE;
-    
-    // Actually figure out the location of the tile that we want.  If we are after a
-    // tile in the second set, then we need to set our offset to the end of the 1st
-    // set and use our signed number to index in to the second set because the 2nd
-    // half of the 1st set is also the 1st half the second set.
-    uint16_t location = (TILESET_0 == sIndex) ?
-            TILE_SET_0_OFFSET + toffset : TILE_SET_0_OFFSET + toffset + (TILES_PER_SET * TILE_SIZE);
-
-    return lookup(location);
+    return getTile(sIndex, m_memory.read(address));
 }
 
 shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
@@ -336,8 +312,8 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
     ColorArray colors;
 
     for (size_t i = 0; i < tile.size(); i += 2) {
-        uint8_t lower = tile.at(i);
-        uint8_t upper = tile.at(i + 1);
+        uint8_t lower = *tile.at(i);
+        uint8_t upper = *tile.at(i + 1);
 
         for (uint8_t j = 0; j < 8; j++) {
             // The left most pixel starts at the most significant bit.
@@ -357,7 +333,7 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
     return colors;
 }
 
-ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
+ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
 {
     ColorArray colors(PIXELS_PER_COL * PIXELS_PER_ROW);
 
@@ -375,25 +351,35 @@ ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
 
     for (uint16_t i = yTileOffset; i < yEnd; i++) {
         for (uint16_t j = xTileOffset; j < xEnd; j++) {
-            // Lookup the tile that we want and translate it to RGB.
-            ColorArray rgb = toRGB(m_palette,
-                lookup(mIndex, sIndex, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS), true);
-
             // Each tile is 8x8, so we first need to figure out the coordinates
             // of the top left corner of the tile we are translating.
             uint16_t xOffset = j * TILE_PIXELS_PER_ROW;
             uint16_t yOffset = i * TILE_PIXELS_PER_COL;
+
+            uint16_t col = xOffset - m_x;
+            uint16_t row = yOffset - m_y;
+
+            const Tile & tile = (isWindowEnabled()
+                                 && (col >= m_winX) && (col < PIXELS_PER_COL)
+                                 && (row >= m_winY) && (row < PIXELS_PER_ROW)) ?
+                // lookup(mIndex, win, col, row) :
+                lookup(mIndex, win, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS) :
+                lookup(mIndex, bg, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS);
+
+            // Lookup the tile that we want and translate it to RGB.
+            ColorArray rgb = toRGB(m_palette, tile, true);
 
             // Loop through each pixel in the tile that we just translated, and stick
             // it in to the screen RGB array at the appropriate pixel location.
             for (size_t k = 0; k < rgb.size(); k++) {
                 // These are 8x8 chunks, so we need to calculate a new x, y each time
                 // we go through this loop and have a new pixel.
-                uint16_t x = (xOffset + (k % TILE_PIXELS_PER_ROW)) - m_x;
-                uint16_t y = (yOffset + (k / TILE_PIXELS_PER_ROW)) - m_y;
+                uint16_t x = col + (k % TILE_PIXELS_PER_ROW);
+                uint16_t y = row + (k / TILE_PIXELS_PER_ROW);
 
                 if ((x < PIXELS_PER_ROW) && (y < PIXELS_PER_COL)) {
                     uint16_t index = (y * PIXELS_PER_ROW) + x;
+
                     colors[index] = std::move(rgb[k]);
                 }
             }
@@ -406,11 +392,19 @@ ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
 
 void GPU::readSprite(SpriteData & data)
 {
+    // If the sprite height is extended, then we need to mask out the lower bit and
+    // take that as upper tile in the sprite.  The new masked tile number + 1 is the
+    // address of the lower number.
+    uint8_t number = data.tile;
+    if (SPRITE_HEIGHT_EXTENDED == data.height) {
+        number &= 0xFE;
+    }
+    
     // Lookup the tile in our table of sprites.  If we have a sprite that has extended
     // height, then we need to read out the sprite data at the next address as well.
-    Tile tile = lookup(data.pointer);
+    Tile tile = getTile(TILESET_0, number);
     if (SPRITE_HEIGHT_EXTENDED == data.height) {
-        Tile additional = lookup(data.pointer + 1);
+        const Tile & additional = getTile(TILESET_0, number + 1);
         tile.insert(tile.end(), additional.begin(), additional.end());
     }
 
@@ -452,17 +446,7 @@ void GPU::drawSprites(ColorArray & display)
     for (shared_ptr<SpriteData> & data : m_sprites) {
         if (!data) { continue; }
 
-        data->pointer = TILE_SET_0_OFFSET + (TILE_SIZE * m_memory.read(data->address + 2));
-
-        // Figure out the height of the sprite.  If the height of the sprite, is extended
-        // (8x16), then we need to mask out the least significant bit and use the masked
-        // address as the upper portion of the sprite and the next sprite tile as the lower
-        // portion.
         data->height = (m_control & SPRITE_SIZE) ? SPRITE_HEIGHT_EXTENDED : SPRITE_HEIGHT_NORMAL;
-        if (SPRITE_HEIGHT_EXTENDED == data->height) {
-            data->pointer &= 0xFE;
-        }
-
         if (data->isVisible()) {
             enabled.push_back(data);
         }
@@ -491,6 +475,7 @@ void GPU::drawSprites(ColorArray & display)
 GPU::SpriteData::SpriteData(
     const uint8_t & col,
     const uint8_t & row,
+    const uint8_t & t,
     const uint8_t & atts,
     const uint8_t & p0,
     const uint8_t & p1)
@@ -498,7 +483,8 @@ GPU::SpriteData::SpriteData(
       y(row),
       flags(atts),
       palette0(p0),
-      palette1(p1)
+      palette1(p1),
+      tile(t)
 {
 
 }
@@ -567,7 +553,7 @@ string GPU::SpriteData::toString() const
     stream << "    Location: (" << int(this->x) << ", " << int(this->y) << ") " << std::endl;;
     stream << "    Height:   " << int(this->height) << std::endl;
     stream << "    Flags:    " << int(this->flags) << std::endl;
-    stream << "    Pointer:  " << this->pointer;
+    stream << "    Pointer:  " << this->tile;
     
     return stream.str();
 }

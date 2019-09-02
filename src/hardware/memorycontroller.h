@@ -31,8 +31,6 @@ public:
     void reset();
     void setCartridge(const std::string & filename);
 
-    bool isCartridgeValid() const;
-
     void saveBIOS(const std::string & filename);
 
     inline bool isRtcResetRequested() const
@@ -42,6 +40,7 @@ public:
     inline void unlockBiosRegion() { m_memory.pop_front(); }
 
     inline bool inBios() const { return (m_memory.front() == &m_bios); }
+    inline bool isCartridgeValid() const { return m_cartridge.isValid(); }
     
 private:
     static uint8_t DUMMY;
@@ -67,7 +66,7 @@ private:
         virtual void write(uint16_t address, uint8_t value);
         virtual uint8_t & read(uint16_t address);
 
-        virtual inline uint16_t size() const { return uint16_t(m_memory.size()); }
+        virtual inline uint16_t size() const { return m_size; }
 
         virtual void reset() { std::fill(m_memory.begin(), m_memory.end(), resetValue()); }
 
@@ -78,7 +77,9 @@ private:
         
     protected:
         uint16_t m_offset;
-        uint16_t m_initializing;
+        uint16_t m_size;
+        
+        bool m_initializing;
 
         std::vector<uint8_t> m_memory;
     };

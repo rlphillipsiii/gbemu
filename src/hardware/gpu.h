@@ -18,12 +18,14 @@
 
 #define GPU_SPRITE_COUNT 40
 
+#define GPU_TILES_PER_SET 256
+
 class MemoryController;
 
 namespace GB { struct RGB; };
 
 typedef std::vector<std::shared_ptr<GB::RGB>> ColorArray;
-typedef std::vector<uint8_t> Tile;
+typedef std::vector<const uint8_t*> Tile;
 typedef std::array<GB::RGB, 4> BWPalette;
 
 class GPU {
@@ -89,17 +91,18 @@ private:
 
         const uint8_t & palette0;
         const uint8_t & palette1;
-        
-        uint8_t height;
 
+        const uint8_t & tile;
+
+        uint8_t height;
         uint16_t address;
-        uint16_t pointer;
 
         ColorArray colors;
 
         SpriteData(
             const uint8_t & col,
             const uint8_t & row,
+            const uint8_t & tile,
             const uint8_t & atts,
             const uint8_t & pal0,
             const uint8_t & pal1);
@@ -130,7 +133,7 @@ private:
         BACKGROUND_MAP    = 0x08,
         TILE_SET_SELECT   = 0x10,
         WINDOW_ENABLE     = 0x20,
-        WINDOW_TILE_SET   = 0x40,
+        WINDOW_MAP        = 0x40,
         DISPLAY_ENABLE    = 0x80,
     };
 
@@ -171,6 +174,8 @@ private:
     uint8_t & m_sPalette1;
     uint8_t & m_x;
     uint8_t & m_y;
+    uint8_t & m_winX;
+    uint8_t & m_winY;
     uint8_t & m_scanline;
     
     RenderState m_state;
@@ -180,12 +185,13 @@ private:
     bool m_cgb;
 
     ColorArray m_screen;
-    
+
+    std::array<std::array<Tile, GPU_TILES_PER_SET>, 2> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
     
-    ColorArray lookup(TileMapIndex mIndex, TileSetIndex sIndex);
-    Tile lookup(uint16_t address);
-    Tile lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
+    ColorArray lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex window);
+    
+    const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
     ColorArray toRGB(const uint8_t & pal, const Tile & tile, bool white) const;
     
@@ -197,6 +203,9 @@ private:
     void handleVRAM();
     
     RenderState next();
+
+    inline const Tile & getTile(TileSetIndex index, uint16_t tile) const
+        { return m_tiles.at(index).at(tile); }
 
     inline void updateRenderStateStatus(RenderState state)
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
