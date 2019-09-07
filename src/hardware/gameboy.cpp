@@ -75,30 +75,11 @@ void GameBoy::run()
 {
     LOG("%s\n", "Gameboy thread running");
 
-    const int CYCLES = 120000;
-    
-    int count = 0;
-    
     while (m_run.load()) {
-        {
-            TimeProfiler p("Clock Cycle Loop");
-            while (count < CYCLES) {
-                uint8_t ticks = m_cpu.cycle();
+        uint8_t ticks = m_cpu.cycle();
 
-                m_gpu.cycle(ticks);
-
-                m_joypad.cycle(ticks);
-
-                count += ticks;
-            }
-        }
-
-        count =- CYCLES;
-
-#ifdef PROFILING
-        string temp;
-        std::getline(std::cin, temp);
-#endif
+        m_gpu.cycle(ticks);
+        m_joypad.cycle(ticks);
     }
 }
 
