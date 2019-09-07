@@ -16,6 +16,7 @@
 #include <string>
 #include <iostream>
 #include <cmath>
+#include <unordered_map>
 
 #include "gpu.h"
 #include "processor.h"
@@ -31,6 +32,9 @@ using std::pair;
 using std::shared_ptr;
 using std::stringstream;
 using std::string;
+using std::unordered_map;
+using std::lock_guard;
+using std::mutex;
 
 const BWPalette GPU::NON_CGB_PALETTE = {{
     { 255, 255, 255, 0xFF }, // white
@@ -98,7 +102,9 @@ GPU::GPU(MemoryController & memory)
       m_winX(m_memory.read(GPU_WINDOW_X_ADDRESS)),
       m_winY(m_memory.read(GPU_WINDOW_Y_ADDRESS)),
       m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
-      m_cgb(false)
+      m_cgb(false),
+      m_screen(PIXELS_PER_ROW * PIXELS_PER_COL),
+      m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL)
 {
     reset();
  
@@ -213,6 +219,8 @@ void GPU::handleHBlank()
         // clear the scanline as we are starting back at the beginning.
         if (VBLANK == (m_status & RENDER_MODE)) {
             m_scanline = 0;
+
+            m_cache.clear();
         }
         
         if (isHBlankInterruptEnabled()) {
@@ -223,6 +231,7 @@ void GPU::handleHBlank()
 
     if (m_ticks < HBLANK_TICKS) { return; }
 
+    updateScreen();
     m_scanline++;
 }
 
@@ -235,6 +244,13 @@ void GPU::handleVBlank()
 
         Interrupts::set(m_memory, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
+
+        drawSprites(m_buffer);
+
+        lock_guard<mutex> guard(m_lock);
+        
+        m_screen = std::move(m_buffer);
+        m_buffer.resize(PIXELS_PER_ROW * PIXELS_PER_COL);
     }
 
     const int cycles = VBLANK_TICKS / (SCANLINE_MAX - PIXELS_PER_COL);
@@ -262,14 +278,14 @@ void GPU::handleVRAM()
     }
 }
 
-ColorArray GPU::getColorMap()
+void GPU::updateScreen()
 {
     TileMapIndex mIndex = (m_control & TILE_SET_SELECT) ? TILEMAP_0 : TILEMAP_1;
     
     TileSetIndex bg     = (m_control & BACKGROUND_MAP) ? TILESET_1 : TILESET_0;
     TileSetIndex window = (m_control & WINDOW_MAP) ? TILESET_1 : TILESET_0;
     
-    return lookup(mIndex, bg, window);
+    lookup(mIndex, bg, window);
 }
 
 const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
@@ -333,10 +349,41 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
     return colors;
 }
 
-ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
+void GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
 {
-    ColorArray colors(PIXELS_PER_COL * PIXELS_PER_ROW);
+    uint16_t offset = m_scanline * PIXELS_PER_ROW;
+    
+    for (uint8_t i = 0; i < PIXELS_PER_ROW; i++) {
+        uint8_t col = m_x + i;
+        uint8_t row = m_y + m_scanline;
+        
+        uint8_t xOffset = col / TILE_PIXELS_PER_ROW;
+        uint8_t yOffset = row / TILE_PIXELS_PER_COL;
 
+        uint16_t key = (xOffset << 8) | yOffset;
+
+        auto iterator = m_cache.find(key);
+        if (m_cache.end() == iterator) {
+            TileSetIndex set = (isWindowEnabled()
+                                 && (m_scanline >= m_winY) && (m_scanline < PIXELS_PER_ROW))
+                                 && (i >= m_winX) && (i < PIXELS_PER_COL) ? win : bg;
+        
+            const Tile & tile = lookup(mIndex, set, col / TILE_PIXELS_PER_ROW, row / TILE_PIXELS_PER_COL);
+
+            m_cache[key] = toRGB(m_palette, tile, true);
+            iterator = m_cache.find(key);
+        }
+
+        const ColorArray & rgb = iterator->second;
+
+        uint8_t xTile = col - (xOffset * TILE_PIXELS_PER_ROW);
+        uint8_t yTile = row - (yOffset * TILE_PIXELS_PER_COL);
+
+        uint8_t index = xTile + (yTile * TILE_PIXELS_PER_ROW);
+        m_buffer[offset++] = rgb[index];
+    }
+    
+#if 0    
     // Figure out the first tile that we need to read in based on the x and y registers,
     // which define the upper left hand corner of the screen.
     uint16_t xTileOffset = m_x / TILE_PIXELS_PER_ROW;
@@ -359,9 +406,7 @@ ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
             uint16_t col = xOffset - m_x;
             uint16_t row = yOffset - m_y;
 
-            const Tile & tile = (isWindowEnabled()
-                                 && (col >= m_winX) && (col < PIXELS_PER_COL)
-                                 && (row >= m_winY) && (row < PIXELS_PER_ROW)) ?
+            const Tile & tile = 
                 // lookup(mIndex, win, col, row) :
                 lookup(mIndex, win, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS) :
                 lookup(mIndex, bg, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS);
@@ -377,6 +422,8 @@ ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
                 uint16_t x = col + (k % TILE_PIXELS_PER_ROW);
                 uint16_t y = row + (k / TILE_PIXELS_PER_ROW);
 
+                if (y != m_scanline) { continue; }
+                
                 if ((x < PIXELS_PER_ROW) && (y < PIXELS_PER_COL)) {
                     uint16_t index = (y * PIXELS_PER_ROW) + x;
 
@@ -388,6 +435,7 @@ ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
 
     drawSprites(colors);
     return colors;
+#endif
 }
 
 void GPU::readSprite(SpriteData & data)

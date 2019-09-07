@@ -12,6 +12,8 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <unordered_map>
+#include <mutex>
 
 #include "interrupt.h"
 #include "memmap.h"
@@ -36,12 +38,16 @@ public:
     void cycle(uint8_t ticks);
     void reset();
 
-    ColorArray getColorMap();
-
     inline uint8_t scanline() const { return m_scanline; }
     
     inline void enableCGB()  { m_cgb = true;  }
     inline void disableCGB() { m_cgb = false; }
+
+    inline ColorArray getColorMap()
+    {
+        std::lock_guard<std::mutex> guard(m_lock);
+        return std::move(m_screen);
+    }
 
 private:
     static const BWPalette NON_CGB_PALETTE;
@@ -184,12 +190,17 @@ private:
     
     bool m_cgb;
 
+    std::mutex m_lock;
+    
     ColorArray m_screen;
-
+    ColorArray m_buffer;
+    
     std::array<std::array<Tile, GPU_TILES_PER_SET>, 2> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
+
+    std::unordered_map<uint16_t, ColorArray> m_cache;
     
-    ColorArray lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex window);
+    void lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex window);
     
     const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
@@ -210,6 +221,8 @@ private:
     inline void updateRenderStateStatus(RenderState state)
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
 
+    void updateScreen();
+    
     void drawSprites(ColorArray & display);
     void readSprite(SpriteData & data);
 };

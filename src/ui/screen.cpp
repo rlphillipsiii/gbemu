@@ -99,7 +99,8 @@ void Screen::onTimeout()
     
     for (size_t i = 0; i < rgb.size(); i++) {
         shared_ptr<GB::RGB> color = rgb.at(i);
-
+        if (!color) { return; }
+        
         int x = i % m_width;
         int y = i / m_width;
         m_canvas.setPixel(x, y, qRgba(color->red, color->green, color->blue, color->alpha));
