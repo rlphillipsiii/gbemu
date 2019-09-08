@@ -284,7 +284,7 @@ void GPU::updateScreen()
     
     TileSetIndex bg     = (m_control & BACKGROUND_MAP) ? TILESET_1 : TILESET_0;
     TileSetIndex window = (m_control & WINDOW_MAP) ? TILESET_1 : TILESET_0;
-    
+
     lookup(mIndex, bg, window);
 }
 
@@ -349,6 +349,16 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
     return colors;
 }
 
+bool GPU::isWindowSelected(uint8_t x, uint8_t y)
+{
+    if (!isWindowEnabled()) { return false; }
+    
+    if ((y < m_winY) || (y >= PIXELS_PER_ROW)) { return false; }
+    if ((x < m_winX) || (x >= PIXELS_PER_COL)) { return false; }
+
+    return true;
+}
+
 void GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
 {
     uint16_t offset = m_scanline * PIXELS_PER_ROW;
@@ -362,13 +372,13 @@ void GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
 
         uint16_t key = (xOffset << 8) | yOffset;
 
+        bool window = isWindowSelected(i, m_scanline);
+        
         auto iterator = m_cache.find(key);
         if (m_cache.end() == iterator) {
-            TileSetIndex set = (isWindowEnabled()
-                                 && (m_scanline >= m_winY) && (m_scanline < PIXELS_PER_ROW))
-                                 && (i >= m_winX) && (i < PIXELS_PER_COL) ? win : bg;
+            TileSetIndex set = window ? TILESET_0 : bg;//? win : bg;
         
-            const Tile & tile = lookup(mIndex, set, col / TILE_PIXELS_PER_ROW, row / TILE_PIXELS_PER_COL);
+            const Tile & tile = lookup(mIndex, set, xOffset, yOffset);
 
             m_cache[key] = toRGB(m_palette, tile, true);
             iterator = m_cache.find(key);
@@ -380,62 +390,10 @@ void GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
         uint8_t yTile = row - (yOffset * TILE_PIXELS_PER_COL);
 
         uint8_t index = xTile + (yTile * TILE_PIXELS_PER_ROW);
-        m_buffer[offset++] = rgb[index];
-    }
-    
-#if 0    
-    // Figure out the first tile that we need to read in based on the x and y registers,
-    // which define the upper left hand corner of the screen.
-    uint16_t xTileOffset = m_x / TILE_PIXELS_PER_ROW;
-    uint16_t yTileOffset = m_y / TILE_PIXELS_PER_COL;
-
-    // Figure out the last tile that needs to be read in by offseting the pixels per
-    // each column and row and dividing each of those numbers by the number of pixels
-    // each column and row.  The ceiling of that operation is the index of the last
-    // tile.
-    uint16_t xEnd = (uint16_t)std::ceil(double(m_x + PIXELS_PER_ROW) / TILE_PIXELS_PER_ROW);
-    uint16_t yEnd = (uint16_t)std::ceil(double(m_y + PIXELS_PER_COL) / TILE_PIXELS_PER_COL);
-
-    for (uint16_t i = yTileOffset; i < yEnd; i++) {
-        for (uint16_t j = xTileOffset; j < xEnd; j++) {
-            // Each tile is 8x8, so we first need to figure out the coordinates
-            // of the top left corner of the tile we are translating.
-            uint16_t xOffset = j * TILE_PIXELS_PER_ROW;
-            uint16_t yOffset = i * TILE_PIXELS_PER_COL;
-
-            uint16_t col = xOffset - m_x;
-            uint16_t row = yOffset - m_y;
-
-            const Tile & tile = 
-                // lookup(mIndex, win, col, row) :
-                lookup(mIndex, win, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS) :
-                lookup(mIndex, bg, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS);
-
-            // Lookup the tile that we want and translate it to RGB.
-            ColorArray rgb = toRGB(m_palette, tile, true);
-
-            // Loop through each pixel in the tile that we just translated, and stick
-            // it in to the screen RGB array at the appropriate pixel location.
-            for (size_t k = 0; k < rgb.size(); k++) {
-                // These are 8x8 chunks, so we need to calculate a new x, y each time
-                // we go through this loop and have a new pixel.
-                uint16_t x = col + (k % TILE_PIXELS_PER_ROW);
-                uint16_t y = row + (k / TILE_PIXELS_PER_ROW);
-
-                if (y != m_scanline) { continue; }
-                
-                if ((x < PIXELS_PER_ROW) && (y < PIXELS_PER_COL)) {
-                    uint16_t index = (y * PIXELS_PER_ROW) + x;
-
-                    colors[index] = std::move(rgb[k]);
-                }
-            }
+        if (isBackgroundEnabled()) {
+            m_buffer[offset++] = rgb[index];
         }
     }
-
-    drawSprites(colors);
-    return colors;
-#endif
 }
 
 void GPU::readSprite(SpriteData & data)
@@ -598,10 +556,10 @@ string GPU::SpriteData::toString() const
     stringstream stream;
 
     stream << "Sprite: " << std::hex << "0x" << this->address << std::endl;
+    stream << "    Tile:     " << this->tile << std::endl;
     stream << "    Location: (" << int(this->x) << ", " << int(this->y) << ") " << std::endl;;
     stream << "    Height:   " << int(this->height) << std::endl;
-    stream << "    Flags:    " << int(this->flags) << std::endl;
-    stream << "    Pointer:  " << this->tile;
+    stream << "    Flags:    " << int(this->flags);
     
     return stream.str();
 }

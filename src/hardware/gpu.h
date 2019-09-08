@@ -51,7 +51,7 @@ public:
 
 private:
     static const BWPalette NON_CGB_PALETTE;
-
+    
     static const uint16_t TILE_SIZE;
     static const uint16_t TILES_PER_SET;
 
@@ -222,6 +222,8 @@ private:
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
 
     void updateScreen();
+
+    bool isWindowSelected(uint8_t x, uint8_t y);
     
     void drawSprites(ColorArray & display);
     void readSprite(SpriteData & data);
