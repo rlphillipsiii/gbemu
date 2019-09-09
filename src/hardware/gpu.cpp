@@ -107,7 +107,7 @@ GPU::GPU(MemoryController & memory)
       m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL)
 {
     reset();
- 
+
     for (size_t i = 0; i < m_sprites.size(); i++) {
         uint16_t address = SPRITE_ATTRIBUTES_TABLE + (i * SPRITE_BYTES_PER_ATTRIBUTE);
 
@@ -244,7 +244,7 @@ void GPU::handleVBlank()
 
         Interrupts::set(m_memory, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
-
+        
         drawSprites(m_buffer);
 
         lock_guard<mutex> guard(m_lock);
@@ -280,19 +280,19 @@ void GPU::handleVRAM()
 
 void GPU::updateScreen()
 {
-    TileMapIndex mIndex = (m_control & TILE_SET_SELECT) ? TILEMAP_0 : TILEMAP_1;
+    TileSetIndex set = (m_control & TILE_SET_SELECT) ? TILESET_0 : TILESET_1;
     
-    TileSetIndex bg     = (m_control & BACKGROUND_MAP) ? TILESET_1 : TILESET_0;
-    TileSetIndex window = (m_control & WINDOW_MAP) ? TILESET_1 : TILESET_0;
+    TileMapIndex background = (m_control & BACKGROUND_MAP) ? TILEMAP_1 : TILEMAP_0;
+    TileMapIndex window     = (m_control & WINDOW_MAP) ? TILEMAP_1 : TILEMAP_0;
 
-    lookup(mIndex, bg, window);
+    lookup(set, background, window);
 }
 
 const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
 {
     // We have two maps, so figure out which offset we need to use for our address
     uint16_t offset = (TILEMAP_0 == mIndex) ? TILE_MAP_0_OFFSET : TILE_MAP_1_OFFSET;
-
+    
     // Now that we know our offset, figure out the address of the tile that we are
     // needing to look up.
     uint16_t address = offset + ((y * TILE_MAP_COLUMNS) + x);
@@ -302,13 +302,10 @@ const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, u
 
 shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
 {
-    if (m_cgb) {
-        // TODO: do something with cgb mode here
-        assert(0);
-    }
+    // TODO: do something with cgb mode here
+    if (m_cgb) { assert(0); }
 
     uint8_t index = pixel & 0x03;
-
     uint8_t color = (pal >> (index * 2)) & 0x03;
 
     shared_ptr<GB::RGB> rgb(new GB::RGB(NON_CGB_PALETTE[color]));;
@@ -354,12 +351,12 @@ bool GPU::isWindowSelected(uint8_t x, uint8_t y)
     if (!isWindowEnabled()) { return false; }
     
     if ((y < m_winY) || (y >= PIXELS_PER_ROW)) { return false; }
-    if ((x < m_winX) || (x >= PIXELS_PER_COL)) { return false; }
+    if ((x < (m_winX - 7)) || (x >= (PIXELS_PER_COL + 7))) { return false; }
 
     return true;
 }
 
-void GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
+void GPU::lookup(TileSetIndex set, TileMapIndex background, TileMapIndex window)
 {
     uint16_t offset = m_scanline * PIXELS_PER_ROW;
     
@@ -372,13 +369,16 @@ void GPU::lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex win)
 
         uint16_t key = (xOffset << 8) | yOffset;
 
-        bool window = isWindowSelected(i, m_scanline);
+        bool win = isWindowSelected(i, m_scanline);
         
         auto iterator = m_cache.find(key);
         if (m_cache.end() == iterator) {
-            TileSetIndex set = window ? TILESET_0 : bg;//? win : bg;
-        
-            const Tile & tile = lookup(mIndex, set, xOffset, yOffset);
+            uint8_t xLookup = (win) ? (col - (m_winX - 7)) / TILE_PIXELS_PER_ROW : xOffset;
+            uint8_t yLookup = (win) ? (row - m_winY) / TILE_PIXELS_PER_COL : yOffset;
+            
+            TileMapIndex tMap = (win) ? window : background;
+
+            const Tile & tile = lookup(tMap, set, xLookup, yLookup);
 
             m_cache[key] = toRGB(m_palette, tile, true);
             iterator = m_cache.find(key);

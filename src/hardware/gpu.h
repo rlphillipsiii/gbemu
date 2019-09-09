@@ -200,7 +200,7 @@ private:
 
     std::unordered_map<uint16_t, ColorArray> m_cache;
     
-    void lookup(TileMapIndex mIndex, TileSetIndex bg, TileSetIndex window);
+    void lookup(TileSetIndex set, TileMapIndex background, TileMapIndex window);
     
     const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
