@@ -116,7 +116,7 @@ GPU::GPU(MemoryController & memory)
         const uint8_t & tile  = m_memory.read(address + 2);
         const uint8_t & flags = m_memory.read(address + 3);
 
-        shared_ptr<SpriteData> data(new SpriteData(x, y, tile, flags, m_sPalette0, m_sPalette1));
+        shared_ptr<SpriteData> data(new SpriteData(*this, x, y, tile, flags, m_sPalette0, m_sPalette1));
         assert(data);
 
         data->address = address;
@@ -244,8 +244,6 @@ void GPU::handleVBlank()
 
         Interrupts::set(m_memory, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
-        
-        drawSprites(m_buffer);
 
         lock_guard<mutex> guard(m_lock);
         
@@ -346,6 +344,32 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
     return colors;
 }
 
+ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool white) const
+{
+    ColorArray colors;
+
+    uint8_t offset = row * 2;
+
+    uint8_t lower = *tile.at(offset);
+    uint8_t upper = *tile.at(offset + 1);
+
+    for (uint8_t j = 0; j < 8; j++) {
+        // The left most pixel starts at the most significant bit.
+        uint8_t shift = 7 - j;
+
+        // Each pixel is spread across two bytes i.e. the least significant bit of
+        // the left most pixel is at the most significant bit of the first byte and
+        // the most of significant bit of the left most pixel is at the most
+        // significant bit of the second byte.
+        uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
+
+        // Each pixel needs to be run through a palette to get the actual color.
+        colors.push_back(std::move(palette(pal, pixel, white)));
+    }
+
+    return colors;
+}
+
 bool GPU::isWindowSelected(uint8_t x, uint8_t y)
 {
     if (!isWindowEnabled()) { return false; }
@@ -360,44 +384,38 @@ void GPU::lookup(TileSetIndex set, TileMapIndex background, TileMapIndex window)
 {
     uint16_t offset = m_scanline * PIXELS_PER_ROW;
     
-    for (uint8_t i = 0; i < PIXELS_PER_ROW; i++) {
+    for (uint8_t i = 0; i < PIXELS_PER_ROW; i += TILE_PIXELS_PER_ROW) {
         uint8_t col = m_x + i;
         uint8_t row = m_y + m_scanline;
         
         uint8_t xOffset = col / TILE_PIXELS_PER_ROW;
         uint8_t yOffset = row / TILE_PIXELS_PER_COL;
 
-        uint16_t key = (xOffset << 8) | yOffset;
-
         bool win = isWindowSelected(i, m_scanline);
         
-        auto iterator = m_cache.find(key);
-        if (m_cache.end() == iterator) {
-            uint8_t xLookup = (win) ? (col - (m_winX - 7)) / TILE_PIXELS_PER_ROW : xOffset;
-            uint8_t yLookup = (win) ? (row - m_winY) / TILE_PIXELS_PER_COL : yOffset;
+        uint8_t xLookup = (win) ? (col - (m_winX - 7)) / TILE_PIXELS_PER_ROW : xOffset;
+        uint8_t yLookup = (win) ? (row - m_winY) / TILE_PIXELS_PER_COL : yOffset;
             
-            TileMapIndex tMap = (win) ? window : background;
+        TileMapIndex tMap = (win) ? window : background;
+        const Tile & tile = lookup(tMap, set, xLookup, yLookup);
 
-            const Tile & tile = lookup(tMap, set, xLookup, yLookup);
+        ColorArray rgb = toRGB(m_palette, tile, row % TILE_PIXELS_PER_COL, true);
 
-            m_cache[key] = toRGB(m_palette, tile, true);
-            iterator = m_cache.find(key);
-        }
-
-        const ColorArray & rgb = iterator->second;
-
-        uint8_t xTile = col - (xOffset * TILE_PIXELS_PER_ROW);
-        uint8_t yTile = row - (yOffset * TILE_PIXELS_PER_COL);
-
-        uint8_t index = xTile + (yTile * TILE_PIXELS_PER_ROW);
-        if (isBackgroundEnabled()) {
-            m_buffer[offset++] = rgb[index];
+        for (size_t j = 0; j < rgb.size(); j++) {
+            if (isBackgroundEnabled()) {
+                m_buffer[offset] = std::move(rgb[j]);
+            }
+            offset++;
         }
     }
+
+    drawSprites(m_buffer);
 }
 
 void GPU::readSprite(SpriteData & data)
 {
+    data.colors.clear();
+
     // If the sprite height is extended, then we need to mask out the lower bit and
     // take that as upper tile in the sprite.  The new masked tile number + 1 is the
     // address of the lower number.
@@ -414,31 +432,21 @@ void GPU::readSprite(SpriteData & data)
         tile.insert(tile.end(), additional.begin(), additional.end());
     }
 
-    ColorArray temp = toRGB(data.palette(), tile, false);
-
     bool flipX = data.flags & FLIP_X;
     bool flipY = data.flags & FLIP_Y;
 
-    // We already have an RGB color map of the sprite, so if the flip x or y flags aren't
-    // set, we don't have anything else that we need to do here.
-    if (!(flipX || flipY)) {
-        data.colors = std::move(temp);
-        return;
-    }
-
-    data.colors.clear();
+    uint8_t row = m_scanline % TILE_PIXELS_PER_COL;
+    if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
     
-    IndexIterator yIndex(0, data.height - 1, flipY);
-    while (yIndex.hasNext()) {
-        IndexIterator xIndex(0, SPRITE_WIDTH - 1, flipX);
+    ColorArray temp = toRGB(data.palette(), tile, row, false);
 
-        uint8_t y = yIndex.next();
-
-        while (xIndex.hasNext()) {
-            uint8_t x = xIndex.next();
-
-            uint8_t index = ((y * SPRITE_WIDTH) + x);
-            data.colors.push_back(std::move(temp.at(index)));
+    if (flipX) {
+        for (auto it = temp.rbegin(); it != temp.rend(); it++) {
+            data.colors.push_back(std::move(*it));
+        }
+    } else {
+        for (auto it = temp.begin(); it != temp.end(); it++) {
+            data.colors.push_back(std::move(*it));
         }
     }
 }
@@ -473,19 +481,21 @@ void GPU::drawSprites(ColorArray & display)
         });
 
     for (const shared_ptr<SpriteData> & sprite : enabled) {
-        sprite->render(*this, display, m_palette);
+        sprite->render(display, m_palette);
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 GPU::SpriteData::SpriteData(
+    GPU & gpu,                            
     const uint8_t & col,
     const uint8_t & row,
     const uint8_t & t,
     const uint8_t & atts,
     const uint8_t & p0,
     const uint8_t & p1)
-    : x(col),
+    : m_gpu(gpu),
+      x(col),
       y(row),
       flags(atts),
       palette0(p0),
@@ -508,24 +518,26 @@ bool GPU::SpriteData::isVisible() const
         return false;
     }
 
-    return true;
+    uint8_t y = this->y - 16;
+    if ((m_gpu.m_scanline >= y) && (m_gpu.m_scanline < (y + this->height))) {
+        return true;
+    }
+    
+    return false;
 }
 
-void GPU::SpriteData::render(GPU & gpu, ColorArray & display, uint8_t dPalette)
+void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
 {
-    gpu.readSprite(*this);
+    m_gpu.readSprite(*this);
 
     for (size_t i = 0; i < this->colors.size(); i++) {
-        int xOffset = (i % SPRITE_WIDTH) - 8;
-        if ((this->x + xOffset) < 0) { continue; }
+        int offset = int(this->x) - 8;
+        
+        if ((offset + int(i)) < 0) { continue; }
 
-        int yOffset = (i / SPRITE_WIDTH) - 16;
-        if ((this->y + yOffset) < 0) { continue; }
-
-        uint8_t x = this->x + xOffset;
-        uint8_t y = this->y + yOffset;
-
-        uint16_t index = (y * PIXELS_PER_ROW) + x;
+        uint8_t x = this->x + offset + i;
+        
+        uint16_t index = (m_gpu.m_scanline * PIXELS_PER_ROW) + x;
         if (index >= int(display.size())) {
             continue;
         }
@@ -542,7 +554,7 @@ void GPU::SpriteData::render(GPU & gpu, ColorArray & display, uint8_t dPalette)
         // that the sprite overlaps with is set to color 0.
         if (this->flags & OBJECT_PRIORITY) {
             const GB::RGB & bg = NON_CGB_PALETTE[dPalette & 0x03];
-            if (!(*display[index] == bg)) {
+            if (display[index] && !(*display[index] == bg)) {
                 continue;
             }
         }

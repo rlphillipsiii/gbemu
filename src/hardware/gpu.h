@@ -90,6 +90,8 @@ private:
     static const uint8_t ALPHA_TRANSPARENT;
 
     struct SpriteData {
+        GPU & m_gpu;
+        
         const uint8_t & x;
         const uint8_t & y;
 
@@ -106,6 +108,7 @@ private:
         ColorArray colors;
 
         SpriteData(
+            GPU & gpu,
             const uint8_t & col,
             const uint8_t & row,
             const uint8_t & tile,
@@ -117,7 +120,7 @@ private:
         
         std::string toString() const;
         bool isVisible() const;
-        void render(GPU & gpu, ColorArray & display, uint8_t dPalette);
+        void render(ColorArray & display, uint8_t dPalette);
 
         uint8_t palette() const;
     };
@@ -205,7 +208,8 @@ private:
     const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
     ColorArray toRGB(const uint8_t & pal, const Tile & tile, bool white) const;
-    
+    ColorArray toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool white) const;
+
     std::shared_ptr<GB::RGB> palette(const uint8_t & pal, uint8_t pixel, bool white) const;
 
     void handleHBlank();
