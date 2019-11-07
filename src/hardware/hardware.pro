@@ -27,7 +27,6 @@ HEADERS += gameboy.h
 HEADERS += joypad.h
 HEADERS += interrupt.h
 HEADERS += memmap.h
-HEADERS += iiterator.h
 HEADERS += cartridge.h
 HEADERS += $$PUBLIC_HEADERS
 

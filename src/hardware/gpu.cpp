@@ -24,7 +24,6 @@
 #include "memmap.h"
 #include "logging.h"
 #include "gameboyinterface.h"
-#include "iiterator.h"
 
 using std::vector;
 using std::array;
@@ -219,8 +218,6 @@ void GPU::handleHBlank()
         // clear the scanline as we are starting back at the beginning.
         if (VBLANK == (m_status & RENDER_MODE)) {
             m_scanline = 0;
-
-            m_cache.clear();
         }
         
         if (isHBlankInterruptEnabled()) {
@@ -278,6 +275,8 @@ void GPU::handleVRAM()
 
 void GPU::updateScreen()
 {
+    if (m_scanline >= PIXELS_PER_COL) { return; }
+    
     TileSetIndex set = (m_control & TILE_SET_SELECT) ? TILESET_0 : TILESET_1;
     
     TileMapIndex background = (m_control & BACKGROUND_MAP) ? TILEMAP_1 : TILEMAP_0;
@@ -316,32 +315,6 @@ shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white)
         rgb->alpha = ALPHA_TRANSPARENT;
     }
     return rgb;
-}
-
-ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
-{
-    ColorArray colors;
-
-    for (size_t i = 0; i < tile.size(); i += 2) {
-        uint8_t lower = *tile.at(i);
-        uint8_t upper = *tile.at(i + 1);
-
-        for (uint8_t j = 0; j < 8; j++) {
-            // The left most pixel starts at the most significant bit.
-            uint8_t shift = 7 - j;
-
-            // Each pixel is spread across two bytes i.e. the least significant bit of
-            // the left most pixel is at the most significant bit of the first byte and
-            // the most of significant bit of the left most pixel is at the most
-            // significant bit of the second byte.
-            uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
-
-            // Each pixel needs to be run through a palette to get the actual color.
-            colors.push_back(std::move(palette(pal, pixel, white)));
-        }
-    }
-
-    return colors;
 }
 
 ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool white) const
@@ -531,12 +504,8 @@ void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
     m_gpu.readSprite(*this);
 
     for (size_t i = 0; i < this->colors.size(); i++) {
-        int offset = int(this->x) - 8;
-        
-        if ((offset + int(i)) < 0) { continue; }
+        uint8_t x = (this->x + i - 8) % PIXELS_PER_ROW;
 
-        uint8_t x = this->x + offset + i;
-        
         uint16_t index = (m_gpu.m_scanline * PIXELS_PER_ROW) + x;
         if (index >= int(display.size())) {
             continue;

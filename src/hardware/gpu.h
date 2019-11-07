@@ -201,13 +201,10 @@ private:
     std::array<std::array<Tile, GPU_TILES_PER_SET>, 2> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
 
-    std::unordered_map<uint16_t, ColorArray> m_cache;
-    
     void lookup(TileSetIndex set, TileMapIndex background, TileMapIndex window);
     
     const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
-    ColorArray toRGB(const uint8_t & pal, const Tile & tile, bool white) const;
     ColorArray toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool white) const;
 
     std::shared_ptr<GB::RGB> palette(const uint8_t & pal, uint8_t pixel, bool white) const;
