@@ -10,14 +10,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2    
     - name: configure
-      run: ./configure
-    - name: change WD
-      working-directory: ./src
+      run: ./configure      
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
+      working-directory: ./src
     - name: make
       run: make
-    - name: make check
-      run: make check
-    - name: make distcheck
-      run: make distcheck
+      working-directory: ./src
