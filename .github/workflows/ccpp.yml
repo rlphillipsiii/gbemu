@@ -9,8 +9,6 @@ jobs:
     
     steps:
     - uses: actions/checkout@v2    
-    - name: configure
-      run: ./configure      
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
       working-directory: ./src
