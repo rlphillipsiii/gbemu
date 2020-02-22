@@ -16,7 +16,7 @@ jobs:
         # Directory to install Qt
         dir: /bin/
         # Version of Qt to install
-        version: 5.10 # optional, default is 5.12.6
+        #version: 5.10.0 # optional, default is 5.12.6
         # Host platform
         #host: # optional
         # Target platform for build
