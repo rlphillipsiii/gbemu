@@ -1,4 +1,3 @@
-
 CONFIG (release, debug|release) {
     TARGET_SPEC = release
     
@@ -59,26 +58,26 @@ defineTest(publishHeaders) {
 }
 
 defineReplace(getBaseDirectory) {
-    needle = "build.pri"
+    needle = ".git"
     
     exists($$needle) {
-        return($$system("pwd"))
+        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("pwd"))
+        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("pwd"))
+        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("pwd"))
+        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("pwd"))
+        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
     }
     
     message("Couldn't find base directory")
@@ -101,7 +100,7 @@ INCLUDEPATH += $$PUBLIC_INC
 LIBS += $$combine(-L, $$PUBLIC_LIB)
 LIBS += $$combine(-L, $$PUBLIC_BIN)
 
-CONFIG += c++11
+CONFIG += c++17
 CONFIG += console
 
 QMAKE_CXXFLAGS += -Wall 
