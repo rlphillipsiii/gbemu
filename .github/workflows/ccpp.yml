@@ -17,9 +17,9 @@ jobs:
         architecture: 'x64'
     - name: Install Qt
       uses: jurplel/install-qt-action@v2.3.0
-      with:
+      #with:
         # Directory to install Qt
-        dir: ~/bin/
+        #dir: ~/bin/
         # Version of Qt to install
         #version: 5.10.0 # optional, default is 5.12.6
         # Host platform
