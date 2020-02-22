@@ -8,13 +8,15 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+
+    - uses: actions/checkout@v2
     - name: Install Qt
       uses: jurplel/install-qt-action@v2.3.0
-      #with:
+      with:
         # Directory to install Qt
-        #dir: # optional
+        dir: /bin/
         # Version of Qt to install
-        #version: # optional, default is 5.12.6
+        version: 5.10 # optional, default is 5.12.6
         # Host platform
         #host: # optional
         # Target platform for build
@@ -24,8 +26,7 @@ jobs:
         # Whether or not to install Qt dependencies on Linux
         #install-deps: # optional, default is true
         # Additional Qt modules to install
-        #modules: # optional
-    - uses: actions/checkout@v2       
+        #modules: # optional       
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
       working-directory: ./src
