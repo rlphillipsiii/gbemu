@@ -15,6 +15,21 @@ jobs:
         architecture: 'x64'
     - name: Install Qt
       uses: jurplel/install-qt-action@v2.3.0
+      with:
+        # Directory to install Qt
+        #dir: # optional
+        # Version of Qt to install
+        #version: # optional, default is 5.12.6
+        # Host platform
+        #host: # optional
+        # Target platform for build
+        #target: # optional, default is desktop
+        # Architecture for Windows/Android
+        arch: win64_msvc2017_64
+        # Whether or not to install Qt dependencies on Linux
+        #install-deps: # optional, default is true
+        # Additional Qt modules to install
+        #modules: # optiona
              
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
@@ -36,21 +51,7 @@ jobs:
         architecture: 'x64'
     - name: Install Qt
       uses: jurplel/install-qt-action@v2.3.0
-      #with:
-        # Directory to install Qt
-        #dir: # optional
-        # Version of Qt to install
-        #version: # optional, default is 5.12.6
-        # Host platform
-        #host: # optional
-        # Target platform for build
-        #target: # optional, default is desktop
-        # Architecture for Windows/Android
-        #arch: # optional
-        # Whether or not to install Qt dependencies on Linux
-        #install-deps: # optional, default is true
-        # Additional Qt modules to install
-        #modules: # optional  
+      l  
              
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
