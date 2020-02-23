@@ -31,7 +31,9 @@ jobs:
         # Additional Qt modules to install
         #modules: # optiona
     - name: Set Qt Env
-      run: ./%QT_DIR%/bin/qtenv2.bat
+      run: "%QT_DIR%/bin/qtenv2.bat"
+    - name: Run vcvars64.bat
+      run: "C:/Program Files (x86)/Microsoft Visual Studio/2017/Community/VC/Auxiliary/Build/vcvars64.bat"
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
       working-directory: ./src
