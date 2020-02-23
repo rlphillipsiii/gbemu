@@ -189,6 +189,8 @@ Cartridge::MBC3::MBC3(Cartridge & cartridge)
 
 void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
 {
+    // TODO: finsih the RTC portion of the ROM writing portion
+    
     if (address < 0x2000) {
         m_ramEnable = ((value & 0x0F) == 0x0A);
     } else if (address < 0x4000) {
