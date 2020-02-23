@@ -32,7 +32,7 @@ jobs:
         #modules: # optiona
              
     - name: qmake
-      run: qmake -r CONFIG+=debug_and_release
+      run: qmake.exe -r CONFIG+=debug_and_release
       working-directory: ./src
       
     - name: cmake
