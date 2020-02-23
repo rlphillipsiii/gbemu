@@ -204,8 +204,8 @@ void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
 
 void Cartridge::MBC3::writeRAM(uint16_t address, uint8_t value)
 {
-    uint16_t index = address + (m_ramBank * EXT_RAM_SIZE);
-    m_ram[index - EXT_RAM_OFFSET] = value;
+    uint16_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
+    m_ram[index] = value;
 }
 
 uint8_t & Cartridge::MBC3::readROM(uint16_t address)
@@ -216,8 +216,8 @@ uint8_t & Cartridge::MBC3::readROM(uint16_t address)
 
 uint8_t & Cartridge::MBC3::readRAM(uint16_t address)
 {
-    uint16_t index = address + (m_ramBank * EXT_RAM_SIZE);
-    return m_ram[index - EXT_RAM_OFFSET];
+    uint16_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
+    return m_ram[index];
 }
 ////////////////////////////////////////////////////////////////////////////////
 
