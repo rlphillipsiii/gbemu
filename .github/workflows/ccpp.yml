@@ -2,48 +2,7 @@ name: C/C++ CI
 
 on: [push]
 
-jobs:
-  windows:
-    runs-on: windows-latest
-    steps:
-
-    - uses: actions/checkout@v2
-    - name: Install Python 3.7
-      uses: actions/setup-python@v1
-      with:
-        python-version: '3.7'
-        architecture: 'x64'
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v2.3.0
-      with:
-        # Directory to install Qt
-        #dir: # optional
-        # Version of Qt to install
-        #version: # optional, default is 5.12.6
-        # Host platform
-        #host: # optional
-        # Target platform for build
-        #target: # optional, default is desktop
-        # Architecture for Windows/Android
-        arch: win64_msvc2017_64
-        # Whether or not to install Qt dependencies on Linux
-        #install-deps: # optional, default is true
-        # Additional Qt modules to install
-        #modules: # optiona
-    - name: Set Qt Env
-      shell: cmd
-      run: 'd:/a/gbemu/Qt/5.12.6/msvc2017_64/bin/qtenv2.bat'
-    - name: Run vcvars64.bat
-      shell: cmd
-      run: "C:/Program Files (x86)/Microsoft Visual Studio/2017/Community/VC/Auxiliary/Build/vcvars64.bat"
-    - name: qmake
-      run: qmake -r CONFIG+=debug_and_release
-      working-directory: ./src
-      
-    - name: nmake
-      run: nmake
-      working-directory: ./src
-      
+jobs:      
   macOSX:
     runs-on: macos-latest
     steps:
@@ -66,12 +25,7 @@ jobs:
       working-directory: ./src
       
   linux:
-
     runs-on: ubuntu-latest
-    #runs-on: ${{ matrix.os }}
-    #strategy:
-    #  matrix:
-    #    os: [ubuntu-latest, macosx-latest,windows-latest]
     steps:
 
     - uses: actions/checkout@v2
