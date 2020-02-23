@@ -53,8 +53,11 @@ Screen::Screen(QQuickItem *parent)
     QStringList args = QCoreApplication::arguments();
 
     string filename = (args.size() < 2) ? "" : args.at(1).toStdString();
-    m_console->load(filename);
-    m_console->start();
+
+    if (m_console) {
+        m_console->load(filename);
+        m_console->start();
+    }
 }
 
 Screen::~Screen()
@@ -68,7 +71,7 @@ void Screen::stop()
 
     m_timer.stop();
 
-    m_console->stop();
+    if (m_console) { m_console->stop(); }
 }
 
 void Screen::keyPressEvent(QKeyEvent *event)

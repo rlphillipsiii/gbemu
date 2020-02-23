@@ -750,7 +750,7 @@ Processor::Processor(MemoryController & memory)
 
     OPCODES = {
         // { opcode, { name, lambda function, length, cycles } }
-        { 0x00, { "NOP", [this]() { }, 1, 1 } },
+        { 0x00, { "NOP", [this]() { (void)this; }, 1, 1 } },
 
         { 0xCE, { "ADC_a_n",  [this]() { add8(m_operands[0], true); }, 2, 2 } },
         { 0x8F, { "ADC_a_a",  [this]() { add8(m_gpr.a, true);       }, 1, 1 } },

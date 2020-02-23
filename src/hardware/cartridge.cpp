@@ -81,9 +81,11 @@ Cartridge::Cartridge(const string & path)
     }
 
     m_bank = unique_ptr<MemoryBank>(bank);
+
+    assert(m_bank);
     
     LOG("ROM Size:  0x%x (0x%02x)\n", m_info.size, m_memory.at(ROM_SIZE_OFFSET));
-    LOG("Bank Type: 0x%02x\n", uint8_t(m_info.type));
+    LOG("Bank Type: %s (0x%02x)\n", m_bank->name().c_str(), uint8_t(m_info.type));
     m_valid = true;
 }
 
@@ -110,7 +112,7 @@ void Cartridge::write(uint16_t address, uint8_t value)
 {
     assert(m_bank);
     
-    if (address < (ROM_0_OFFSET + ROM_0_SIZE)) {
+    if ((address < (ROM_0_OFFSET + ROM_0_SIZE)) || (address < (ROM_1_OFFSET + ROM_1_SIZE))) {
         m_bank->writeROM(address, value);
     } else if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
         m_bank->writeRAM(address, value);
@@ -119,7 +121,7 @@ void Cartridge::write(uint16_t address, uint8_t value)
 
 ////////////////////////////////////////////////////////////////////////////////
 Cartridge::MBC1::MBC1(Cartridge & cartridge)
-    : MemoryBank(cartridge, 0x8000),
+    : MemoryBank(cartridge, "MBC1", 0x8000),
       m_mode(Cartridge::MBC_ROM)
 {
 
@@ -127,22 +129,22 @@ Cartridge::MBC1::MBC1(Cartridge & cartridge)
 
 void Cartridge::MBC1::writeROM(uint16_t address, uint8_t value)
 {
-    if (address <= 0x1FFF) {
+    if (address < 0x2000) {
         m_ramEnable = ((value & 0x0F) == 0x0A);
-    } else if (address <= 0x3FFF) {
+    } else if (address < 0x4000) {
         uint8_t bank = (value & 0x1F);
         if ((0x00 == bank) || (0x20 == bank) || (0x40 == bank) || (0x60 == bank)) {
             bank |= 0x01;
         }
 
         m_romBank = ((m_romBank & 0xE0) | bank);
-    } else if (address <= 0x5FFF) {
+    } else if (address < 0x6000) {
         if (MBC_ROM == m_mode) {
             m_romBank = (((value << 5) & 0xE0) | m_romBank);
         } else {
             m_ramBank = (value & 0x07);
         }
-    } else if (address <= 0x7FFF) {
+    } else if (address < 0x8000) {
         m_mode = (0x00 == value) ? Cartridge::MBC_ROM : Cartridge::MBC_RAM;
     } else {
         LOG("Illegal MBC1 write to address 0x%04x\n", address);
@@ -171,27 +173,27 @@ uint8_t & Cartridge::MBC1::readRAM(uint16_t address)
 
 ////////////////////////////////////////////////////////////////////////////////
 Cartridge::MBC3::MBC3(Cartridge & cartridge)
-    : MemoryBank(cartridge, 0x8000)
+    : MemoryBank(cartridge, "MBC3", 0x8000)
 {
 
 }
 
 void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
 {
-    if (address <= 0x1FFF) {
+    if (address < 0x2000) {
         m_ramEnable = ((value & 0x0F) == 0x0A);
-    } else if (address <= 0x3FFF) {
+    } else if (address < 0x4000) {
         uint8_t bank = (value & 0x7F);
         if (0x00 == bank) { bank |= 0x01; }
 
         m_romBank = bank;
-    } else if (address <= 0x5FFF) {
+    } else if (address < 0x6000) {
         if (value <= 0x03) {
             m_ramBank = value;
         } else {
 
         }
-    } else if (address <= 0x7FFF) {
+    } else if (address < 0x8000) {
 
     } else {
         LOG("Illegal MBC3 write to address 0x%04x\n", address);
@@ -202,7 +204,7 @@ void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
 
 void Cartridge::MBC3::writeRAM(uint16_t address, uint8_t value)
 {
-    uint16_t index = address + ((m_ramBank - 1) * EXT_RAM_SIZE);
+    uint16_t index = address + (m_ramBank * EXT_RAM_SIZE);
     m_ram[index - EXT_RAM_OFFSET] = value;
 }
 
@@ -214,7 +216,7 @@ uint8_t & Cartridge::MBC3::readROM(uint16_t address)
 
 uint8_t & Cartridge::MBC3::readRAM(uint16_t address)
 {
-    uint16_t index = address + ((m_ramBank - 1) * EXT_RAM_SIZE);
+    uint16_t index = address + (m_ramBank * EXT_RAM_SIZE);
     return m_ram[index - EXT_RAM_OFFSET];
 }
 ////////////////////////////////////////////////////////////////////////////////

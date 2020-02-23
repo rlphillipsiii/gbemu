@@ -337,7 +337,7 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool 
         uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
 
         // Each pixel needs to be run through a palette to get the actual color.
-        colors.push_back(std::move(palette(pal, pixel, white)));
+        colors.push_back(palette(pal, pixel, white));
     }
 
     return colors;

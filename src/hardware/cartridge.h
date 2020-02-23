@@ -53,12 +53,13 @@ private:
 
     class MemoryBank {
     public:
-        MemoryBank(Cartridge & cartridge, uint16_t size)
+        MemoryBank(Cartridge & cartridge, const std::string & name, uint16_t size)
             : m_cartridge(cartridge),
+              m_name(name),
               m_ram(size),
               m_ramEnable(false),
               m_romBank(1),
-              m_ramBank(1)
+              m_ramBank(0)
         { }
         virtual ~MemoryBank() = default;
         
@@ -68,9 +69,13 @@ private:
         virtual uint8_t & readROM(uint16_t address) = 0;
         virtual uint8_t & readRAM(uint16_t address) = 0;
 
+        inline std::string name() const { return m_name; }
+        
     protected:
         Cartridge & m_cartridge;
 
+        std::string m_name;
+        
         std::vector<uint8_t> m_ram;
 
         bool m_ramEnable;

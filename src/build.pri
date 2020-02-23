@@ -104,7 +104,8 @@ CONFIG += c++17
 CONFIG += console
 
 QMAKE_CXXFLAGS += -Wall 
-  
+QMAKE_CXXFLAGS += -Werror
+
 win32: DEFINES += WIN32
 unix:  DEFINES += LINUX
 

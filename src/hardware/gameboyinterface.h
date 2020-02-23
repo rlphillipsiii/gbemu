@@ -83,6 +83,8 @@ public:
     
     static std::shared_ptr<GameBoyInterface> Instance(ConsoleType type=GAMEBOY_EMU);
 
+    virtual ~GameBoyInterface() = default;
+    
     virtual bool load(const std::string & filename) = 0;
 
     virtual void start() = 0;
