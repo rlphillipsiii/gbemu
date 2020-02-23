@@ -30,7 +30,8 @@ jobs:
         #install-deps: # optional, default is true
         # Additional Qt modules to install
         #modules: # optiona
-             
+    - name: Set Qt Env
+      run: ./%QT_DIR%/bin/qtenv2.bat
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
       working-directory: ./src
