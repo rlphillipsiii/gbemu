@@ -3,10 +3,29 @@ name: C/C++ CI
 on: [push]
 
 jobs:
-  build:
+  windows:
+    runs-on: windows-latest
+    steps:
 
-    runs-on: ubuntu-latest
-    
+    - uses: actions/checkout@v2
+    - name: Install Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.7'
+        architecture: 'x64'
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v2.3.0
+             
+    - name: qmake
+      run: qmake -r CONFIG+=debug_and_release
+      working-directory: ./src
+      
+    - name: cmake
+      run: cmake.exe
+      working-directory: ./src
+      
+  macOSX:
+    runs-on: macos-latest
     steps:
 
     - uses: actions/checkout@v2
@@ -32,6 +51,32 @@ jobs:
         #install-deps: # optional, default is true
         # Additional Qt modules to install
         #modules: # optional  
+             
+    - name: qmake
+      run: qmake -r CONFIG+=debug_and_release
+      working-directory: ./src
+      
+    - name: make
+      run: make
+      working-directory: ./src
+      
+  linux:
+
+    runs-on: ubuntu-latest
+    #runs-on: ${{ matrix.os }}
+    #strategy:
+    #  matrix:
+    #    os: [ubuntu-latest, macosx-latest,windows-latest]
+    steps:
+
+    - uses: actions/checkout@v2
+    - name: Install Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.7'
+        architecture: 'x64'
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v2.3.0
              
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
