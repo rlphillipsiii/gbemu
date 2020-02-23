@@ -32,11 +32,11 @@ jobs:
         #modules: # optiona
              
     - name: qmake
-      run: qmake.exe -r CONFIG+=debug_and_release
+      run: qmake -r CONFIG+=debug_and_release
       working-directory: ./src
       
-    - name: cmake
-      run: cmake.exe
+    - name: nmake
+      run: nmake
       working-directory: ./src
       
   macOSX:
