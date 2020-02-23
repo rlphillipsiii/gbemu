@@ -63,10 +63,22 @@ Cartridge::Cartridge(const string & path)
         }
     }
 
-    MemoryBank *bank;
-
     m_info.type = BankType(m_memory.at(ROM_TYPE_OFFSET));
-    switch (m_info.type) {
+
+    m_bank = unique_ptr<MemoryBank>(initMemoryBank(m_info.type));
+
+    assert(m_bank);
+    
+    LOG("ROM Size:  0x%x (0x%02x)\n", m_info.size, m_memory.at(ROM_SIZE_OFFSET));
+    LOG("Bank Type: %s (0x%02x)\n", m_bank->name().c_str(), uint8_t(m_info.type));
+    m_valid = true;
+}
+
+Cartridge::MemoryBank *Cartridge::initMemoryBank(uint8_t type)
+{
+    MemoryBank *bank = nullptr;
+
+    switch (type) {
     default: assert(0);
 
     case MBC_1:
@@ -80,13 +92,7 @@ Cartridge::Cartridge(const string & path)
         break;
     }
 
-    m_bank = unique_ptr<MemoryBank>(bank);
-
-    assert(m_bank);
-    
-    LOG("ROM Size:  0x%x (0x%02x)\n", m_info.size, m_memory.at(ROM_SIZE_OFFSET));
-    LOG("Bank Type: %s (0x%02x)\n", m_bank->name().c_str(), uint8_t(m_info.type));
-    m_valid = true;
+    return bank;
 }
 
 uint8_t & Cartridge::read(uint16_t address)
@@ -118,6 +124,26 @@ void Cartridge::write(uint16_t address, uint8_t value)
         m_bank->writeRAM(address, value);
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+void Cartridge::MemoryBank::writeRAM(uint16_t address, uint8_t value)
+{
+    uint32_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
+    m_ram[index] = value;
+}
+
+uint8_t & Cartridge::MemoryBank::readROM(uint16_t address)
+{
+    uint32_t index = address + ((m_romBank - 1) * ROM_1_SIZE);
+    return m_cartridge.m_memory[index];
+}
+
+uint8_t & Cartridge::MemoryBank::readRAM(uint16_t address)
+{
+    uint32_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
+    return m_ram[index];
+}
+////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
 Cartridge::MBC1::MBC1(Cartridge & cartridge)
@@ -152,23 +178,6 @@ void Cartridge::MBC1::writeROM(uint16_t address, uint8_t value)
         assert(0);
     }
 }
-
-void Cartridge::MBC1::writeRAM(uint16_t address, uint8_t value)
-{
-    // TODO: RAM banking
-    m_ram[address - EXT_RAM_OFFSET] = value;
-}
-
-uint8_t & Cartridge::MBC1::readROM(uint16_t address)
-{
-    uint16_t index = address + ((m_romBank - 1) * ROM_1_SIZE);
-    return m_cartridge.m_memory[index];
-}
-
-uint8_t & Cartridge::MBC1::readRAM(uint16_t address)
-{
-    return m_ram[address - EXT_RAM_OFFSET];
-}
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -200,24 +209,6 @@ void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
         
         assert(0);
     }
-}
-
-void Cartridge::MBC3::writeRAM(uint16_t address, uint8_t value)
-{
-    uint16_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
-    m_ram[index] = value;
-}
-
-uint8_t & Cartridge::MBC3::readROM(uint16_t address)
-{
-    uint16_t index = address + ((m_romBank - 1) * ROM_1_SIZE);
-    return m_cartridge.m_memory[index];
-}
-
-uint8_t & Cartridge::MBC3::readRAM(uint16_t address)
-{
-    uint16_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
-    return m_ram[index];
 }
 ////////////////////////////////////////////////////////////////////////////////
 

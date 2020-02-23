@@ -64,10 +64,11 @@ private:
         virtual ~MemoryBank() = default;
         
         virtual void writeROM(uint16_t address, uint8_t value) = 0;
-        virtual void writeRAM(uint16_t address, uint8_t value) = 0;
 
-        virtual uint8_t & readROM(uint16_t address) = 0;
-        virtual uint8_t & readRAM(uint16_t address) = 0;
+        void writeRAM(uint16_t address, uint8_t value);
+
+        uint8_t & readROM(uint16_t address);
+        uint8_t & readRAM(uint16_t address);
 
         inline std::string name() const { return m_name; }
         
@@ -90,10 +91,6 @@ private:
         ~MBC1() = default;
 
         void writeROM(uint16_t address, uint8_t value) override;
-        void writeRAM(uint16_t address, uint8_t value) override;
-
-        uint8_t & readROM(uint16_t address) override;
-        uint8_t & readRAM(uint16_t address) override;
 
     private:
         Cartridge::BankMode m_mode;
@@ -105,10 +102,6 @@ private:
         ~MBC2() = default;
 
         void writeROM(uint16_t address, uint8_t value) override;
-        void writeRAM(uint16_t address, uint8_t value) override;
-
-        uint8_t & readROM(uint16_t address) override;
-        uint8_t & readRAM(uint16_t address) override;
     };
 
     class MBC3 : public MemoryBank {
@@ -117,16 +110,14 @@ private:
         ~MBC3() = default;
 
         void writeROM(uint16_t address, uint8_t value) override;
-        void writeRAM(uint16_t address, uint8_t value) override;
-
-        uint8_t & readROM(uint16_t address) override;
-        uint8_t & readRAM(uint16_t address) override;
     };
     
     std::vector<uint8_t> m_memory;
     std::vector<uint8_t> m_ram;
 
     std::unique_ptr<MemoryBank> m_bank;
+
+    MemoryBank *initMemoryBank(uint8_t type);
 };
 
 #endif
