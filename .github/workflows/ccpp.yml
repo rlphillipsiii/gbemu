@@ -2,11 +2,9 @@ name: C/C++ CI
 
 on: [push]
 
-jobs:
-  build:
-
-    runs-on: ubuntu-latest
-    
+jobs:      
+  macOSX:
+    runs-on: macos-latest
     steps:
 
     - uses: actions/checkout@v2
@@ -17,21 +15,27 @@ jobs:
         architecture: 'x64'
     - name: Install Qt
       uses: jurplel/install-qt-action@v2.3.0
-      #with:
-        # Directory to install Qt
-        #dir: # optional
-        # Version of Qt to install
-        #version: # optional, default is 5.12.6
-        # Host platform
-        #host: # optional
-        # Target platform for build
-        #target: # optional, default is desktop
-        # Architecture for Windows/Android
-        #arch: # optional
-        # Whether or not to install Qt dependencies on Linux
-        #install-deps: # optional, default is true
-        # Additional Qt modules to install
-        #modules: # optional  
+             
+    - name: qmake
+      run: qmake -r CONFIG+=debug_and_release
+      working-directory: ./src
+      
+    - name: make
+      run: make
+      working-directory: ./src
+      
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+    - name: Install Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.7'
+        architecture: 'x64'
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v2.3.0
              
     - name: qmake
       run: qmake -r CONFIG+=debug_and_release
