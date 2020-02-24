@@ -73,7 +73,9 @@ private:
     static const uint8_t SPRITE_WIDTH;
     static const uint8_t SPRITE_HEIGHT_NORMAL;
     static const uint8_t SPRITE_HEIGHT_EXTENDED;
-
+    static const uint8_t SPRITE_X_OFFSET;
+    static const uint8_t SPRITE_Y_OFFSET;
+    
     static const uint16_t SCREEN_ROWS;
     static const uint16_t SCREEN_COLUMNS;
 
@@ -88,6 +90,8 @@ private:
     static const uint16_t PIXELS_PER_COL;
 
     static const uint8_t ALPHA_TRANSPARENT;
+
+    static const uint8_t WINDOW_ROW_OFFSET;
 
     struct SpriteData {
         GPU & m_gpu;
@@ -201,11 +205,16 @@ private:
     std::array<std::array<Tile, GPU_TILES_PER_SET>, 2> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
 
-    void lookup(TileSetIndex set, TileMapIndex background, TileMapIndex window);
+    void draw(TileSetIndex set, TileMapIndex background, TileMapIndex window);
     
     const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
-    ColorArray toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool white) const;
+    ColorArray toRGB(
+        const uint8_t & pal,
+        const Tile & tile,
+        uint8_t row,
+        bool white,
+        bool flip) const;
 
     std::shared_ptr<GB::RGB> palette(const uint8_t & pal, uint8_t pixel, bool white) const;
 
@@ -227,6 +236,8 @@ private:
     bool isWindowSelected(uint8_t x, uint8_t y);
     
     void drawSprites(ColorArray & display);
+    void drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex window);
+    
     void readSprite(SpriteData & data);
 };
 

@@ -74,6 +74,9 @@ const uint8_t GPU::SPRITE_WIDTH = 8;
 const uint8_t GPU::SPRITE_HEIGHT_NORMAL   = 8;
 const uint8_t GPU::SPRITE_HEIGHT_EXTENDED = 16;
 
+const uint8_t GPU::SPRITE_X_OFFSET = 8;
+const uint8_t GPU::SPRITE_Y_OFFSET = 16;
+
 const uint16_t GPU::OAM_TICKS    = 80;
 const uint16_t GPU::VRAM_TICKS   = 172;
 const uint16_t GPU::HBLANK_TICKS = 204;
@@ -88,6 +91,8 @@ const uint16_t GPU::TILE_PIXELS_PER_ROW = 8;
 const uint16_t GPU::TILE_PIXELS_PER_COL = 8;
 
 const uint8_t GPU::ALPHA_TRANSPARENT = 0x00;
+
+const uint8_t GPU::WINDOW_ROW_OFFSET = 7;
 
 GPU::GPU(MemoryController & memory)
     : m_memory(memory),
@@ -242,9 +247,10 @@ void GPU::handleVBlank()
         Interrupts::set(m_memory, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
 
-        lock_guard<mutex> guard(m_lock);
-        
-        m_screen = std::move(m_buffer);
+        {
+            lock_guard<mutex> guard(m_lock);
+            m_screen = std::move(m_buffer);
+        }
         m_buffer.resize(PIXELS_PER_ROW * PIXELS_PER_COL);
     }
 
@@ -282,7 +288,7 @@ void GPU::updateScreen()
     TileMapIndex background = (m_control & BACKGROUND_MAP) ? TILEMAP_1 : TILEMAP_0;
     TileMapIndex window     = (m_control & WINDOW_MAP) ? TILEMAP_1 : TILEMAP_0;
 
-    lookup(set, background, window);
+    draw(set, background, window);
 }
 
 const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
@@ -311,13 +317,18 @@ shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white)
     // If the color palette entry is 0, and we are not allowing the color white, then we
     // need to set our alpha blend entry to transparent so that this pixel won't show up
     // on the display when we go to draw the screen.
-    if ((0 == color) && !white) {
+    if ((0 == index) && !white) {
         rgb->alpha = ALPHA_TRANSPARENT;
     }
     return rgb;
 }
 
-ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool white) const
+ColorArray GPU::toRGB(
+    const uint8_t & pal,
+    const Tile & tile,
+    uint8_t row,
+    bool white,
+    bool flip) const
 {
     ColorArray colors;
 
@@ -327,8 +338,10 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool 
     uint8_t upper = *tile.at(offset + 1);
 
     for (uint8_t j = 0; j < 8; j++) {
+        uint8_t index = (flip) ? 7 - j : j;
+
         // The left most pixel starts at the most significant bit.
-        uint8_t shift = 7 - j;
+        uint8_t shift = 7 - index;
 
         // Each pixel is spread across two bytes i.e. the least significant bit of
         // the left most pixel is at the most significant bit of the first byte and
@@ -345,50 +358,99 @@ ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, uint8_t row, bool 
 
 bool GPU::isWindowSelected(uint8_t x, uint8_t y)
 {
+    // We are trying to figure out if the window is visible at the given x and y,
+    // so the first thing that we need to check is if the window is even enabled.
     if (!isWindowEnabled()) { return false; }
     
-    if ((y < m_winY) || (y >= PIXELS_PER_ROW)) { return false; }
-    if ((x < (m_winX - 7)) || (x >= (PIXELS_PER_COL + 7))) { return false; }
+    if ((y < m_winY) || (y >= PIXELS_PER_COL)) { return false; }
+
+    if (((x + WINDOW_ROW_OFFSET) < m_winX)
+        || (x >= (PIXELS_PER_ROW + WINDOW_ROW_OFFSET))) { return false; }
 
     return true;
 }
 
-void GPU::lookup(TileSetIndex set, TileMapIndex background, TileMapIndex window)
+void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex window)
 {
-    uint16_t offset = m_scanline * PIXELS_PER_ROW;
+    if (!isBackgroundEnabled()) { return; }
     
-    for (uint8_t i = 0; i < PIXELS_PER_ROW; i += TILE_PIXELS_PER_ROW) {
-        uint8_t col = m_x + i;
-        uint8_t row = m_y + m_scanline;
+    unordered_map<uint16_t, ColorArray> winCache;
+    unordered_map<uint16_t, ColorArray> bgCache;
+    
+    uint16_t offset = m_scanline * PIXELS_PER_ROW;
+
+    for (uint8_t pixel = 0; pixel < PIXELS_PER_ROW; pixel++) {
+        bool win = isWindowSelected(pixel, m_scanline);
         
-        uint8_t xOffset = col / TILE_PIXELS_PER_ROW;
-        uint8_t yOffset = row / TILE_PIXELS_PER_COL;
+        // Figure out the row and column that we're actually talking about and
+        // make sure that if the pixels walk off the edge of our background map
+        // that we wrap back around.
+        uint16_t col = (m_x + pixel);
+        uint16_t row = (m_y + m_scanline);
 
-        bool win = isWindowSelected(i, m_scanline);
-        
-        uint8_t xLookup = (win) ? (col - (m_winX - 7)) / TILE_PIXELS_PER_ROW : xOffset;
-        uint8_t yLookup = (win) ? (row - m_winY) / TILE_PIXELS_PER_COL : yOffset;
-            
-        TileMapIndex tMap = (win) ? window : background;
-        const Tile & tile = lookup(tMap, set, xLookup, yLookup);
-
-        ColorArray rgb = toRGB(m_palette, tile, row % TILE_PIXELS_PER_COL, true);
-
-        for (size_t j = 0; j < rgb.size(); j++) {
-            if (isBackgroundEnabled()) {
-                m_buffer[offset] = std::move(rgb[j]);
-            }
-            offset++;
+        // If the window is active, we need to adjust our lookup locations for
+        // where the top left location of the window is located.
+        if (win) {
+            col -= (m_winX - WINDOW_ROW_OFFSET);
+            row -= m_winY;
         }
-    }
+        
+        col %= (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
+        row %= (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
 
+        // Figure out the coordinates of the tile that we need to look up in
+        // order to draw the pixels that we are after, which may or may not be
+        // the whole row from this tile.
+        uint16_t xOffset = col / TILE_PIXELS_PER_ROW;
+        uint16_t yOffset = row / TILE_PIXELS_PER_COL;
+
+        auto & cache = (win) ? winCache : bgCache;
+
+        // First we need to see if we've previously looked up this tile.  If not,
+        // we need to look this tile up and stick it in our cache.
+        auto iterator = cache.find(xOffset);
+        if (cache.end() == iterator) {
+            const Tile & tile = lookup(((win) ? window : background), set, xOffset, yOffset);
+
+            // Now that we have the tile that we are interested in, we need to get
+            // the RGB values that are associated with the row in the tile that we
+            // need to add to our screen buffer.
+            ColorArray rgb = toRGB(m_palette, tile, row % TILE_PIXELS_PER_COL, true, false);
+
+            auto entry = cache.emplace(xOffset, rgb);
+            iterator = entry.first;
+        }
+
+        ColorArray & rgb = iterator->second;
+        
+        uint16_t index = col - (xOffset * TILE_PIXELS_PER_ROW);
+
+        // Write this pixel to the the screen buffer.  Its location in the
+        // row that we are drawing is the background x offset subtracted
+        // from the pixel location and then modded by the pixels per
+        // row on screen to wrap the background back around to the left
+        // side of the screen.
+        uint16_t pX = (xOffset * TILE_PIXELS_PER_ROW) + index;
+        if (pX < m_x) { pX += m_x; }
+        
+        m_buffer[offset + ((pX - m_x) % PIXELS_PER_ROW)] = std::move(rgb[index]);
+    }
+}
+
+void GPU::draw(TileSetIndex set, TileMapIndex background, TileMapIndex window)
+{
+    // Draw the 3 layers of the screen in order from lowest priority to highest
+    // so that the highest priority pixels actually end up on top.  The special
+    // priority states of the sprites will be handled by the sprite drawing
+    // routine itself.
+
+    // Background -> Window -> Sprites
+    drawBackground(set, background, window);
     drawSprites(m_buffer);
 }
 
 void GPU::readSprite(SpriteData & data)
 {
-    data.colors.clear();
-
     // If the sprite height is extended, then we need to mask out the lower bit and
     // take that as upper tile in the sprite.  The new masked tile number + 1 is the
     // address of the lower number.
@@ -408,20 +470,17 @@ void GPU::readSprite(SpriteData & data)
     bool flipX = data.flags & FLIP_X;
     bool flipY = data.flags & FLIP_Y;
 
-    uint8_t row = m_scanline % TILE_PIXELS_PER_COL;
+    data.colors.clear();
+
+    // TODO: This isn't quite right here.  Fix it.
+    if (data.y < SPRITE_Y_OFFSET) { return; }
+    uint8_t row = m_scanline - (data.y - SPRITE_Y_OFFSET);
+    
+    // Figure out which row we are trying to render
+    //uint8_t row = m_scanline % TILE_PIXELS_PER_COL;
     if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
     
-    ColorArray temp = toRGB(data.palette(), tile, row, false);
-
-    if (flipX) {
-        for (auto it = temp.rbegin(); it != temp.rend(); it++) {
-            data.colors.push_back(std::move(*it));
-        }
-    } else {
-        for (auto it = temp.begin(); it != temp.end(); it++) {
-            data.colors.push_back(std::move(*it));
-        }
-    }
+    data.colors = toRGB(data.palette(), tile, row, false, flipX);
 }
 
 void GPU::drawSprites(ColorArray & display)
@@ -485,13 +544,18 @@ uint8_t GPU::SpriteData::palette() const
 
 bool GPU::SpriteData::isVisible() const
 {
+    // If either coordinates are set to 0 or the sprite is completely off screen
+    // then it isn't visible.
     if ((0 == this->x) || (0 == this->y)) { return false; }
 
-    if ((this->x >= PIXELS_PER_ROW + 8) || (this->y >= PIXELS_PER_COL + 16)) {
-        return false;
-    }
+    if (this->x >= (PIXELS_PER_ROW + SPRITE_X_OFFSET)) { return false; }
+    if (this->y >= (PIXELS_PER_COL + SPRITE_Y_OFFSET)) { return false; }
 
-    uint8_t y = this->y - 16;
+    // Figure out the y coordinate.  Make sure to clamp the value to 0 if subtracting
+    // the Y offset value for a sprite would cause the value to wrap around.  The
+    // sprite is visible on the scanline if the scanline is between the y coordinate
+    // and the y coordinate plus the height of the sprite.
+    uint8_t y = (this->y < SPRITE_Y_OFFSET) ? 0 : this->y - SPRITE_Y_OFFSET;
     if ((m_gpu.m_scanline >= y) && (m_gpu.m_scanline < (y + this->height))) {
         return true;
     }
@@ -504,19 +568,19 @@ void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
     m_gpu.readSprite(*this);
 
     for (size_t i = 0; i < this->colors.size(); i++) {
-        uint8_t x = (this->x + i - 8) % PIXELS_PER_ROW;
-
-        uint16_t index = (m_gpu.m_scanline * PIXELS_PER_ROW) + x;
-        if (index >= int(display.size())) {
-            continue;
-        }
-
         // Look at the alpha blend and make sure that this sprite pixel isn't supposed to be
         // transparent.  If it is, then we need to leave our display alone.
         const shared_ptr<GB::RGB> & color = this->colors.at(i);
-        if (ALPHA_TRANSPARENT == color->alpha) {
-            continue;
-        }
+        if (ALPHA_TRANSPARENT == color->alpha) { continue; }
+
+        // Figure out the pixel that we are actually after.  If that pixel wrapped around,
+        // then it's off screen, and we need to skip it.
+        uint8_t x = this->x + i - SPRITE_X_OFFSET;
+        if (x >= PIXELS_PER_ROW) { continue; }
+
+        // Grab the actual index in to the display buffer.
+        uint16_t index = (m_gpu.m_scanline * PIXELS_PER_ROW) + x;
+        assert(index < display.size());
 
         // Check the sprite's priority.  If the sprite priority bit is set, the pixels are
         // supposed to be behind the background (i.e. not shown) unless the background pixel
