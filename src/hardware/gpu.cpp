@@ -374,8 +374,7 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
 {
     if (!isBackgroundEnabled()) { return; }
     
-    unordered_map<uint16_t, ColorArray> winCache;
-    unordered_map<uint16_t, ColorArray> bgCache;
+    unordered_map<uint16_t, ColorArray> winCache, bgCache;
     
     uint16_t offset = m_scanline * PIXELS_PER_ROW;
 
@@ -417,23 +416,13 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
             // need to add to our screen buffer.
             ColorArray rgb = toRGB(m_palette, tile, row % TILE_PIXELS_PER_COL, true, false);
 
-            auto entry = cache.emplace(xOffset, rgb);
-            iterator = entry.first;
+            iterator = cache.emplace(xOffset, rgb).first;
         }
 
         ColorArray & rgb = iterator->second;
         
         uint16_t index = col - (xOffset * TILE_PIXELS_PER_ROW);
-
-        // Write this pixel to the the screen buffer.  Its location in the
-        // row that we are drawing is the background x offset subtracted
-        // from the pixel location and then modded by the pixels per
-        // row on screen to wrap the background back around to the left
-        // side of the screen.
-        uint16_t pX = (xOffset * TILE_PIXELS_PER_ROW) + index;
-        if (pX < m_x) { pX += m_x; }
-        
-        m_buffer[offset + ((pX - m_x) % PIXELS_PER_ROW)] = std::move(rgb[index]);
+        m_buffer[offset + pixel] = std::move(rgb[index]);
     }
 }
 
@@ -470,14 +459,16 @@ void GPU::readSprite(SpriteData & data)
     bool flipX = data.flags & FLIP_X;
     bool flipY = data.flags & FLIP_Y;
 
-    data.colors.clear();
-
-    // TODO: This isn't quite right here.  Fix it.
-    if (data.y < SPRITE_Y_OFFSET) { return; }
+    // Figure out which row we are trying to render.
     uint8_t row = m_scanline - (data.y - SPRITE_Y_OFFSET);
+    if (data.y < SPRITE_Y_OFFSET) {
+        // Special case for when the top of a sprite is off the screen.  If the sprite
+        // isn't partiall on screen, then we can bail here without actually looking
+        // up the RGB values.
+        row = SPRITE_Y_OFFSET - data.y + m_scanline;
+        if (row >= data.height) { return; }
+    }
     
-    // Figure out which row we are trying to render
-    //uint8_t row = m_scanline % TILE_PIXELS_PER_COL;
     if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
     
     data.colors = toRGB(data.palette(), tile, row, false, flipX);

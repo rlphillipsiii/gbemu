@@ -82,7 +82,7 @@ Cartridge::MemoryBank *Cartridge::initMemoryBank(uint8_t type)
     default: 
         LOG("%s\n", "WARNING : unknown memory bank type");
         [[gnu::fallthrough]];
-
+        
     case MBC_1:
     case MBC_1R:
     case MBC_1RB:
