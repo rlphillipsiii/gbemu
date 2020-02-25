@@ -51,7 +51,7 @@ public:
 
 private:
     static const BWPalette NON_CGB_PALETTE;
-    
+
     static const uint16_t TILE_SIZE;
     static const uint16_t TILES_PER_SET;
 

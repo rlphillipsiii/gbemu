@@ -311,7 +311,9 @@ shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white)
     uint8_t index = pixel & 0x03;
     uint8_t color = (pal >> (index * 2)) & 0x03;
 
-    shared_ptr<GB::RGB> rgb(new GB::RGB(NON_CGB_PALETTE[color]));;
+    const BWPalette & colors = NON_CGB_PALETTE;
+
+    shared_ptr<GB::RGB> rgb(new GB::RGB(colors[color]));;
     assert(rgb);
 
     // If the color palette entry is 0, and we are not allowing the color white, then we
@@ -380,19 +382,12 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
 
     for (uint8_t pixel = 0; pixel < PIXELS_PER_ROW; pixel++) {
         bool win = isWindowSelected(pixel, m_scanline);
-        
+
         // Figure out the row and column that we're actually talking about and
         // make sure that if the pixels walk off the edge of our background map
         // that we wrap back around.
-        uint16_t col = (m_x + pixel);
-        uint16_t row = (m_y + m_scanline);
-
-        // If the window is active, we need to adjust our lookup locations for
-        // where the top left location of the window is located.
-        if (win) {
-            col -= (m_winX - WINDOW_ROW_OFFSET);
-            row -= m_winY;
-        }
+        uint16_t col = win ? (pixel - m_winX + WINDOW_ROW_OFFSET) : (m_x + pixel);
+        uint16_t row = win ? (m_scanline - m_winY) : (m_y + m_scanline);
         
         col %= (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
         row %= (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
@@ -419,10 +414,8 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
             iterator = cache.emplace(xOffset, rgb).first;
         }
 
-        ColorArray & rgb = iterator->second;
-        
-        uint16_t index = col - (xOffset * TILE_PIXELS_PER_ROW);
-        m_buffer[offset + pixel] = std::move(rgb[index]);
+        // Move the RGB values from the iterator in to our buffer.
+        m_buffer[offset + pixel] = std::move(iterator->second[col % TILE_PIXELS_PER_ROW]);
     }
 }
 
@@ -470,7 +463,7 @@ void GPU::readSprite(SpriteData & data)
     }
     
     if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
-    
+
     data.colors = toRGB(data.palette(), tile, row, false, flipX);
 }
 
