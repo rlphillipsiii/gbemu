@@ -32,9 +32,7 @@ GameBoy::GameBoy()
     : m_cpu(m_memory),
       m_gpu(m_memory),
       m_joypad(m_memory),
-      m_run(false),
-      m_advance(false),
-      m_running(true)
+      m_run(false)
 {
 #ifdef STATIC_MEMORY
     ifstream ram("memory2.bin", std::ios::in | std::ios::binary);
@@ -77,41 +75,11 @@ void GameBoy::run()
 {
     LOG("%s\n", "Gameboy thread running");
 
-    const int CYCLES = 120000;
-    
-    int count = 0;
-    
     while (m_run.load()) {
-        {
-            TimeProfiler p("Clock Cycle Loop");
-            while (count < CYCLES) {
-                uint8_t ticks = m_cpu.cycle();
+        uint8_t ticks = m_cpu.cycle();
 
-                m_gpu.cycle(ticks);
-
-                m_joypad.cycle(ticks);
-
-                count += ticks;
-            }
-        }
-
-        count =- CYCLES;
-
-        // TODO: need to move this up in to the loop somewhere so that
-        //       it only happens during VBLANK so that the GPU ram is in
-        //       a complete state
-        {
-            lock_guard<mutex> lock(m_sync);
-            {
-                TimeProfiler p("Render Operation");
-                m_screen = m_gpu.getColorMap();
-            }
-        }
-
-#ifdef PROFILING
-        string temp;
-        std::getline(std::cin, temp);
-#endif
+        m_gpu.cycle(ticks);
+        m_joypad.cycle(ticks);
     }
 }
 

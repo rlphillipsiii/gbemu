@@ -35,11 +35,7 @@ public:
     inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
     inline void clrButton(JoyPadButton button) override { m_joypad.clr(button); }
 
-    inline ColorArray getRGB() override
-    {
-        std::lock_guard<std::mutex> lock(m_sync);
-        return std::move(m_screen);
-    }
+    inline ColorArray getRGB() override { return std::move(m_gpu.getColorMap()); }
 
 private:
     MemoryController m_memory;
@@ -47,14 +43,7 @@ private:
     GPU m_gpu;
     JoyPad m_joypad;
 
-    ColorArray m_screen;
-    
-    std::condition_variable m_wait;
-    std::mutex m_sync;
-    
     std::atomic<bool> m_run;
-    std::atomic<bool> m_advance;
-    std::atomic<bool> m_running;
     
     std::thread m_thread;
 

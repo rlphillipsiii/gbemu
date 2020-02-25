@@ -53,8 +53,11 @@ Screen::Screen(QQuickItem *parent)
     QStringList args = QCoreApplication::arguments();
 
     string filename = (args.size() < 2) ? "" : args.at(1).toStdString();
-    m_console->load(filename);
-    m_console->start();
+
+    if (m_console) {
+        m_console->load(filename);
+        m_console->start();
+    }
 }
 
 Screen::~Screen()
@@ -68,7 +71,7 @@ void Screen::stop()
 
     m_timer.stop();
 
-    m_console->stop();
+    if (m_console) { m_console->stop(); }
 }
 
 void Screen::keyPressEvent(QKeyEvent *event)
@@ -99,10 +102,13 @@ void Screen::onTimeout()
     
     for (size_t i = 0; i < rgb.size(); i++) {
         shared_ptr<GB::RGB> color = rgb.at(i);
-
+        
         int x = i % m_width;
         int y = i / m_width;
-        m_canvas.setPixel(x, y, qRgba(color->red, color->green, color->blue, color->alpha));
+
+        QRgb rgb = (color) ? qRgba(color->red, color->green, color->blue, color->alpha) :
+            qRgba(0xFF, 0xFF, 0xFF, 0xFF);
+        m_canvas.setPixel(x, y, rgb);
     }
 
     update();

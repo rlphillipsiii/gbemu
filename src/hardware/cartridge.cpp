@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdint>
 #include <cassert>
+#include <memory>
 
 #include "cartridge.h"
 #include "logging.h"
@@ -9,6 +10,7 @@
 using std::vector;
 using std::string;
 using std::ifstream;
+using std::unique_ptr;
 
 const uint16_t Cartridge::NINTENDO_LOGO_OFFSET = 0x0104;
 
@@ -54,11 +56,6 @@ Cartridge::Cartridge(const string & path)
 
         m_info.name += char(entry);
     }
-
-    m_info.mbc.type  = BankType(m_memory.at(ROM_TYPE_OFFSET));
-    m_info.mbc.ramEn = false;
-    m_info.mbc.bank  = 0x01;
-    m_info.mbc.mode  = MBC_ROM;
   
     for (size_t i = 0; i < NINTENDO_LOGO.size(); i++) {
         if (m_memory.at(i + NINTENDO_LOGO_OFFSET) != NINTENDO_LOGO.at(i)) {
@@ -66,22 +63,52 @@ Cartridge::Cartridge(const string & path)
         }
     }
 
-    LOG("ROM Size:  0x%x (0x%02x)\n", m_info.size, m_memory.at(ROM_SIZE_OFFSET));
-    LOG("Bank Type: 0x%02x\n", uint8_t(m_info.mbc.type));
+    m_info.type = BankType(m_memory.at(ROM_TYPE_OFFSET));
+
+    m_bank = unique_ptr<MemoryBank>(initMemoryBank(m_info.type));
+
+    assert(m_bank);
     
+    LOG("ROM Size:  0x%x (0x%02x)\n", m_info.size, m_memory.at(ROM_SIZE_OFFSET));
+    LOG("Bank Type: %s (0x%02x)\n", m_bank->name().c_str(), uint8_t(m_info.type));
     m_valid = true;
+}
+
+Cartridge::MemoryBank *Cartridge::initMemoryBank(uint8_t type)
+{
+    MemoryBank *bank = nullptr;
+
+    switch (type) {
+    default: 
+        LOG("%s\n", "WARNING : unknown memory bank type");
+        [[gnu::fallthrough]];
+        
+    case MBC_1:
+    case MBC_1R:
+    case MBC_1RB:
+        bank = new MBC1(*this);
+        break;
+
+    case MBC_3RB:
+        bank = new MBC3(*this);
+        break;
+    }
+
+    return bank;
 }
 
 uint8_t & Cartridge::read(uint16_t address)
 {
+    assert(m_bank);
+
     if (address < (ROM_0_OFFSET + ROM_0_SIZE)) {
         return m_memory[address];
     }
     if (address < (ROM_1_OFFSET + ROM_1_SIZE)) {
-        return m_memory[address + (m_info.mbc.bank * ROM_1_SIZE) - ROM_1_OFFSET];
+        return m_bank->readROM(address);
     }
     if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
-        return m_ram[address - EXT_RAM_OFFSET];
+        return m_bank->readRAM(address);
     }
 
     assert(0);
@@ -91,40 +118,103 @@ uint8_t & Cartridge::read(uint16_t address)
 
 void Cartridge::write(uint16_t address, uint8_t value)
 {
-    if (address < (ROM_0_OFFSET + ROM_0_SIZE)) {
-        writeROM(address, value);
+    assert(m_bank);
+    
+    if ((address < (ROM_0_OFFSET + ROM_0_SIZE)) || (address < (ROM_1_OFFSET + ROM_1_SIZE))) {
+        m_bank->writeROM(address, value);
     } else if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
-        writeRAM(address, value);
+        m_bank->writeRAM(address, value);
     }
 }
 
-void Cartridge::writeROM(uint16_t address, uint8_t value)
+////////////////////////////////////////////////////////////////////////////////
+void Cartridge::MemoryBank::writeRAM(uint16_t address, uint8_t value)
 {
-    if (address <= 0x1FFF) {
-        m_info.mbc.ramEn = ((value & 0x0F) == 0x0A);
-    } else if (address <= 0x3FFF) {
+    uint32_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
+    m_ram[index] = value;
+}
+
+uint8_t & Cartridge::MemoryBank::readROM(uint16_t address)
+{
+    uint32_t index = address + ((m_romBank - 1) * ROM_1_SIZE);
+    return m_cartridge.m_memory[index];
+}
+
+uint8_t & Cartridge::MemoryBank::readRAM(uint16_t address)
+{
+    uint32_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
+    return m_ram[index];
+}
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+Cartridge::MBC1::MBC1(Cartridge & cartridge)
+    : MemoryBank(cartridge, "MBC1", 0x8000),
+      m_mode(Cartridge::MBC_ROM)
+{
+
+}
+
+void Cartridge::MBC1::writeROM(uint16_t address, uint8_t value)
+{
+    if (address < 0x2000) {
+        m_ramEnable = ((value & 0x0F) == 0x0A);
+    } else if (address < 0x4000) {
         uint8_t bank = (value & 0x1F);
         if ((0x00 == bank) || (0x20 == bank) || (0x40 == bank) || (0x60 == bank)) {
             bank |= 0x01;
         }
 
-        m_info.mbc.bank = ((m_info.mbc.bank & 0xE0) | bank);
-    } else if (address <= 0x5FFF) {
-        if (MBC_ROM == m_info.mbc.mode) {
-            m_info.mbc.bank = (((value << 5) & 0xE0) | m_info.mbc.bank);
+        m_romBank = ((m_romBank & 0xE0) | bank);
+    } else if (address < 0x6000) {
+        if (MBC_ROM == m_mode) {
+            m_romBank = (((value << 5) & 0xE0) | m_romBank);
         } else {
-            m_info.mbc.bank = (value & 0x07);
+            m_ramBank = (value & 0x07);
         }
-    } else if (address <= 0x7FFF) {
-        m_info.mbc.mode = (0x00 == value) ? MBC_ROM : MBC_RAM;
+    } else if (address < 0x8000) {
+        m_mode = (0x00 == value) ? Cartridge::MBC_ROM : Cartridge::MBC_RAM;
     } else {
+        LOG("Illegal MBC1 write to address 0x%04x\n", address);
+        
         assert(0);
     }
 }
+////////////////////////////////////////////////////////////////////////////////
 
-void Cartridge::writeRAM(uint16_t address, uint8_t value)
+////////////////////////////////////////////////////////////////////////////////
+Cartridge::MBC3::MBC3(Cartridge & cartridge)
+    : MemoryBank(cartridge, "MBC3", 0x8000)
 {
-    m_ram[address - EXT_RAM_OFFSET] = value;
+
 }
+
+void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
+{
+    // TODO: finsih the RTC portion of the ROM writing portion
+    
+    if (address < 0x2000) {
+        m_ramEnable = ((value & 0x0F) == 0x0A);
+    } else if (address < 0x4000) {
+        uint8_t bank = (value & 0x7F);
+        if (0x00 == bank) { bank |= 0x01; }
+
+        m_romBank = bank;
+    } else if (address < 0x6000) {
+        if (value <= 0x03) {
+            m_ramBank = value;
+        } else {
+
+        }
+    } else if (address < 0x8000) {
+
+    } else {
+        LOG("Illegal MBC3 write to address 0x%04x\n", address);
+        
+        assert(0);
+    }
+}
+////////////////////////////////////////////////////////////////////////////////
+
 
 

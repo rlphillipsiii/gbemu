@@ -12,18 +12,22 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <unordered_map>
+#include <mutex>
 
 #include "interrupt.h"
 #include "memmap.h"
 
 #define GPU_SPRITE_COUNT 40
 
+#define GPU_TILES_PER_SET 256
+
 class MemoryController;
 
 namespace GB { struct RGB; };
 
 typedef std::vector<std::shared_ptr<GB::RGB>> ColorArray;
-typedef std::vector<uint8_t> Tile;
+typedef std::vector<const uint8_t*> Tile;
 typedef std::array<GB::RGB, 4> BWPalette;
 
 class GPU {
@@ -34,12 +38,16 @@ public:
     void cycle(uint8_t ticks);
     void reset();
 
-    ColorArray getColorMap();
-
     inline uint8_t scanline() const { return m_scanline; }
     
     inline void enableCGB()  { m_cgb = true;  }
     inline void disableCGB() { m_cgb = false; }
+
+    inline ColorArray getColorMap()
+    {
+        std::lock_guard<std::mutex> guard(m_lock);
+        return std::move(m_screen);
+    }
 
 private:
     static const BWPalette NON_CGB_PALETTE;
@@ -65,7 +73,9 @@ private:
     static const uint8_t SPRITE_WIDTH;
     static const uint8_t SPRITE_HEIGHT_NORMAL;
     static const uint8_t SPRITE_HEIGHT_EXTENDED;
-
+    static const uint8_t SPRITE_X_OFFSET;
+    static const uint8_t SPRITE_Y_OFFSET;
+    
     static const uint16_t SCREEN_ROWS;
     static const uint16_t SCREEN_COLUMNS;
 
@@ -81,7 +91,11 @@ private:
 
     static const uint8_t ALPHA_TRANSPARENT;
 
+    static const uint8_t WINDOW_ROW_OFFSET;
+
     struct SpriteData {
+        GPU & m_gpu;
+        
         const uint8_t & x;
         const uint8_t & y;
 
@@ -89,17 +103,19 @@ private:
 
         const uint8_t & palette0;
         const uint8_t & palette1;
-        
-        uint8_t height;
 
+        const uint8_t & tile;
+
+        uint8_t height;
         uint16_t address;
-        uint16_t pointer;
 
         ColorArray colors;
 
         SpriteData(
+            GPU & gpu,
             const uint8_t & col,
             const uint8_t & row,
+            const uint8_t & tile,
             const uint8_t & atts,
             const uint8_t & pal0,
             const uint8_t & pal1);
@@ -108,7 +124,7 @@ private:
         
         std::string toString() const;
         bool isVisible() const;
-        void render(GPU & gpu, ColorArray & display, uint8_t dPalette);
+        void render(ColorArray & display, uint8_t dPalette);
 
         uint8_t palette() const;
     };
@@ -130,7 +146,7 @@ private:
         BACKGROUND_MAP    = 0x08,
         TILE_SET_SELECT   = 0x10,
         WINDOW_ENABLE     = 0x20,
-        WINDOW_TILE_SET   = 0x40,
+        WINDOW_MAP        = 0x40,
         DISPLAY_ENABLE    = 0x80,
     };
 
@@ -171,6 +187,8 @@ private:
     uint8_t & m_sPalette1;
     uint8_t & m_x;
     uint8_t & m_y;
+    uint8_t & m_winX;
+    uint8_t & m_winY;
     uint8_t & m_scanline;
     
     RenderState m_state;
@@ -179,16 +197,25 @@ private:
     
     bool m_cgb;
 
+    std::mutex m_lock;
+    
     ColorArray m_screen;
+    ColorArray m_buffer;
     
+    std::array<std::array<Tile, GPU_TILES_PER_SET>, 2> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
-    
-    ColorArray lookup(TileMapIndex mIndex, TileSetIndex sIndex);
-    Tile lookup(uint16_t address);
-    Tile lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
-    ColorArray toRGB(const uint8_t & pal, const Tile & tile, bool white) const;
+    void draw(TileSetIndex set, TileMapIndex background, TileMapIndex window);
     
+    const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
+
+    ColorArray toRGB(
+        const uint8_t & pal,
+        const Tile & tile,
+        uint8_t row,
+        bool white,
+        bool flip) const;
+
     std::shared_ptr<GB::RGB> palette(const uint8_t & pal, uint8_t pixel, bool white) const;
 
     void handleHBlank();
@@ -198,10 +225,19 @@ private:
     
     RenderState next();
 
+    inline const Tile & getTile(TileSetIndex index, uint16_t tile) const
+        { return m_tiles.at(index).at(tile); }
+
     inline void updateRenderStateStatus(RenderState state)
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
 
+    void updateScreen();
+
+    bool isWindowSelected(uint8_t x, uint8_t y);
+    
     void drawSprites(ColorArray & display);
+    void drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex window);
+    
     void readSprite(SpriteData & data);
 };
 

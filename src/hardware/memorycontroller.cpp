@@ -47,6 +47,7 @@ const vector<uint8_t> MemoryController::BIOS_REGION = {
 ////////////////////////////////////////////////////////////////////////////////
 MemoryController::Region::Region(uint16_t size, uint16_t offset)
     : m_offset(offset),
+      m_size(size),
       m_initializing(false),
       m_memory(size)
 {
@@ -55,7 +56,7 @@ MemoryController::Region::Region(uint16_t size, uint16_t offset)
 
 bool MemoryController::Region::isAddressed(uint16_t address) const
 {
-    return ((address >= m_offset) && (address < (m_offset + m_memory.size())));
+    return ((address >= m_offset) && (address < (m_offset + m_size)));
 }
 
 void MemoryController::Region::write(uint16_t address, uint8_t value)
@@ -144,7 +145,8 @@ void MemoryController::Removable::write(uint16_t address, uint8_t value)
 
 uint8_t & MemoryController::Removable::read(uint16_t address)
 {
-    return (m_cartridge) ? m_cartridge->read(address) : EMPTY;
+    return (m_cartridge && m_cartridge->isValid())
+        ? m_cartridge->read(address) : EMPTY;
 }
 
 bool MemoryController::Removable::isAddressed(uint16_t address) const
@@ -256,11 +258,6 @@ void MemoryController::reset()
 void MemoryController::setCartridge(const string & filename)
 {
     m_cartridge.load(filename);
-}
-
-bool MemoryController::isCartridgeValid() const
-{
-    return m_cartridge.isValid();
 }
 
 MemoryController::Region *MemoryController::find(uint16_t address) const

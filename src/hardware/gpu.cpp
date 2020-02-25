@@ -16,6 +16,7 @@
 #include <string>
 #include <iostream>
 #include <cmath>
+#include <unordered_map>
 
 #include "gpu.h"
 #include "processor.h"
@@ -23,7 +24,6 @@
 #include "memmap.h"
 #include "logging.h"
 #include "gameboyinterface.h"
-#include "iiterator.h"
 
 using std::vector;
 using std::array;
@@ -31,6 +31,9 @@ using std::pair;
 using std::shared_ptr;
 using std::stringstream;
 using std::string;
+using std::unordered_map;
+using std::lock_guard;
+using std::mutex;
 
 const BWPalette GPU::NON_CGB_PALETTE = {{
     { 255, 255, 255, 0xFF }, // white
@@ -71,6 +74,9 @@ const uint8_t GPU::SPRITE_WIDTH = 8;
 const uint8_t GPU::SPRITE_HEIGHT_NORMAL   = 8;
 const uint8_t GPU::SPRITE_HEIGHT_EXTENDED = 16;
 
+const uint8_t GPU::SPRITE_X_OFFSET = 8;
+const uint8_t GPU::SPRITE_Y_OFFSET = 16;
+
 const uint16_t GPU::OAM_TICKS    = 80;
 const uint16_t GPU::VRAM_TICKS   = 172;
 const uint16_t GPU::HBLANK_TICKS = 204;
@@ -86,6 +92,8 @@ const uint16_t GPU::TILE_PIXELS_PER_COL = 8;
 
 const uint8_t GPU::ALPHA_TRANSPARENT = 0x00;
 
+const uint8_t GPU::WINDOW_ROW_OFFSET = 7;
+
 GPU::GPU(MemoryController & memory)
     : m_memory(memory),
       m_control(m_memory.read(GPU_CONTROL_ADDRESS)),
@@ -95,26 +103,44 @@ GPU::GPU(MemoryController & memory)
       m_sPalette1(m_memory.read(GPU_OBP2_ADDRESS)),
       m_x(m_memory.read(GPU_SCROLLX_ADDRESS)),
       m_y(m_memory.read(GPU_SCROLLY_ADDRESS)),
+      m_winX(m_memory.read(GPU_WINDOW_X_ADDRESS)),
+      m_winY(m_memory.read(GPU_WINDOW_Y_ADDRESS)),
       m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
-      m_cgb(false)
+      m_cgb(false),
+      m_screen(PIXELS_PER_ROW * PIXELS_PER_COL),
+      m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL)
 {
     reset();
 
     for (size_t i = 0; i < m_sprites.size(); i++) {
         uint16_t address = SPRITE_ATTRIBUTES_TABLE + (i * SPRITE_BYTES_PER_ATTRIBUTE);
 
-        uint8_t & y     = m_memory.read(address);
-        uint8_t & x     = m_memory.read(address + 1);
-        uint8_t & flags = m_memory.read(address + 3);
+        const uint8_t & y     = m_memory.read(address);
+        const uint8_t & x     = m_memory.read(address + 1);
+        const uint8_t & tile  = m_memory.read(address + 2);
+        const uint8_t & flags = m_memory.read(address + 3);
 
-        shared_ptr<SpriteData> data(new SpriteData(x, y, flags, m_sPalette0, m_sPalette1));
+        shared_ptr<SpriteData> data(new SpriteData(*this, x, y, tile, flags, m_sPalette0, m_sPalette1));
         assert(data);
 
         data->address = address;
-        data->pointer = GPU_RAM_OFFSET;
         data->height  = SPRITE_HEIGHT_NORMAL;
         
         m_sprites[i] = data;
+    }
+
+    for (uint16_t i = 0; i < TILES_PER_SET; i++) {
+        uint16_t address = TILE_SET_0_OFFSET + (i * TILE_SIZE);
+        for (uint8_t j = 0; j < TILE_SIZE; j++) {
+            m_tiles[TILESET_0][i].push_back(&m_memory.read(address + j));
+        }
+
+        union { uint8_t uVal; int8_t sVal; } offset = { .uVal = uint8_t(i) };
+
+        address = TILE_SET_0_OFFSET + (TILES_PER_SET * TILE_SIZE) + (offset.sVal * TILE_SIZE);
+        for (uint8_t j = 0; j < TILE_SIZE; j++) {
+            m_tiles[TILESET_1][i].push_back(&m_memory.read(address + j));
+        }
     }
 }
 
@@ -134,35 +160,27 @@ GPU::RenderState GPU::next()
 {
     switch (m_state) {
     case HBLANK: {
-        if (m_ticks < HBLANK_TICKS) {
-            break;
-        }
-        m_ticks -= HBLANK_TICKS;
+        if (m_ticks < HBLANK_TICKS) { break; }
 
+        m_ticks -= HBLANK_TICKS;
         return (PIXELS_PER_COL == m_scanline) ? VBLANK : OAM;
     }
     case VBLANK: {
-        if (m_ticks < VBLANK_TICKS) {
-            break;
-        }
-        m_ticks -= VBLANK_TICKS;
+        if (m_ticks < VBLANK_TICKS) { break; }
 
+        m_ticks -= VBLANK_TICKS;
         return (SCANLINE_MAX == m_scanline) ? HBLANK : VBLANK;
     }
     case OAM: {
-        if (m_ticks < OAM_TICKS) {
-            break;
-        }
-        m_ticks -= OAM_TICKS;
+        if (m_ticks < OAM_TICKS) { break; }
 
+        m_ticks -= OAM_TICKS;
         return VRAM;
     }
     case VRAM: {
-        if (m_ticks < VRAM_TICKS) {
-            break;
-        }
-        m_ticks -= VRAM_TICKS;
+        if (m_ticks < VRAM_TICKS) { break; }
 
+        m_ticks -= VRAM_TICKS;
         return HBLANK;
     }
     default: {
@@ -215,6 +233,7 @@ void GPU::handleHBlank()
 
     if (m_ticks < HBLANK_TICKS) { return; }
 
+    updateScreen();
     m_scanline++;
 }
 
@@ -227,6 +246,12 @@ void GPU::handleVBlank()
 
         Interrupts::set(m_memory, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
+
+        {
+            lock_guard<mutex> guard(m_lock);
+            m_screen = std::move(m_buffer);
+        }
+        m_buffer.resize(PIXELS_PER_ROW * PIXELS_PER_COL);
     }
 
     const int cycles = VBLANK_TICKS / (SCANLINE_MAX - PIXELS_PER_COL);
@@ -254,193 +279,192 @@ void GPU::handleVRAM()
     }
 }
 
-Tile GPU::lookup(uint16_t address)
+void GPU::updateScreen()
 {
-    Tile tile(TILE_SIZE);
-    for (size_t i = 0; i < tile.size(); i++) {
-        tile[i] = m_memory.read(address + i);
-    }
+    if (m_scanline >= PIXELS_PER_COL) { return; }
+    
+    TileSetIndex set = (m_control & TILE_SET_SELECT) ? TILESET_0 : TILESET_1;
+    
+    TileMapIndex background = (m_control & BACKGROUND_MAP) ? TILEMAP_1 : TILEMAP_0;
+    TileMapIndex window     = (m_control & WINDOW_MAP) ? TILEMAP_1 : TILEMAP_0;
 
-    return tile;
+    draw(set, background, window);
 }
 
-ColorArray GPU::getColorMap()
-{
-    if (isWindowEnabled()) {
-
-    } else {
-
-    }
-
-    TileMapIndex mIndex = (m_control & TILE_SET_SELECT) ? TILEMAP_0 : TILEMAP_1;
-    TileSetIndex sIndex = (m_control & BACKGROUND_MAP) ? TILESET_1 : TILESET_0;
-
-    return lookup(mIndex, sIndex);
-}
-
-Tile GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
+const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
 {
     // We have two maps, so figure out which offset we need to use for our address
     uint16_t offset = (TILEMAP_0 == mIndex) ? TILE_MAP_0_OFFSET : TILE_MAP_1_OFFSET;
-
+    
     // Now that we know our offset, figure out the address of the tile that we are
     // needing to look up.
     uint16_t address = offset + ((y * TILE_MAP_COLUMNS) + x);
 
-    // We have the address, so let's read out our actual value and shove it in to a
-    // tile pointer object.  This will let us interpret the number that comes out as
-    // either a signed integer (in the case of map 1) or an unsigned integer (in the
-    // case of map 2).
-    union { uint8_t tile0; int8_t tile1; } tptr = { .tile0 = m_memory.read(address) };
-
-    // Now that we have our union initialized, we need to figure out the offset we
-    // need to use in order to figure out the location of our tile in memory.
-    int16_t toffset = (TILESET_0 == sIndex) ?
-        int16_t(tptr.tile0) * TILE_SIZE : int16_t(tptr.tile1) * TILE_SIZE;
-    
-    // Actually figure out the location of the tile that we want.  If we are after a
-    // tile in the second set, then we need to set our offset to the end of the 1st
-    // set and use our signed number to index in to the second set because the 2nd
-    // half of the 1st set is also the 1st half the second set.
-    uint16_t location = (TILESET_0 == sIndex) ?
-            TILE_SET_0_OFFSET + toffset : TILE_SET_0_OFFSET + toffset + (TILES_PER_SET * TILE_SIZE);
-
-    return lookup(location);
+    return getTile(sIndex, m_memory.read(address));
 }
 
 shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
 {
-    if (m_cgb) {
-        // TODO: do something with cgb mode here
-        assert(0);
-    }
+    // TODO: do something with cgb mode here
+    if (m_cgb) { assert(0); }
 
     uint8_t index = pixel & 0x03;
-
     uint8_t color = (pal >> (index * 2)) & 0x03;
 
-    shared_ptr<GB::RGB> rgb(new GB::RGB(NON_CGB_PALETTE[color]));;
+    const BWPalette & colors = NON_CGB_PALETTE;
+
+    shared_ptr<GB::RGB> rgb(new GB::RGB(colors[color]));;
     assert(rgb);
 
     // If the color palette entry is 0, and we are not allowing the color white, then we
     // need to set our alpha blend entry to transparent so that this pixel won't show up
     // on the display when we go to draw the screen.
-    if ((0 == color) && !white) {
+    if ((0 == index) && !white) {
         rgb->alpha = ALPHA_TRANSPARENT;
     }
     return rgb;
 }
 
-ColorArray GPU::toRGB(const uint8_t & pal, const Tile & tile, bool white) const
+ColorArray GPU::toRGB(
+    const uint8_t & pal,
+    const Tile & tile,
+    uint8_t row,
+    bool white,
+    bool flip) const
 {
     ColorArray colors;
 
-    for (size_t i = 0; i < tile.size(); i += 2) {
-        uint8_t lower = tile.at(i);
-        uint8_t upper = tile.at(i + 1);
+    uint8_t offset = row * 2;
 
-        for (uint8_t j = 0; j < 8; j++) {
-            // The left most pixel starts at the most significant bit.
-            uint8_t shift = 7 - j;
+    uint8_t lower = *tile.at(offset);
+    uint8_t upper = *tile.at(offset + 1);
 
-            // Each pixel is spread across two bytes i.e. the least significant bit of
-            // the left most pixel is at the most significant bit of the first byte and
-            // the most of significant bit of the left most pixel is at the most
-            // significant bit of the second byte.
-            uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
+    for (uint8_t j = 0; j < 8; j++) {
+        uint8_t index = (flip) ? 7 - j : j;
 
-            // Each pixel needs to be run through a palette to get the actual color.
-            colors.push_back(std::move(palette(pal, pixel, white)));
-        }
+        // The left most pixel starts at the most significant bit.
+        uint8_t shift = 7 - index;
+
+        // Each pixel is spread across two bytes i.e. the least significant bit of
+        // the left most pixel is at the most significant bit of the first byte and
+        // the most of significant bit of the left most pixel is at the most
+        // significant bit of the second byte.
+        uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
+
+        // Each pixel needs to be run through a palette to get the actual color.
+        colors.push_back(palette(pal, pixel, white));
     }
 
     return colors;
 }
 
-ColorArray GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex)
+bool GPU::isWindowSelected(uint8_t x, uint8_t y)
 {
-    ColorArray colors(PIXELS_PER_COL * PIXELS_PER_ROW);
+    // We are trying to figure out if the window is visible at the given x and y,
+    // so the first thing that we need to check is if the window is even enabled.
+    if (!isWindowEnabled()) { return false; }
+    
+    if ((y < m_winY) || (y >= PIXELS_PER_COL)) { return false; }
 
-    // Figure out the first tile that we need to read in based on the x and y registers,
-    // which define the upper left hand corner of the screen.
-    uint16_t xTileOffset = m_x / TILE_PIXELS_PER_ROW;
-    uint16_t yTileOffset = m_y / TILE_PIXELS_PER_COL;
+    if (((x + WINDOW_ROW_OFFSET) < m_winX)
+        || (x >= (PIXELS_PER_ROW + WINDOW_ROW_OFFSET))) { return false; }
 
-    // Figure out the last tile that needs to be read in by offseting the pixels per
-    // each column and row and dividing each of those numbers by the number of pixels
-    // each column and row.  The ceiling of that operation is the index of the last
-    // tile.
-    uint16_t xEnd = (uint16_t)std::ceil(double(m_x + PIXELS_PER_ROW) / TILE_PIXELS_PER_ROW);
-    uint16_t yEnd = (uint16_t)std::ceil(double(m_y + PIXELS_PER_COL) / TILE_PIXELS_PER_COL);
+    return true;
+}
 
-    for (uint16_t i = yTileOffset; i < yEnd; i++) {
-        for (uint16_t j = xTileOffset; j < xEnd; j++) {
-            // Lookup the tile that we want and translate it to RGB.
-            ColorArray rgb = toRGB(m_palette,
-                lookup(mIndex, sIndex, j % TILE_MAP_COLUMNS, i % TILE_MAP_ROWS), true);
+void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex window)
+{
+    if (!isBackgroundEnabled()) { return; }
+    
+    unordered_map<uint16_t, ColorArray> winCache, bgCache;
+    
+    uint16_t offset = m_scanline * PIXELS_PER_ROW;
 
-            // Each tile is 8x8, so we first need to figure out the coordinates
-            // of the top left corner of the tile we are translating.
-            uint16_t xOffset = j * TILE_PIXELS_PER_ROW;
-            uint16_t yOffset = i * TILE_PIXELS_PER_COL;
+    for (uint8_t pixel = 0; pixel < PIXELS_PER_ROW; pixel++) {
+        bool win = isWindowSelected(pixel, m_scanline);
 
-            // Loop through each pixel in the tile that we just translated, and stick
-            // it in to the screen RGB array at the appropriate pixel location.
-            for (size_t k = 0; k < rgb.size(); k++) {
-                // These are 8x8 chunks, so we need to calculate a new x, y each time
-                // we go through this loop and have a new pixel.
-                uint16_t x = (xOffset + (k % TILE_PIXELS_PER_ROW)) - m_x;
-                uint16_t y = (yOffset + (k / TILE_PIXELS_PER_ROW)) - m_y;
+        // Figure out the row and column that we're actually talking about and
+        // make sure that if the pixels walk off the edge of our background map
+        // that we wrap back around.
+        uint16_t col = win ? (pixel - m_winX + WINDOW_ROW_OFFSET) : (m_x + pixel);
+        uint16_t row = win ? (m_scanline - m_winY) : (m_y + m_scanline);
+        
+        col %= (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
+        row %= (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
 
-                if ((x < PIXELS_PER_ROW) && (y < PIXELS_PER_COL)) {
-                    uint16_t index = (y * PIXELS_PER_ROW) + x;
-                    colors[index] = std::move(rgb[k]);
-                }
-            }
+        // Figure out the coordinates of the tile that we need to look up in
+        // order to draw the pixels that we are after, which may or may not be
+        // the whole row from this tile.
+        uint16_t xOffset = col / TILE_PIXELS_PER_ROW;
+        uint16_t yOffset = row / TILE_PIXELS_PER_COL;
+
+        auto & cache = (win) ? winCache : bgCache;
+
+        // First we need to see if we've previously looked up this tile.  If not,
+        // we need to look this tile up and stick it in our cache.
+        auto iterator = cache.find(xOffset);
+        if (cache.end() == iterator) {
+            const Tile & tile = lookup(((win) ? window : background), set, xOffset, yOffset);
+
+            // Now that we have the tile that we are interested in, we need to get
+            // the RGB values that are associated with the row in the tile that we
+            // need to add to our screen buffer.
+            ColorArray rgb = toRGB(m_palette, tile, row % TILE_PIXELS_PER_COL, true, false);
+
+            iterator = cache.emplace(xOffset, rgb).first;
         }
-    }
 
-    drawSprites(colors);
-    return colors;
+        // Move the RGB values from the iterator in to our buffer.
+        m_buffer[offset + pixel] = std::move(iterator->second[col % TILE_PIXELS_PER_ROW]);
+    }
+}
+
+void GPU::draw(TileSetIndex set, TileMapIndex background, TileMapIndex window)
+{
+    // Draw the 3 layers of the screen in order from lowest priority to highest
+    // so that the highest priority pixels actually end up on top.  The special
+    // priority states of the sprites will be handled by the sprite drawing
+    // routine itself.
+
+    // Background -> Window -> Sprites
+    drawBackground(set, background, window);
+    drawSprites(m_buffer);
 }
 
 void GPU::readSprite(SpriteData & data)
 {
+    // If the sprite height is extended, then we need to mask out the lower bit and
+    // take that as upper tile in the sprite.  The new masked tile number + 1 is the
+    // address of the lower number.
+    uint8_t number = data.tile;
+    if (SPRITE_HEIGHT_EXTENDED == data.height) {
+        number &= 0xFE;
+    }
+    
     // Lookup the tile in our table of sprites.  If we have a sprite that has extended
     // height, then we need to read out the sprite data at the next address as well.
-    Tile tile = lookup(data.pointer);
+    Tile tile = getTile(TILESET_0, number);
     if (SPRITE_HEIGHT_EXTENDED == data.height) {
-        Tile additional = lookup(data.pointer + 1);
+        const Tile & additional = getTile(TILESET_0, number + 1);
         tile.insert(tile.end(), additional.begin(), additional.end());
     }
-
-    ColorArray temp = toRGB(data.palette(), tile, false);
 
     bool flipX = data.flags & FLIP_X;
     bool flipY = data.flags & FLIP_Y;
 
-    // We already have an RGB color map of the sprite, so if the flip x or y flags aren't
-    // set, we don't have anything else that we need to do here.
-    if (!(flipX || flipY)) {
-        data.colors = std::move(temp);
-        return;
+    // Figure out which row we are trying to render.
+    uint8_t row = m_scanline - (data.y - SPRITE_Y_OFFSET);
+    if (data.y < SPRITE_Y_OFFSET) {
+        // Special case for when the top of a sprite is off the screen.  If the sprite
+        // isn't partiall on screen, then we can bail here without actually looking
+        // up the RGB values.
+        row = SPRITE_Y_OFFSET - data.y + m_scanline;
+        if (row >= data.height) { return; }
     }
-
-    data.colors.clear();
     
-    IndexIterator yIndex(0, data.height - 1, flipY);
-    while (yIndex.hasNext()) {
-        IndexIterator xIndex(0, SPRITE_WIDTH - 1, flipX);
+    if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
 
-        uint8_t y = yIndex.next();
-
-        while (xIndex.hasNext()) {
-            uint8_t x = xIndex.next();
-
-            uint8_t index = ((y * SPRITE_WIDTH) + x);
-            data.colors.push_back(std::move(temp.at(index)));
-        }
-    }
+    data.colors = toRGB(data.palette(), tile, row, false, flipX);
 }
 
 void GPU::drawSprites(ColorArray & display)
@@ -452,17 +476,7 @@ void GPU::drawSprites(ColorArray & display)
     for (shared_ptr<SpriteData> & data : m_sprites) {
         if (!data) { continue; }
 
-        data->pointer = TILE_SET_0_OFFSET + (TILE_SIZE * m_memory.read(data->address + 2));
-
-        // Figure out the height of the sprite.  If the height of the sprite, is extended
-        // (8x16), then we need to mask out the least significant bit and use the masked
-        // address as the upper portion of the sprite and the next sprite tile as the lower
-        // portion.
         data->height = (m_control & SPRITE_SIZE) ? SPRITE_HEIGHT_EXTENDED : SPRITE_HEIGHT_NORMAL;
-        if (SPRITE_HEIGHT_EXTENDED == data->height) {
-            data->pointer &= 0xFE;
-        }
-
         if (data->isVisible()) {
             enabled.push_back(data);
         }
@@ -483,22 +497,26 @@ void GPU::drawSprites(ColorArray & display)
         });
 
     for (const shared_ptr<SpriteData> & sprite : enabled) {
-        sprite->render(*this, display, m_palette);
+        sprite->render(display, m_palette);
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 GPU::SpriteData::SpriteData(
+    GPU & gpu,                            
     const uint8_t & col,
     const uint8_t & row,
+    const uint8_t & t,
     const uint8_t & atts,
     const uint8_t & p0,
     const uint8_t & p1)
-    : x(col),
+    : m_gpu(gpu),
+      x(col),
       y(row),
       flags(atts),
       palette0(p0),
-      palette1(p1)
+      palette1(p1),
+      tile(t)
 {
 
 }
@@ -510,47 +528,50 @@ uint8_t GPU::SpriteData::palette() const
 
 bool GPU::SpriteData::isVisible() const
 {
+    // If either coordinates are set to 0 or the sprite is completely off screen
+    // then it isn't visible.
     if ((0 == this->x) || (0 == this->y)) { return false; }
 
-    if ((this->x >= PIXELS_PER_ROW + 8) || (this->y >= PIXELS_PER_COL + 16)) {
-        return false;
-    }
+    if (this->x >= (PIXELS_PER_ROW + SPRITE_X_OFFSET)) { return false; }
+    if (this->y >= (PIXELS_PER_COL + SPRITE_Y_OFFSET)) { return false; }
 
-    return true;
+    // Figure out the y coordinate.  Make sure to clamp the value to 0 if subtracting
+    // the Y offset value for a sprite would cause the value to wrap around.  The
+    // sprite is visible on the scanline if the scanline is between the y coordinate
+    // and the y coordinate plus the height of the sprite.
+    uint8_t y = (this->y < SPRITE_Y_OFFSET) ? 0 : this->y - SPRITE_Y_OFFSET;
+    if ((m_gpu.m_scanline >= y) && (m_gpu.m_scanline < (y + this->height))) {
+        return true;
+    }
+    
+    return false;
 }
 
-void GPU::SpriteData::render(GPU & gpu, ColorArray & display, uint8_t dPalette)
+void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
 {
-    gpu.readSprite(*this);
+    m_gpu.readSprite(*this);
 
     for (size_t i = 0; i < this->colors.size(); i++) {
-        int xOffset = (i % SPRITE_WIDTH) - 8;
-        if ((this->x + xOffset) < 0) { continue; }
-
-        int yOffset = (i / SPRITE_WIDTH) - 16;
-        if ((this->y + yOffset) < 0) { continue; }
-
-        uint8_t x = this->x + xOffset;
-        uint8_t y = this->y + yOffset;
-
-        uint16_t index = (y * PIXELS_PER_ROW) + x;
-        if (index >= int(display.size())) {
-            continue;
-        }
-
         // Look at the alpha blend and make sure that this sprite pixel isn't supposed to be
         // transparent.  If it is, then we need to leave our display alone.
         const shared_ptr<GB::RGB> & color = this->colors.at(i);
-        if (ALPHA_TRANSPARENT == color->alpha) {
-            continue;
-        }
+        if (ALPHA_TRANSPARENT == color->alpha) { continue; }
+
+        // Figure out the pixel that we are actually after.  If that pixel wrapped around,
+        // then it's off screen, and we need to skip it.
+        uint8_t x = this->x + i - SPRITE_X_OFFSET;
+        if (x >= PIXELS_PER_ROW) { continue; }
+
+        // Grab the actual index in to the display buffer.
+        uint16_t index = (m_gpu.m_scanline * PIXELS_PER_ROW) + x;
+        assert(index < display.size());
 
         // Check the sprite's priority.  If the sprite priority bit is set, the pixels are
         // supposed to be behind the background (i.e. not shown) unless the background pixel
         // that the sprite overlaps with is set to color 0.
         if (this->flags & OBJECT_PRIORITY) {
             const GB::RGB & bg = NON_CGB_PALETTE[dPalette & 0x03];
-            if (!(*display[index] == bg)) {
+            if (display[index] && !(*display[index] == bg)) {
                 continue;
             }
         }
@@ -564,10 +585,10 @@ string GPU::SpriteData::toString() const
     stringstream stream;
 
     stream << "Sprite: " << std::hex << "0x" << this->address << std::endl;
+    stream << "    Tile:     " << this->tile << std::endl;
     stream << "    Location: (" << int(this->x) << ", " << int(this->y) << ") " << std::endl;;
     stream << "    Height:   " << int(this->height) << std::endl;
-    stream << "    Flags:    " << int(this->flags) << std::endl;
-    stream << "    Pointer:  " << this->pointer;
+    stream << "    Flags:    " << int(this->flags);
     
     return stream.str();
 }
