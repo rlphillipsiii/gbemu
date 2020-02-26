@@ -1,5 +1,6 @@
 ## Overview
-![](https://github.com/rlphillipsiii/gbemu/workflows/C/C++%20CI/badge.svg)
+![](https://github.com/rlphillipsiii/gbemu/workflows/Linux%20CI/badge.svg)
+![](https://github.com/rlphillipsiii/gbemu/workflows/MacOS%20CI/badge.svg)
 
 ##### Supported Platforms
 * Linux Based OS's (i.e. Ubuntu)
