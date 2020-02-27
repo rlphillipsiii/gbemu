@@ -35,7 +35,7 @@ public:
     inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
     inline void clrButton(JoyPadButton button) override { m_joypad.clr(button); }
 
-    inline ColorArray getRGB() override { return std::move(m_gpu.getColorMap()); }
+    inline ColorArray && getRGB() override { return m_gpu.getColorMap(); }
 
 private:
     MemoryController m_memory;
@@ -44,11 +44,11 @@ private:
     JoyPad m_joypad;
 
     std::atomic<bool> m_run;
-    
+
     std::thread m_thread;
 
     std::vector<Processor::Command> m_assembly;
-    
+
     void run();
 };
 

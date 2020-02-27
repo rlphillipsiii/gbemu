@@ -1,9 +1,9 @@
 CONFIG (release, debug|release) {
     TARGET_SPEC = release
-    
+
     DEFINES += NDEBUG
     DEFINES += RELEASE
-    
+
     QMAKE_CXXFLAGS += -O3
 }
 
@@ -11,7 +11,7 @@ CONFIG (debug, debug|release) {
     TARGET_SPEC = debug
 
     DEFINES += DEBUG
-    
+
     QMAKE_CXXFLAGS += -g
     QMAKE_CXXFLAGS += -O0
 }
@@ -43,7 +43,7 @@ defineTest(publishTarget) {
     contains (TEMPLATE, lib) {
         destination = $$PUBLIC_LIB
     }
-    
+
     #publishFile($$join($$TARGET_SPEC, $$TARGET, "/"), $$join($$list($$destination, $$TARGET), "/"))
 }
 
@@ -59,7 +59,7 @@ defineTest(publishHeaders) {
 
 defineReplace(getBaseDirectory) {
     needle = ".git"
-    
+
     exists($$needle) {
         return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
     }
@@ -79,7 +79,7 @@ defineReplace(getBaseDirectory) {
     exists($$needle) {
         return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
     }
-    
+
     message("Couldn't find base directory")
     return("")
 }
@@ -103,8 +103,9 @@ LIBS += $$combine(-L, $$PUBLIC_BIN)
 CONFIG += c++17
 CONFIG += console
 
-QMAKE_CXXFLAGS += -Wall 
+QMAKE_CXXFLAGS += -Wall
 QMAKE_CXXFLAGS += -Werror
+QMAKE_CXXFLAGS += -Wextra
 
 win32: DEFINES += WIN32
 unix:  DEFINES += LINUX

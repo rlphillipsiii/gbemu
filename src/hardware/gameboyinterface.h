@@ -27,7 +27,7 @@ namespace GB {
 
         RGB(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
             : red(r), green(g), blue(b), alpha(a) { }
-              
+
         RGB() : RGB(0, 0, 0, 0) { }
 
         RGB(const RGB & other)
@@ -56,7 +56,7 @@ namespace GB {
                 "g:0x" << int(this->green) << " " <<
                 "b:0x" << int(this->blue) << " " <<
                 "a:0x" << int(this->alpha);
-            
+
             return stream.str();
         }
     };
@@ -80,11 +80,11 @@ public:
         JOYPAD_UP     = 0x04,
         JOYPAD_DOWN   = 0x08,
     };
-    
+
     static std::shared_ptr<GameBoyInterface> Instance(ConsoleType type=GAMEBOY_EMU);
 
     virtual ~GameBoyInterface() = default;
-    
+
     virtual bool load(const std::string & filename) = 0;
 
     virtual void start() = 0;
@@ -92,8 +92,8 @@ public:
 
     virtual void setButton(JoyPadButton button) = 0;
     virtual void clrButton(JoyPadButton button) = 0;
-    
-    virtual ColorArray getRGB() = 0;
+
+    virtual ColorArray && getRGB() = 0;
 };
 
 #endif /* GAMEBOYINTERFACE_H_ */

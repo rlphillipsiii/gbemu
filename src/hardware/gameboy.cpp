@@ -34,29 +34,19 @@ GameBoy::GameBoy()
       m_joypad(m_memory),
       m_run(false)
 {
-#ifdef STATIC_MEMORY
-    ifstream ram("memory2.bin", std::ios::in | std::ios::binary);
-    //for (int i = GPU_RAM_OFFSET; i <= 0xFFFF; i++) {
-    for (int i = 0; i <= 0xFFFF; i++) {
-        uint8_t b;
-        ram.read(reinterpret_cast<char*>(&b), 1);
-        
-        m_memory.initialize(i, b);
-    }
-    std::cout << "Memory controller initialized" << std::endl;
-#endif
+
 }
 
 bool GameBoy::load(const string & filename)
 {
     m_memory.setCartridge(filename);
-    
+
     m_assembly = m_cpu.disassemble();
 #if 0
     for (const Processor::Command & cmd : m_assembly) {
         std::cout << cmd.str() << std::endl;
     }
-#endif    
+#endif
     return true;
 }
 
@@ -64,11 +54,9 @@ void GameBoy::start()
 {
     m_run = true;
 
-#ifndef STATIC_MEMORY
     m_thread = std::thread([this]() {
         this->run();
     });
-#endif
 }
 
 void GameBoy::run()
@@ -91,4 +79,3 @@ void GameBoy::stop()
         m_thread.join();
     }
 }
-
