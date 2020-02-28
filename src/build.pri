@@ -61,23 +61,23 @@ defineReplace(getBaseDirectory) {
     needle = "config.py"
 
     exists($$needle) {
-        return($$system("python -p $$needle"))
+        return($$system("python $$needle -p"))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("python -p $$needle"))
+        return($$system("python $$needle -p"))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("python -p $$needle"))
+        return($$system("python $$needle -p"))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("python -p $$needle"))
+        return($$system("python $$needle -p"))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("python -p $$needle"))
+        return($$system("python $$needle -p"))
     }
 
     message("Couldn't find base directory")

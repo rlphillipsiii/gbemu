@@ -14,7 +14,7 @@ def get_base():
 
     raise Exception('Failed to find project root directory')
 
-def cmd(command)
+def cmd(command):
     p = subprocess.Popen(command.split(' '))
     p.wait()
 
@@ -52,8 +52,10 @@ if __name__ == '__main__':
     if args.path:
         print (os.getcwd())
     elif args.qmake:
+        os.chdir('src')
         qmake()
     elif args.clean:
+        os.chdir('src')
         clean()
     elif args.init:
         init()

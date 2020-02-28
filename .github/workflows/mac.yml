@@ -17,9 +17,9 @@ jobs:
       uses: jurplel/install-qt-action@v2.3.0
 
     - name: qmake
-      run: brew install coreutils && qmake -r CONFIG+=debug_and_release
-      working-directory: ./src
+      run: python config.py -q
+      working-directory: .
 
     - name: make
-      run: make
-      working-directory: ./src
+      run: python config.py -b release
+      working-directory: .
