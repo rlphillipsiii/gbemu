@@ -99,7 +99,7 @@ Cartridge::MemoryBank *Cartridge::initMemoryBank(uint8_t type)
     switch (type) {
     default:
         WARN("%s\n", "WARNING : unknown memory bank type");
-        [[gnu::fallthrough]];
+        [[fallthrough]];
 
     case MBC_1:
     case MBC_1R:

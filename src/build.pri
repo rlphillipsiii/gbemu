@@ -58,26 +58,26 @@ defineTest(publishHeaders) {
 }
 
 defineReplace(getBaseDirectory) {
-    needle = ".git"
+    needle = "config.py"
 
     exists($$needle) {
-        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
+        return($$system("python -p $$needle"))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
+        return($$system("python -p $$needle"))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
+        return($$system("python -p $$needle"))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
+        return($$system("python -p $$needle"))
     }
     needle = $$combine("../", $$needle)
     exists($$needle) {
-        return($$system("realpath $$needle | python -c \"import sys; print('/'.join(sys.stdin.readline().split('/')[:-1]))\""))
+        return($$system("python -p $$needle"))
     }
 
     message("Couldn't find base directory")
