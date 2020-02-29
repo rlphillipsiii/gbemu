@@ -17,6 +17,7 @@ const uint16_t Cartridge::NINTENDO_LOGO_OFFSET = 0x0104;
 
 const uint16_t Cartridge::ROM_HEADER_LENGTH   = 0x0180;
 const uint16_t Cartridge::ROM_NAME_OFFSET     = 0x0134;
+const uint16_t Cartridge::ROM_CGB_OFFSET      = 0x0143;
 const uint16_t Cartridge::ROM_TYPE_OFFSET     = 0x0147;
 const uint16_t Cartridge::ROM_SIZE_OFFSET     = 0x0148;
 const uint16_t Cartridge::ROM_RAM_SIZE_OFFSET = 0x0149;
@@ -39,7 +40,8 @@ const vector<uint16_t> Cartridge::RAM_SIZES = {
 Cartridge::Cartridge(const string & path)
     : m_path(path),
       m_valid(false),
-      m_ram(EXT_RAM_SIZE)
+      m_ram(EXT_RAM_SIZE),
+      m_cgb(false)
 {
     ifstream input(m_path, std::ios::in | std::ios::binary);
     if (!input.is_open()) { return; }
@@ -82,6 +84,12 @@ Cartridge::Cartridge(const string & path)
 
     assert(m_bank);
 
+    m_cgb = (m_memory.at(ROM_CGB_OFFSET) == 0xC0) || (m_memory.at(ROM_CGB_OFFSET) == 0x80);
+    if (m_cgb) {
+        WARN("%s\n", "CGB ROM detected, but CGB not yet support");
+        m_cgb = false;
+    }
+
     NOTE("ROM Name: %s\n", m_info.name.c_str());
 
     LOG("ROM Size:  0x%x (0x%02x)\n", m_info.size, m_memory.at(ROM_SIZE_OFFSET));
@@ -98,17 +106,22 @@ Cartridge::MemoryBank *Cartridge::initMemoryBank(uint8_t type)
 
     switch (type) {
     default:
-        WARN("%s\n", "WARNING : unknown memory bank type");
+        WARN("WARNING : unknown memory bank type: 0x%02x\n", type);
         [[fallthrough]];
 
     case MBC_1:
     case MBC_1R:
+        bank = new MBC1(*this, size, false);
+        break;
     case MBC_1RB:
-        bank = new MBC1(*this, size);
+        bank = new MBC1(*this, size, true);
         break;
 
     case MBC_3RB:
-        bank = new MBC3(*this, size);
+        bank = new MBC3(*this, size, true, false);
+        break;
+    case MBC_3TRB:
+        bank = new MBC3(*this, size, true, true);
         break;
     }
 
@@ -152,14 +165,15 @@ void Cartridge::write(uint16_t address, uint8_t value)
 Cartridge::MemoryBank::MemoryBank(
     Cartridge & cartridge,
     const std::string & name,
-    uint16_t size)
+    uint16_t size,
+    bool battery)
     : m_cartridge(cartridge),
       m_name(name),
       m_ram(size),
       m_ramEnable(false),
       m_romBank(1),
       m_ramBank(0),
-      m_hasBattery(true)
+      m_hasBattery(battery)
 {
     string nv = m_cartridge.game() + ".sav";
 
@@ -215,8 +229,8 @@ uint8_t & Cartridge::MemoryBank::readRAM(uint16_t address)
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-Cartridge::MBC1::MBC1(Cartridge & cartridge, uint16_t size)
-    : MemoryBank(cartridge, "MBC1", size),
+Cartridge::MBC1::MBC1(Cartridge & cartridge, uint16_t size, bool battery)
+    : MemoryBank(cartridge, "MBC1", size, battery),
       m_mode(Cartridge::MBC_ROM)
 {
 
@@ -250,8 +264,9 @@ void Cartridge::MBC1::writeROM(uint16_t address, uint8_t value)
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-Cartridge::MBC3::MBC3(Cartridge & cartridge, uint16_t size)
-    : MemoryBank(cartridge, "MBC3", size)
+Cartridge::MBC3::MBC3(Cartridge & cartridge, uint16_t size, bool battery, bool rtc)
+    : MemoryBank(cartridge, "MBC3", size, battery),
+      m_rtc(rtc)
 {
 
 }

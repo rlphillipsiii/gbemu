@@ -9,14 +9,23 @@
 #ifdef DEBUG
 
 #define LOG(format, ...) TRACE(format, __VA_ARGS__)
-#else
-#define LOG(format, ...)
-#endif
-
-#endif
 
 #define NOTE(format, ...) printf("n %s ==> ", __PRETTY_FUNCTION__); TRACE(format, __VA_ARGS__);
 
 #define WARN(format, ...) printf("w %s ==> ", __PRETTY_FUNCTION__); TRACE(format, __VA_ARGS__);
 
 #define ERROR(format, ...) printf("e %s ==> ", __PRETTY_FUNCTION__); TRACE(format, __VA_ARGS__);
+
+#else
+
+#define LOG(format, ...)
+
+#define NOTE(format, ...) TRACE(format, __VA_ARGS__);
+
+#define WARN(format, ...) TRACE(format, __VA_ARGS__);
+
+#define ERROR(format, ...) TRACE(format, __VA_ARGS__);
+
+#endif
+
+#endif

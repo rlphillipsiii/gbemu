@@ -71,6 +71,36 @@ uint8_t & MemoryController::Region::read(uint16_t address)
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
+const uint16_t MemoryController::VideoRam::BANK_SELECT_ADDRESS = 0xFF4F;
+
+MemoryController::VideoRam::VideoRam(MemoryController & parent, uint16_t size, uint16_t offset)
+    : Region(size, offset),
+      m_parent(parent),
+      m_bank(size)
+{
+
+}
+
+uint8_t & MemoryController::VideoRam::read(uint16_t address)
+{
+    if (!m_parent.m_cgb) { return Region::read(address); }
+
+    auto & bank = (m_parent.read(BANK_SELECT_ADDRESS)) ? m_memory : m_bank;
+    return bank[address];
+}
+
+void MemoryController::VideoRam::write(uint16_t address, uint8_t value)
+{
+    if (m_parent.m_cgb) {
+        auto & bank = (m_parent.read(BANK_SELECT_ADDRESS)) ? m_memory : m_bank;
+        bank[address] = value;
+    } else {
+        Region::write(address, value);
+    }
+}
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
 MemoryController::WorkingRam::WorkingRam(uint16_t size, uint16_t offset)
     : Region(size, offset),
       m_shadowOffset(offset + size),
@@ -160,7 +190,7 @@ bool MemoryController::Removable::isAddressed(uint16_t address) const
     if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
         return true;
     }
-    
+
     return false;
 }
 ////////////////////////////////////////////////////////////////////////////////
@@ -185,7 +215,7 @@ void MemoryController::MemoryMappedIO::reset()
 void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 {
     if (m_initializing) { Region::write(address, value); return; }
-    
+
     switch (address) {
     case GPU_STATUS_ADDRESS:        writeBytes(address, value, 0x78); break;
     case JOYPAD_INPUT_ADDRESS:      writeBytes(address, value, 0x30); break;
@@ -197,7 +227,7 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
         m_rtcReset = true;
         break;
     }
-        
+
     case GPU_OAM_DMA: {
         uint16_t source = uint16_t(value) * 0x0100;
         for (uint16_t i = 0; i < GRAPHICS_RAM_SIZE; i++) {
@@ -220,19 +250,20 @@ void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
 
 MemoryController::MemoryController()
     : m_bios(BIOS_SIZE, BIOS_OFFSET),
-      m_gram(GPU_RAM_SIZE, GPU_RAM_OFFSET),
+      m_vram(*this, GPU_RAM_SIZE, GPU_RAM_OFFSET),
       m_working(WORKING_RAM_SIZE, WORKING_RAM_OFFSET),
-      m_graphics(GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
+      m_oam(GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
       m_io(*this, IO_SIZE, IO_OFFSET),
       m_zero(ZRAM_SIZE, ZRAM_OFFSET),
-      m_unusable(UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET)
+      m_unusable(UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET),
+      m_cgb(false)
 {
     reset();
 
     assert(uint16_t(BIOS_REGION.size()) == m_bios.size());
 
     m_bios.enableInit();
-    
+
     uint16_t length = std::min(uint16_t(BIOS_REGION.size()), m_bios.size());
     for (uint16_t i = 0; i < length; i++) {
         m_bios.write(i, BIOS_REGION[i]);
@@ -244,7 +275,7 @@ MemoryController::MemoryController()
 void MemoryController::reset()
 {
     m_memory = {
-        &m_bios, &m_cartridge, &m_gram, &m_working, &m_graphics, &m_unusable, &m_io, &m_zero
+        &m_bios, &m_cartridge, &m_vram, &m_working, &m_oam, &m_unusable, &m_io, &m_zero
     };
 
     for (Region *region : m_memory) {
@@ -289,7 +320,7 @@ void MemoryController::write(uint16_t address, uint8_t value)
     if (region && region->isWritable()) {
         region->write(address, value);
         return;
-    } 
+    }
 
     LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
     assert(0);
