@@ -332,13 +332,14 @@ ColorArray GPU::toRGB(
     bool flip) const
 {
     ColorArray colors;
+    colors.reserve(TILE_PIXELS_PER_ROW);
 
     uint8_t offset = row * 2;
 
     uint8_t lower = *tile.at(offset);
     uint8_t upper = *tile.at(offset + 1);
 
-    for (uint8_t j = 0; j < 8; j++) {
+    for (uint8_t j = 0; j < uint8_t(colors.size()); j++) {
         uint8_t index = (flip) ? 7 - j : j;
 
         // The left most pixel starts at the most significant bit.
@@ -375,7 +376,8 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
 {
     if (!isBackgroundEnabled()) { return; }
 
-    unordered_map<uint16_t, ColorArray> winCache, bgCache;
+    struct Cache { uint16_t x; ColorArray rgb; };
+    Cache winCache = { .x = 0xFFFF, .rgb = {} }, bgCache = { .x = 0xFFFF, .rgb = {} };
 
     uint16_t offset = m_scanline * PIXELS_PER_ROW;
 
@@ -401,20 +403,19 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
 
         // First we need to see if we've previously looked up this tile.  If not,
         // we need to look this tile up and stick it in our cache.
-        auto iterator = cache.find(xOffset);
-        if (cache.end() == iterator) {
+        if (cache.x != xOffset) {
+            cache.x = xOffset;
+
             const Tile & tile = lookup(((win) ? window : background), set, xOffset, yOffset);
 
             // Now that we have the tile that we are interested in, we need to get
             // the RGB values that are associated with the row in the tile that we
             // need to add to our screen buffer.
-            ColorArray rgb = toRGB(m_palette, tile, row % TILE_PIXELS_PER_COL, true, false);
-
-            iterator = cache.emplace(xOffset, rgb).first;
+            cache.rgb = toRGB(m_palette, tile, row % TILE_PIXELS_PER_COL, true, false);
         }
 
         // Move the RGB values from the iterator in to our buffer.
-        m_buffer[offset + pixel] = std::move(iterator->second[col % TILE_PIXELS_PER_ROW]);
+        m_buffer[offset + pixel] = cache.rgb[col % TILE_PIXELS_PER_ROW];
     }
 }
 
@@ -455,7 +456,7 @@ void GPU::readSprite(SpriteData & data)
     uint8_t row = m_scanline - (data.y - SPRITE_Y_OFFSET);
     if (data.y < SPRITE_Y_OFFSET) {
         // Special case for when the top of a sprite is off the screen.  If the sprite
-        // isn't partiall on screen, then we can bail here without actually looking
+        // isn't partially on screen, then we can bail here without actually looking
         // up the RGB values.
         row = SPRITE_Y_OFFSET - data.y + m_scanline;
         if (row >= data.height) { return; }
