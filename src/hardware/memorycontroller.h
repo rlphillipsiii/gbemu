@@ -50,7 +50,7 @@ public:
     inline bool inBios() const { return (&m_memory.front().get() == &m_bios); }
     inline bool isCartridgeValid() const { return m_cartridge.isValid(); }
 
-    inline bool isCGB() const { return m_cgb; }
+    inline bool isCGB() const { return m_cartridge.isCGB(); }
 
 private:
     static uint8_t DUMMY;
@@ -76,8 +76,6 @@ private:
         uint8_t bank;
         BankMode mode;
     } m_mbc;
-
-    bool m_cgb;
 
     std::list<std::reference_wrapper<MemoryRegion>> m_memory;
 

@@ -14,12 +14,12 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+#include <functional>
 
 #include "interrupt.h"
 #include "memmap.h"
 
 #define GPU_SPRITE_COUNT 40
-
 #define GPU_TILES_PER_SET 256
 
 class MemoryController;
@@ -39,9 +39,6 @@ public:
     void reset();
 
     inline uint8_t scanline() const { return m_scanline; }
-
-    inline void enableCGB()  { m_cgb = true;  }
-    inline void disableCGB() { m_cgb = false; }
 
     inline ColorArray && getColorMap()
     {
@@ -75,6 +72,8 @@ private:
     static const uint8_t SPRITE_HEIGHT_EXTENDED;
     static const uint8_t SPRITE_X_OFFSET;
     static const uint8_t SPRITE_Y_OFFSET;
+    static const uint8_t SPRITE_CGB_PALETTE_COUNT;
+    static const uint8_t SPRITE_NON_CGB_PALETTE_COUNT;
 
     static const uint16_t SCREEN_ROWS;
     static const uint16_t SCREEN_COLUMNS;
@@ -101,9 +100,6 @@ private:
 
         const uint8_t & flags;
 
-        const uint8_t & palette0;
-        const uint8_t & palette1;
-
         const uint8_t & tile;
 
         uint8_t height;
@@ -111,15 +107,15 @@ private:
 
         ColorArray colors;
 
+        std::vector<const uint8_t*> mono;
+        std::vector<const uint8_t*> cgb;
+
         SpriteData(
             GPU & gpu,
             const uint8_t & col,
             const uint8_t & row,
             const uint8_t & tile,
-            const uint8_t & atts,
-            const uint8_t & pal0,
-            const uint8_t & pal1);
-
+            const uint8_t & atts);
         ~SpriteData() = default;
 
         std::string toString() const;
@@ -183,8 +179,6 @@ private:
     uint8_t & m_control;
     uint8_t & m_status;
     uint8_t & m_palette;
-    uint8_t & m_sPalette0;
-    uint8_t & m_sPalette1;
     uint8_t & m_x;
     uint8_t & m_y;
     uint8_t & m_winX;
@@ -194,8 +188,6 @@ private:
     RenderState m_state;
 
     uint32_t m_ticks;
-
-    bool m_cgb;
 
     std::mutex m_lock;
 

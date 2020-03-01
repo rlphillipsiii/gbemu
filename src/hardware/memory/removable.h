@@ -25,6 +25,8 @@ public:
     bool isValid() const;
 
     inline void reset() override { }
+    inline bool isCGB() const
+        { return (m_cartridge) ? m_cartridge->isCGB() : false; }
 
 private:
     static uint8_t EMPTY;

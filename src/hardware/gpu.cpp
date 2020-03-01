@@ -77,6 +77,9 @@ const uint8_t GPU::SPRITE_HEIGHT_EXTENDED = 16;
 const uint8_t GPU::SPRITE_X_OFFSET = 8;
 const uint8_t GPU::SPRITE_Y_OFFSET = 16;
 
+const uint8_t GPU::SPRITE_CGB_PALETTE_COUNT     = 7;
+const uint8_t GPU::SPRITE_NON_CGB_PALETTE_COUNT = 2;
+
 const uint16_t GPU::OAM_TICKS    = 80;
 const uint16_t GPU::VRAM_TICKS   = 172;
 const uint16_t GPU::HBLANK_TICKS = 204;
@@ -99,14 +102,11 @@ GPU::GPU(MemoryController & memory)
       m_control(m_memory.read(GPU_CONTROL_ADDRESS)),
       m_status(m_memory.read(GPU_STATUS_ADDRESS)),
       m_palette(m_memory.read(GPU_PALETTE_ADDRESS)),
-      m_sPalette0(m_memory.read(GPU_OBP1_ADDRESS)),
-      m_sPalette1(m_memory.read(GPU_OBP2_ADDRESS)),
       m_x(m_memory.read(GPU_SCROLLX_ADDRESS)),
       m_y(m_memory.read(GPU_SCROLLY_ADDRESS)),
       m_winX(m_memory.read(GPU_WINDOW_X_ADDRESS)),
       m_winY(m_memory.read(GPU_WINDOW_Y_ADDRESS)),
       m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
-      m_cgb(false),
       m_screen(PIXELS_PER_ROW * PIXELS_PER_COL),
       m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL)
 {
@@ -120,8 +120,14 @@ GPU::GPU(MemoryController & memory)
         const uint8_t & tile  = m_memory.read(address + 2);
         const uint8_t & flags = m_memory.read(address + 3);
 
-        shared_ptr<SpriteData> data(new SpriteData(*this, x, y, tile, flags, m_sPalette0, m_sPalette1));
-        assert(data);
+        shared_ptr<SpriteData> data = std::make_shared<SpriteData>(*this, x, y, tile, flags);
+
+        data->mono = { &m_memory.read(GPU_OBP1_ADDRESS), &m_memory.read(GPU_OBP2_ADDRESS) };
+
+        data->cgb.resize(SPRITE_CGB_PALETTE_COUNT);
+        for (size_t j = 0; j < data->cgb.size(); j++) {
+            data->cgb[j] = &m_memory.read(GPU_OBP1_ADDRESS + j);
+        }
 
         data->address = address;
         data->height  = SPRITE_HEIGHT_NORMAL;
@@ -247,6 +253,10 @@ void GPU::handleVBlank()
         Interrupts::set(m_memory, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
 
+        // We've move in to the hblank state, so move the internal buffer
+        // over to the screen buffer that the external code can retrieve.
+        // This empties out our buffer, so we need to resize it to the size
+        // of the screen.
         {
             lock_guard<mutex> guard(m_lock);
             m_screen = std::move(m_buffer);
@@ -305,9 +315,6 @@ const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, u
 
 GB::RGB GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
 {
-    // TODO: do something with cgb mode here
-    if (m_cgb) { assert(0); }
-
     uint8_t index = pixel & 0x03;
     uint8_t color = (pal >> (index * 2)) & 0x03;
 
@@ -339,7 +346,7 @@ ColorArray GPU::toRGB(
     uint8_t lower = *tile.at(offset);
     uint8_t upper = *tile.at(offset + 1);
 
-    for (uint8_t j = 0; j < uint8_t(colors.size()); j++) {
+    for (uint8_t j = 0; j < uint8_t(colors.capacity()); j++) {
         uint8_t index = (flip) ? 7 - j : j;
 
         // The left most pixel starts at the most significant bit.
@@ -352,7 +359,7 @@ ColorArray GPU::toRGB(
         uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
 
         // Each pixel needs to be run through a palette to get the actual color.
-        colors.push_back(palette(pal, pixel, white));
+        colors.emplace_back(palette(pal, pixel, white));
     }
 
     return colors;
@@ -472,13 +479,14 @@ void GPU::drawSprites(ColorArray & display)
     if (!areSpritesEnabled()) { return; }
 
     vector<shared_ptr<SpriteData>> enabled;
+    enabled.reserve(m_sprites.size());
 
     for (shared_ptr<SpriteData> & data : m_sprites) {
         if (!data) { continue; }
 
         data->height = (m_control & SPRITE_SIZE) ? SPRITE_HEIGHT_EXTENDED : SPRITE_HEIGHT_NORMAL;
         if (data->isVisible()) {
-            enabled.push_back(data);
+            enabled.emplace_back(data);
         }
     }
 
@@ -493,7 +501,8 @@ void GPU::drawSprites(ColorArray & display)
     // determine the priority (same rule as CGB mode).
     std::sort(enabled.begin(), enabled.end(),
             [this](const shared_ptr<SpriteData> & a, const shared_ptr<SpriteData> & b) {
-                return (this->m_cgb || (a->x == b->x)) ? (a->address < b->address) : (a->x < b->x);
+                return (this->m_memory.isCGB() || (a->x == b->x))
+                    ? (a->address < b->address) : (a->x < b->x);
         });
 
     for (const shared_ptr<SpriteData> & sprite : enabled) {
@@ -507,15 +516,11 @@ GPU::SpriteData::SpriteData(
     const uint8_t & col,
     const uint8_t & row,
     const uint8_t & t,
-    const uint8_t & atts,
-    const uint8_t & p0,
-    const uint8_t & p1)
+    const uint8_t & atts)
     : m_gpu(gpu),
       x(col),
       y(row),
       flags(atts),
-      palette0(p0),
-      palette1(p1),
       tile(t)
 {
 
@@ -523,7 +528,11 @@ GPU::SpriteData::SpriteData(
 
 uint8_t GPU::SpriteData::palette() const
 {
-    return ((this->flags & PALETTE_NUMBER_NON_CGB) ? palette1 : palette0);
+    if (m_gpu.m_memory.isCGB()) {
+        return *cgb.at(this->flags & PALETTE_NUMBER_CGB);
+    } else {
+        return ((this->flags & PALETTE_NUMBER_NON_CGB) ? *mono.at(1) : *mono.at(0));
+    }
 }
 
 bool GPU::SpriteData::isVisible() const

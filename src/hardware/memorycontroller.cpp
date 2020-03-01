@@ -54,8 +54,7 @@ MemoryController::MemoryController()
       m_oam(*this, GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
       m_io(*this, IO_SIZE, IO_OFFSET),
       m_zero(*this, ZRAM_SIZE, ZRAM_OFFSET),
-      m_unusable(*this, UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET),
-      m_cgb(false)
+      m_unusable(*this, UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET)
 {
     reset();
 
