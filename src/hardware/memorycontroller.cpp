@@ -10,6 +10,8 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <optional>
+#include <functional>
 
 #include "memorycontroller.h"
 #include "memmap.h"
@@ -20,6 +22,8 @@
 using std::vector;
 using std::string;
 using std::ofstream;
+using std::optional;
+using std::reference_wrapper;
 
 uint8_t MemoryController::DUMMY = 0xFF;
 
@@ -275,14 +279,11 @@ MemoryController::MemoryController()
 void MemoryController::reset()
 {
     m_memory = {
-        &m_bios, &m_cartridge, &m_vram, &m_working, &m_oam, &m_unusable, &m_io, &m_zero
+        m_bios, m_cartridge, m_vram, m_working, m_oam, m_unusable, m_io, m_zero
     };
 
-    for (Region *region : m_memory) {
-        if (&m_bios == region) {
-            continue;
-        }
-        region->reset();
+    for (auto it = std::next(m_memory.begin()); it != m_memory.end(); ++it) {
+        (*it).get().reset();
     }
 }
 
@@ -291,46 +292,48 @@ void MemoryController::setCartridge(const string & filename)
     m_cartridge.load(filename);
 }
 
-MemoryController::Region *MemoryController::find(uint16_t address) const
+optional<reference_wrapper<MemoryController::Region>> MemoryController::find(uint16_t address) const
 {
-    for (Region *region : m_memory) {
-        if (region->isAddressed(address)) {
+    for (auto & region : m_memory) {
+        if (region.get().isAddressed(address)) {
             return region;
         }
     }
 
-    return nullptr;
+    return std::nullopt;
 }
 
 void MemoryController::initialize(uint16_t address, uint8_t value)
 {
-    Region *region = find(address);
+    auto found = find(address);
+    if (!found) { return; }
 
-    if (region) {
-        region->enableInit();
-        region->write(address, value);
-        region->disableInit();
-    }
+    auto & region = found->get();
+    region.enableInit();
+    region.write(address, value);
+    region.disableInit();
 }
 
 void MemoryController::write(uint16_t address, uint8_t value)
 {
-    Region *region = find(address);
-
-    if (region && region->isWritable()) {
-        region->write(address, value);
+    auto found = find(address);
+    if (!found) {
+        LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
+        assert(0);
         return;
     }
 
-    LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
-    assert(0);
+    auto & region = found->get();
+    if (region.isWritable()) {
+        region.write(address, value);
+    }
 }
 
 uint8_t & MemoryController::read(uint16_t address)
 {
-    Region *region = find(address);
+    auto region = find(address);
     if (region) {
-        return region->read(address);
+        return region->get().read(address);
     }
 
     LOG("MemoryController::read - Unhandled address 0x%04x\n", address);

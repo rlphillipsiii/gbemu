@@ -15,6 +15,8 @@
 #include <string>
 #include <algorithm>
 #include <memory>
+#include <functional>
+#include <optional>
 
 #include "cartridge.h"
 
@@ -39,7 +41,7 @@ public:
     inline void clearRtcReset()    { m_io.clearRtcReset(); }
     inline void unlockBiosRegion() { m_memory.pop_front(); }
 
-    inline bool inBios() const { return (m_memory.front() == &m_bios); }
+    inline bool inBios() const { return (&m_memory.front().get() == &m_bios); }
     inline bool isCartridgeValid() const { return m_cartridge.isValid(); }
 
 private:
@@ -215,9 +217,9 @@ private:
 
     bool m_cgb;
 
-    std::list<Region*> m_memory;
+    std::list<std::reference_wrapper<Region>> m_memory;
 
-    Region *find(uint16_t address) const;
+    std::optional<std::reference_wrapper<Region>> find(uint16_t address) const;
 
     void initMemoryBank();
 };
