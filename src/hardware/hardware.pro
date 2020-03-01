@@ -13,11 +13,28 @@ CONFIG (staticmem): DEFINES += STATIC_MEMORY
 
 DEFINES += HARDWARE_EXPORT
 
+INCLUDEPATH += memory
+
 TARGET = hardware
 
 PUBLIC_HEADERS += logging.h
 PUBLIC_HEADERS += profiler.h
 PUBLIC_HEADERS += gameboyinterface.h
+
+HEADERS += memory/memoryregion.h
+HEADERS += memory/videoram.h
+HEADERS += memory/mappedio.h
+HEADERS += memory/workingram.h
+HEADERS += memory/readonly.h
+HEADERS += memory/unusable.h
+HEADERS += memory/removable.h
+
+SOURCES += memory/memoryregion.cpp
+SOURCES += memory/videoram.cpp
+SOURCES += memory/mappedio.cpp
+SOURCES += memory/workingram.cpp
+SOURCES += memory/readonly.cpp
+SOURCES += memory/removable.cpp
 
 HEADERS += processor.h
 HEADERS += memorycontroller.h

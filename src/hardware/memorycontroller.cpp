@@ -15,9 +15,7 @@
 
 #include "memorycontroller.h"
 #include "memmap.h"
-#include "gpu.h"
 #include "logging.h"
-#include "cartridge.h"
 
 using std::vector;
 using std::string;
@@ -49,207 +47,27 @@ const vector<uint8_t> MemoryController::BIOS_REGION = {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-MemoryController::Region::Region(uint16_t size, uint16_t offset)
-    : m_offset(offset),
-      m_size(size),
-      m_initializing(false),
-      m_memory(size)
-{
 
-}
+////////////////////////////////////////////////////////////////////////////////
 
-bool MemoryController::Region::isAddressed(uint16_t address) const
-{
-    return ((address >= m_offset) && (address < (m_offset + m_size)));
-}
-
-void MemoryController::Region::write(uint16_t address, uint8_t value)
-{
-    m_memory[address - m_offset] = value;
-}
-
-uint8_t & MemoryController::Region::read(uint16_t address)
-{
-    return m_memory[address - m_offset];
-}
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-const uint16_t MemoryController::VideoRam::BANK_SELECT_ADDRESS = 0xFF4F;
 
-MemoryController::VideoRam::VideoRam(MemoryController & parent, uint16_t size, uint16_t offset)
-    : Region(size, offset),
-      m_parent(parent),
-      m_bank(size)
-{
+////////////////////////////////////////////////////////////////////////////////
 
-}
-
-uint8_t & MemoryController::VideoRam::read(uint16_t address)
-{
-    if (!m_parent.m_cgb) { return Region::read(address); }
-
-    auto & bank = (m_parent.read(BANK_SELECT_ADDRESS)) ? m_memory : m_bank;
-    return bank[address];
-}
-
-void MemoryController::VideoRam::write(uint16_t address, uint8_t value)
-{
-    if (m_parent.m_cgb) {
-        auto & bank = (m_parent.read(BANK_SELECT_ADDRESS)) ? m_memory : m_bank;
-        bank[address] = value;
-    } else {
-        Region::write(address, value);
-    }
-}
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-MemoryController::WorkingRam::WorkingRam(uint16_t size, uint16_t offset)
-    : Region(size, offset),
-      m_shadowOffset(offset + size),
-      m_shadow(size - 512)
-{
 
-}
+////////////////////////////////////////////////////////////////////////////////
 
-void MemoryController::WorkingRam::write(uint16_t address, uint8_t value)
-{
-    if (isShadowAddressed(address)) {
-        m_shadow[address - m_shadowOffset] = value;
-    } else {
-        Region::write(address, value);
-    }
-}
-
-uint8_t & MemoryController::WorkingRam::read(uint16_t address)
-{
-    if (isShadowAddressed(address)) {
-        return m_shadow[address - m_shadowOffset];
-    }
-    return Region::read(address);
-}
-
-bool MemoryController::WorkingRam::isAddressed(uint16_t address) const
-{
-    bool addressed = Region::isAddressed(address);
-    if (!addressed) {
-        addressed = isShadowAddressed(address);
-    }
-    return addressed;
-}
-
-bool MemoryController::WorkingRam::isShadowAddressed(uint16_t address) const
-{
-    return ((address >= m_shadowOffset) && (address < (m_shadowOffset + m_shadow.size())));
-}
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-MemoryController::ReadOnly::ReadOnly(uint16_t size, uint16_t offset)
-    : Region(size, offset)
-{
-
-}
-
-void MemoryController::ReadOnly::write(uint16_t address, uint8_t value)
-{
-    if (!m_initializing) {
-        LOG("Illegal write to address 0x%04x => 0x%02x\n", address, value);
-        return;
-    }
-    Region::write(address, value);
-}
-////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-uint8_t MemoryController::Removable::EMPTY = 0xFF;
 
-void MemoryController::Removable::load(const string & filename)
-{
-    m_cartridge = std::make_shared<Cartridge>(filename);
-}
-
-void MemoryController::Removable::write(uint16_t address, uint8_t value)
-{
-    if (m_cartridge && m_cartridge->isValid()) {
-        m_cartridge->write(address, value);
-    }
-}
-
-uint8_t & MemoryController::Removable::read(uint16_t address)
-{
-    return (m_cartridge && m_cartridge->isValid())
-        ? m_cartridge->read(address) : EMPTY;
-}
-
-bool MemoryController::Removable::isAddressed(uint16_t address) const
-{
-    if (address < (ROM_0_OFFSET + ROM_0_SIZE)) {
-        return true;
-    }
-    if ((address >= ROM_1_OFFSET) && (address < (ROM_1_OFFSET + ROM_1_SIZE))) {
-        return true;
-    }
-    if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
-        return true;
-    }
-
-    return false;
-}
-////////////////////////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////////////////////////////////////////
-MemoryController::MemoryMappedIO::MemoryMappedIO(
-    MemoryController & parent,
-    uint16_t size,
-    uint16_t offset)
-    : Region(size, offset),
-      m_parent(parent),
-      m_rtcReset(false)
-{
-    Region::write(JOYPAD_INPUT_ADDRESS, 0xFF);
-}
-
-void MemoryController::MemoryMappedIO::reset()
-{
-
-}
-
-void MemoryController::MemoryMappedIO::write(uint16_t address, uint8_t value)
-{
-    if (m_initializing) { Region::write(address, value); return; }
-
-    switch (address) {
-    case GPU_STATUS_ADDRESS:        writeBytes(address, value, 0x78); break;
-    case JOYPAD_INPUT_ADDRESS:      writeBytes(address, value, 0x30); break;
-    case INTERRUPT_MASK_ADDRESS:    writeBytes(address, value, 0x1F); break;
-    case INTERRUPT_FLAGS_ADDRESS:   writeBytes(address, value, 0x1F); break;
-    case CPU_TIMER_CONTROL_ADDRESS: writeBytes(address, value, 0x07); break;
-
-    case CPU_TIMER_DIV_ADDRESS: {
-        m_rtcReset = true;
-        break;
-    }
-
-    case GPU_OAM_DMA: {
-        uint16_t source = uint16_t(value) * 0x0100;
-        for (uint16_t i = 0; i < GRAPHICS_RAM_SIZE; i++) {
-            m_parent.write(GRAPHICS_RAM_OFFSET + i, m_parent.read(source + i));
-        }
-
-        break;
-    }
-
-    case SERIAL_TX_CONTROL_ADDRESS: {
-        break;
-    }
-
-    default:
-        Region::write(address, value);
-        break;
-    }
-}
 ////////////////////////////////////////////////////////////////////////////////
 
 MemoryController::MemoryController()
@@ -292,7 +110,7 @@ void MemoryController::setCartridge(const string & filename)
     m_cartridge.load(filename);
 }
 
-optional<reference_wrapper<MemoryController::Region>> MemoryController::find(uint16_t address) const
+optional<reference_wrapper<MemoryRegion>> MemoryController::find(uint16_t address) const
 {
     for (auto & region : m_memory) {
         if (region.get().isAddressed(address)) {
