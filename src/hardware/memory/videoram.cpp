@@ -1,30 +1,17 @@
 #include "memorycontroller.h"
 #include "videoram.h"
 
+const uint8_t VideoRam::BANK_COUNT = 1;
+
 const uint16_t VideoRam::BANK_SELECT_ADDRESS = 0xFF4F;
 
 VideoRam::VideoRam(MemoryController & parent, uint16_t size, uint16_t offset)
-    : MemoryRegion(size, offset),
-      m_parent(parent),
-      m_bank(size)
+    : MemoryRegion(parent, size, offset, BANK_COUNT, BANK_SELECT_ADDRESS)
 {
 
 }
 
-uint8_t & VideoRam::read(uint16_t address)
+bool VideoRam::isBankingActive(uint16_t) const
 {
-    if (!m_parent.isCGB()) { return MemoryRegion::read(address); }
-
-    auto & bank = (m_parent.read(BANK_SELECT_ADDRESS)) ? m_memory : m_bank;
-    return bank[address];
-}
-
-void VideoRam::write(uint16_t address, uint8_t value)
-{
-    if (m_parent.isCGB()) {
-        auto & bank = (m_parent.read(BANK_SELECT_ADDRESS)) ? m_memory : m_bank;
-        bank[address] = value;
-    } else {
-        MemoryRegion::write(address, value);
-    }
+    return m_parent.isCGB();
 }

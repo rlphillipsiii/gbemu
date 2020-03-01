@@ -6,8 +6,7 @@ MappedIO::MappedIO(
     MemoryController & parent,
     uint16_t size,
     uint16_t offset)
-    : MemoryRegion(size, offset),
-      m_parent(parent),
+    : MemoryRegion(parent, size, offset),
       m_rtcReset(false)
 {
     MemoryRegion::write(JOYPAD_INPUT_ADDRESS, 0xFF);

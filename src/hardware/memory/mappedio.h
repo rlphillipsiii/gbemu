@@ -28,8 +28,6 @@ public:
     inline void clearRtcReset() { m_rtcReset = false; }
 
 private:
-    MemoryController & m_parent;
-
     bool m_rtcReset;
 };
 

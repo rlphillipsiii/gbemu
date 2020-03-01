@@ -5,10 +5,12 @@
 
 #include "memoryregion.h"
 
+class MemoryController;
+
 class Unusable : public MemoryRegion {
 public:
-    explicit Unusable(uint16_t size, uint16_t offset)
-        : MemoryRegion(size, offset), m_dummy(0xFF) { m_memory.resize(0); }
+    explicit Unusable(MemoryController & parent, uint16_t size, uint16_t offset)
+        : MemoryRegion(parent, size, offset), m_dummy(0xFF) { m_memory.resize(0); }
     ~Unusable() = default;
 
     void write(uint16_t, uint8_t) override { }

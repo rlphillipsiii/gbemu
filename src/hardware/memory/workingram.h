@@ -6,9 +6,11 @@
 
 #include "memoryregion.h"
 
+class MemoryController;
+
 class WorkingRam : public MemoryRegion {
 public:
-    explicit WorkingRam(uint16_t size, uint16_t offset);
+    explicit WorkingRam(MemoryController & parent, uint16_t size, uint16_t offset);
     ~WorkingRam() = default;
 
     void write(uint16_t address, uint8_t value) override;
@@ -16,10 +18,11 @@ public:
 
     bool isAddressed(uint16_t address) const override;
 
-private:
-    uint16_t m_shadowOffset;
+    bool isBankingActive(uint16_t index) const override;
 
-    std::vector<uint8_t> m_shadow;
+private:
+    static const uint8_t BANK_COUNT;
+    static const uint16_t BANK_SELECT_ADDRESS;
 
     bool isShadowAddressed(uint16_t address) const;
 };

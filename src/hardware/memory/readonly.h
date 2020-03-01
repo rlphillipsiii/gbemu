@@ -5,9 +5,11 @@
 
 #include "memoryregion.h"
 
+class MemoryController;
+
 class ReadOnly : public MemoryRegion {
 public:
-    explicit ReadOnly(uint16_t size, uint16_t offset);
+    explicit ReadOnly(MemoryController & parent, uint16_t size, uint16_t offset);
     ~ReadOnly() = default;
 
     inline bool isWritable() const override { return false; }

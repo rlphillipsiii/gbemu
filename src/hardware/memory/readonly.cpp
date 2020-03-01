@@ -1,8 +1,9 @@
 #include "readonly.h"
 #include "logging.h"
+#include "memorycontroller.h"
 
-ReadOnly::ReadOnly(uint16_t size, uint16_t offset)
-    : MemoryRegion(size, offset)
+ReadOnly::ReadOnly(MemoryController & parent, uint16_t size, uint16_t offset)
+    : MemoryRegion(parent, size, offset)
 {
 
 }

@@ -8,9 +8,12 @@
 #include "memoryregion.h"
 #include "cartridge.h"
 
+class MemoryController;
+
 class Removable : public MemoryRegion {
 public:
-    explicit Removable() : MemoryRegion(0, 0) { }
+    explicit Removable(MemoryController & parent)
+        : MemoryRegion(parent, 0, 0) { }
     ~Removable() = default;
 
     void write(uint16_t address, uint8_t value) override;
