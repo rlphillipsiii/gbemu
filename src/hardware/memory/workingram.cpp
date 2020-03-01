@@ -28,6 +28,9 @@ void WorkingRam::write(uint16_t address, uint8_t value)
 
 uint8_t & WorkingRam::read(uint16_t address)
 {
+    if (isShadowAddressed(address)) {
+        address -= (m_size * 2);
+    }
     return MemoryRegion::read(address);
 }
 
@@ -45,8 +48,8 @@ bool WorkingRam::isAddressed(uint16_t address) const
 
 bool WorkingRam::isShadowAddressed(uint16_t address) const
 {
-    const uint16_t lower = m_offset + m_size;
-    const uint16_t upper = lower + m_size - 512;
+    const uint16_t lower = m_offset + (m_size * 2);
+    const uint16_t upper = lower + ((m_size * 2) - 512);
 
     return ((address >= lower) && (address < upper));
 }

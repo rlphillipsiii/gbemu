@@ -62,7 +62,7 @@ namespace GB {
     };
 };
 
-typedef std::vector<std::shared_ptr<GB::RGB>> ColorArray;
+typedef std::vector<GB::RGB> ColorArray;
 
 class GameBoyInterface {
 public:

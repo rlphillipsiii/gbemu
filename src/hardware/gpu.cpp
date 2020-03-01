@@ -125,7 +125,7 @@ GPU::GPU(MemoryController & memory)
 
         data->address = address;
         data->height  = SPRITE_HEIGHT_NORMAL;
-        
+
         m_sprites[i] = data;
     }
 
@@ -150,9 +150,9 @@ void GPU::reset()
     m_status  = 0x85;
 
     updateRenderStateStatus(OAM);
-    
+
     m_state = OAM;
-    
+
     m_x = m_y = m_scanline = m_ticks = 0;
 }
 
@@ -185,19 +185,19 @@ GPU::RenderState GPU::next()
     }
     default: {
         LOG("GPU::next() : Unknown render state %d\n", m_state);
-    
+
         assert(0);
         break;
     }
     }
-    
+
     return m_state;
 }
 
 void GPU::cycle(uint8_t ticks)
 {
     if (!isDisplayEnabled()) { return; }
-    
+
     m_ticks += ticks;
 
     switch (m_state) {
@@ -210,7 +210,7 @@ void GPU::cycle(uint8_t ticks)
         assert(0);
         return;
     }
-    
+
     m_state = next();
 }
 
@@ -224,7 +224,7 @@ void GPU::handleHBlank()
         if (VBLANK == (m_status & RENDER_MODE)) {
             m_scanline = 0;
         }
-        
+
         if (isHBlankInterruptEnabled()) {
             Interrupts::set(m_memory, InterruptMask::LCD);
         }
@@ -282,9 +282,9 @@ void GPU::handleVRAM()
 void GPU::updateScreen()
 {
     if (m_scanline >= PIXELS_PER_COL) { return; }
-    
+
     TileSetIndex set = (m_control & TILE_SET_SELECT) ? TILESET_0 : TILESET_1;
-    
+
     TileMapIndex background = (m_control & BACKGROUND_MAP) ? TILEMAP_1 : TILEMAP_0;
     TileMapIndex window     = (m_control & WINDOW_MAP) ? TILEMAP_1 : TILEMAP_0;
 
@@ -295,7 +295,7 @@ const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, u
 {
     // We have two maps, so figure out which offset we need to use for our address
     uint16_t offset = (TILEMAP_0 == mIndex) ? TILE_MAP_0_OFFSET : TILE_MAP_1_OFFSET;
-    
+
     // Now that we know our offset, figure out the address of the tile that we are
     // needing to look up.
     uint16_t address = offset + ((y * TILE_MAP_COLUMNS) + x);
@@ -303,7 +303,7 @@ const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, u
     return getTile(sIndex, m_memory.read(address));
 }
 
-shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
+GB::RGB GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
 {
     // TODO: do something with cgb mode here
     if (m_cgb) { assert(0); }
@@ -313,14 +313,13 @@ shared_ptr<GB::RGB> GPU::palette(const uint8_t & pal, uint8_t pixel, bool white)
 
     const BWPalette & colors = NON_CGB_PALETTE;
 
-    shared_ptr<GB::RGB> rgb(new GB::RGB(colors[color]));;
-    assert(rgb);
+    GB::RGB rgb = colors[color];
 
     // If the color palette entry is 0, and we are not allowing the color white, then we
     // need to set our alpha blend entry to transparent so that this pixel won't show up
     // on the display when we go to draw the screen.
     if ((0 == index) && !white) {
-        rgb->alpha = ALPHA_TRANSPARENT;
+        rgb.alpha = ALPHA_TRANSPARENT;
     }
     return rgb;
 }
@@ -363,7 +362,7 @@ bool GPU::isWindowSelected(uint8_t x, uint8_t y)
     // We are trying to figure out if the window is visible at the given x and y,
     // so the first thing that we need to check is if the window is even enabled.
     if (!isWindowEnabled()) { return false; }
-    
+
     if ((y < m_winY) || (y >= PIXELS_PER_COL)) { return false; }
 
     if (((x + WINDOW_ROW_OFFSET) < m_winX)
@@ -375,9 +374,9 @@ bool GPU::isWindowSelected(uint8_t x, uint8_t y)
 void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex window)
 {
     if (!isBackgroundEnabled()) { return; }
-    
+
     unordered_map<uint16_t, ColorArray> winCache, bgCache;
-    
+
     uint16_t offset = m_scanline * PIXELS_PER_ROW;
 
     for (uint8_t pixel = 0; pixel < PIXELS_PER_ROW; pixel++) {
@@ -388,7 +387,7 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
         // that we wrap back around.
         uint16_t col = win ? (pixel - m_winX + WINDOW_ROW_OFFSET) : (m_x + pixel);
         uint16_t row = win ? (m_scanline - m_winY) : (m_y + m_scanline);
-        
+
         col %= (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
         row %= (TILE_MAP_ROWS * TILE_PIXELS_PER_ROW);
 
@@ -440,7 +439,7 @@ void GPU::readSprite(SpriteData & data)
     if (SPRITE_HEIGHT_EXTENDED == data.height) {
         number &= 0xFE;
     }
-    
+
     // Lookup the tile in our table of sprites.  If we have a sprite that has extended
     // height, then we need to read out the sprite data at the next address as well.
     Tile tile = getTile(TILESET_0, number);
@@ -461,7 +460,7 @@ void GPU::readSprite(SpriteData & data)
         row = SPRITE_Y_OFFSET - data.y + m_scanline;
         if (row >= data.height) { return; }
     }
-    
+
     if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
 
     data.colors = toRGB(data.palette(), tile, row, false, flipX);
@@ -503,7 +502,7 @@ void GPU::drawSprites(ColorArray & display)
 
 ////////////////////////////////////////////////////////////////////////////////
 GPU::SpriteData::SpriteData(
-    GPU & gpu,                            
+    GPU & gpu,
     const uint8_t & col,
     const uint8_t & row,
     const uint8_t & t,
@@ -543,7 +542,7 @@ bool GPU::SpriteData::isVisible() const
     if ((m_gpu.m_scanline >= y) && (m_gpu.m_scanline < (y + this->height))) {
         return true;
     }
-    
+
     return false;
 }
 
@@ -554,8 +553,8 @@ void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
     for (size_t i = 0; i < this->colors.size(); i++) {
         // Look at the alpha blend and make sure that this sprite pixel isn't supposed to be
         // transparent.  If it is, then we need to leave our display alone.
-        const shared_ptr<GB::RGB> & color = this->colors.at(i);
-        if (ALPHA_TRANSPARENT == color->alpha) { continue; }
+        const GB::RGB & color = this->colors.at(i);
+        if (ALPHA_TRANSPARENT == color.alpha) { continue; }
 
         // Figure out the pixel that we are actually after.  If that pixel wrapped around,
         // then it's off screen, and we need to skip it.
@@ -571,7 +570,7 @@ void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
         // that the sprite overlaps with is set to color 0.
         if (this->flags & OBJECT_PRIORITY) {
             const GB::RGB & bg = NON_CGB_PALETTE[dPalette & 0x03];
-            if (display[index] && !(*display[index] == bg)) {
+            if (!(display[index] == bg)) {
                 continue;
             }
         }
@@ -589,6 +588,6 @@ string GPU::SpriteData::toString() const
     stream << "    Location: (" << int(this->x) << ", " << int(this->y) << ") " << std::endl;;
     stream << "    Height:   " << int(this->height) << std::endl;
     stream << "    Flags:    " << int(this->flags);
-    
+
     return stream.str();
 }

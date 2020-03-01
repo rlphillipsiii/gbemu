@@ -26,7 +26,7 @@ class MemoryController;
 
 namespace GB { struct RGB; };
 
-typedef std::vector<std::shared_ptr<GB::RGB>> ColorArray;
+typedef std::vector<GB::RGB> ColorArray;
 typedef std::vector<const uint8_t*> Tile;
 typedef std::array<GB::RGB, 4> BWPalette;
 
@@ -216,7 +216,7 @@ private:
         bool white,
         bool flip) const;
 
-    std::shared_ptr<GB::RGB> palette(const uint8_t & pal, uint8_t pixel, bool white) const;
+    GB::RGB palette(const uint8_t & pal, uint8_t pixel, bool white) const;
 
     void handleHBlank();
     void handleVBlank();
