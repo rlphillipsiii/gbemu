@@ -21,6 +21,7 @@
 
 #define GPU_SPRITE_COUNT 40
 #define GPU_TILES_PER_SET 256
+#define GPU_TILE_SET_COUNT 3
 
 class MemoryController;
 
@@ -126,14 +127,9 @@ private:
     };
 
     enum TileMapIndex { TILEMAP_0 = 0, TILEMAP_1 = 1, };
-    enum TileSetIndex { TILESET_0 = 0, TILESET_1 = 1, };
+    enum TileSetIndex { TILESET_0 = 0, TILESET_1 = 1, TILESET_2 = 2 };
 
-    enum RenderState {
-        HBLANK = 0,
-        VBLANK = 1,
-        OAM    = 2,
-        VRAM   = 3,
-    };
+    enum RenderState { HBLANK = 0, VBLANK = 1, OAM = 2, VRAM = 3, };
 
     enum ControlBitMask {
         BACKGROUND_ENABLE = 0x01,
@@ -194,7 +190,7 @@ private:
     ColorArray m_screen;
     ColorArray m_buffer;
 
-    std::array<std::array<Tile, GPU_TILES_PER_SET>, 2> m_tiles;
+    std::array<std::array<Tile, GPU_TILES_PER_SET>, GPU_TILE_SET_COUNT> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
 
     void draw(TileSetIndex set, TileMapIndex background, TileMapIndex window);

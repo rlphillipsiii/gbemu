@@ -22,6 +22,7 @@ using std::string;
 using std::ofstream;
 using std::optional;
 using std::reference_wrapper;
+using std::ifstream;
 
 uint8_t MemoryController::DUMMY = 0xFF;
 
@@ -47,7 +48,7 @@ const vector<uint8_t> MemoryController::BIOS_REGION = {
 };
 
 MemoryController::MemoryController()
-    : m_bios(*this, BIOS_SIZE, BIOS_OFFSET),
+    : m_bios(*this, 0x8F0, BIOS_OFFSET),
       m_cartridge(*this),
       m_vram(*this, GPU_RAM_SIZE, GPU_RAM_OFFSET),
       m_working(*this, WORKING_RAM_SIZE, WORKING_RAM_OFFSET),
@@ -62,9 +63,21 @@ MemoryController::MemoryController()
 
     m_bios.enableInit();
 
+#if 0
     uint16_t length = std::min(uint16_t(BIOS_REGION.size()), m_bios.size());
     for (uint16_t i = 0; i < length; i++) {
         m_bios.write(i, BIOS_REGION[i]);
+    }
+#endif
+
+    ifstream input("gbc_bios.bin", std::ios::in | std::ios::binary);
+
+    vector<uint8_t> buffer(m_bios.size());
+    input.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+
+    const auto & image = (input) ? buffer : BIOS_REGION;
+    for (size_t i = 0; i < image.size(); i++) {
+        m_bios.write(i, image.at(i));
     }
 
     m_bios.disableInit();

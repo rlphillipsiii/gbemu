@@ -60,6 +60,7 @@ void MappedIO::write(uint16_t address, uint8_t value)
     }
 
     case GPU_DMA_OAM: {
+        printf("OAM DMA Request\n");
         uint16_t source = uint16_t(value) * 0x0100;
         for (uint16_t i = 0; i < GRAPHICS_RAM_SIZE; i++) {
             m_parent.write(GRAPHICS_RAM_OFFSET + i, m_parent.read(source + i));

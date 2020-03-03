@@ -15,6 +15,10 @@ CONFIG (debug, debug|release) {
 
     QMAKE_CXXFLAGS += -g
     QMAKE_CXXFLAGS += -O0
+
+    QMAKE_CXXFLAGS += -fsanitize=address
+
+    QMAKE_LFLAGS += -fsanitize=address
 }
 
 defineReplace(combine) {
