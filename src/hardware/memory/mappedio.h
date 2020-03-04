@@ -33,7 +33,6 @@ public:
 
     inline void setBgPaletteWrite(PaletteCallback && callback)
         { m_bgWritePalette = callback; }
-
     inline void setSpritePaletteWrite(PaletteCallback && callback)
         { m_spriteWritePalette = callback; }
 
