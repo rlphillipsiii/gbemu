@@ -31,8 +31,7 @@ void MappedIO::write(uint16_t address, uint8_t value)
     case GPU_BG_PALETTE_DATA: {
         uint8_t pointer = m_parent.read(GPU_BG_PALETTE_INDEX);
 
-        // TODO: need to write the data to the background palette area
-        printf("GPU BG Data: %d ==> %d\n", pointer, value);
+        m_bgWritePalette(pointer, value);
 
         // If the MSB of the bg palette index is set, then we need to auto increment
         // the pointer that we just read out of the register, which is contained in
@@ -46,8 +45,7 @@ void MappedIO::write(uint16_t address, uint8_t value)
     case GPU_SPRITE_PALETTE_DATA: {
         uint8_t pointer = m_parent.read(GPU_SPRITE_PALETTE_INDEX);
 
-        // TODO: need to write the data to the sprite palette area
-        printf("GPU Sprite Data: %d ==> %d\n", pointer, value);
+        m_spriteWritePalette(pointer, value);
 
         // If the MSB of the sprite palette index is set, then we need to auto
         // increment the pointer that we just read out of the register, which is

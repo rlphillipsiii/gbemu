@@ -34,7 +34,13 @@ GameBoy::GameBoy()
       m_joypad(m_memory),
       m_run(false)
 {
+    m_memory.setBgPaletteWrite([&](uint8_t index, uint8_t value) {
+            m_gpu.onBgPaletteWrite(index, value);
+        });
 
+    m_memory.setSpritePaletteWrite([&](uint8_t index, uint8_t value) {
+            m_gpu.onSpritePaletteWrite(index, value);
+        });
 }
 
 bool GameBoy::load(const string & filename)

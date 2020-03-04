@@ -28,6 +28,8 @@
 
 class MemoryController {
 public:
+    typedef std::function<void(uint8_t,uint8_t)> PaletteCallback;
+
     MemoryController();
     ~MemoryController() = default;
 
@@ -51,6 +53,11 @@ public:
     inline bool isCartridgeValid() const { return m_cartridge.isValid(); }
 
     inline bool isCGB() const { return m_cartridge.isCGB(); }
+
+    inline void setBgPaletteWrite(MappedIO::PaletteCallback callback)
+        { m_io.setBgPaletteWrite(std::move(callback)); }
+    inline void setSpritePaletteWrite(MappedIO::PaletteCallback callback)
+        { m_io.setSpritePaletteWrite(std::move(callback)); }
 
 private:
     static uint8_t DUMMY;

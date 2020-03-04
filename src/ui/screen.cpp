@@ -113,6 +113,17 @@ void Screen::onTimeout()
     update();
 }
 
+void Screen::updateCanvas(uint8_t x, uint8_t y, GB::RGB pixel)
+{
+    QRgb rgb = qRgba(pixel.red, pixel.green, pixel.blue, pixel.alpha);
+    m_canvas.setPixel(x, y, rgb);
+}
+
+void Screen::renderCanvas()
+{
+
+}
+
 #if 0
 QSGNode *Screen::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 {

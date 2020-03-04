@@ -36,10 +36,10 @@ using std::lock_guard;
 using std::mutex;
 
 const BWPalette GPU::NON_CGB_PALETTE = {{
-    { 255, 255, 255, 0xFF }, // white
-    { 192, 192, 192, 0xFF }, // light grey
-    { 96,  96,  96,  0xFF }, // grey
-    { 0,   0,   0,   0xFF }, // black
+    { 0, { 255, 255, 255, 0xFF } }, // white
+    { 0, { 192, 192, 192, 0xFF } }, // light grey
+    { 0, { 96,  96,  96,  0xFF } }, // grey
+    { 0, { 0,   0,   0,   0xFF } }, // black
 }};
 
 /** 16 byte tile size (8x8 bit tile w/ 2 bytes per pixel) */
@@ -320,7 +320,7 @@ GB::RGB GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
 
     const BWPalette & colors = NON_CGB_PALETTE;
 
-    GB::RGB rgb = colors[color];
+    GB::RGB rgb = colors[color].second;
 
     // If the color palette entry is 0, and we are not allowing the color white, then we
     // need to set our alpha blend entry to transparent so that this pixel won't show up
@@ -510,6 +510,37 @@ void GPU::drawSprites(ColorArray & display)
     }
 }
 
+void GPU::onBgPaletteWrite(uint8_t index, uint8_t value)
+{
+    onPaletteWrite(m_palettes.bg, index, value);
+}
+
+void GPU::onSpritePaletteWrite(uint8_t index, uint8_t value)
+{
+    onPaletteWrite(m_palettes.sprite, index, value);
+}
+
+void GPU::onPaletteWrite(CgbPalette & palette, uint8_t index, uint8_t value)
+{
+    bool msb = (index & 0x01);
+    uint8_t color = (index >> 1) & 0x03;
+    uint8_t pIdx  = (index >> 3) & 0x07;
+
+    auto & [bits, rgb] = palette[pIdx][color];
+
+    bits |= ((msb) ? (value << 8) : value);
+
+    auto convert = [](uint8_t value) {
+        double normalized = value / 31.;
+        return uint8_t(0xFF * normalized);
+    };
+
+    rgb.red   = convert(bits & 0x1F);
+    rgb.green = convert((bits >> 5) & 0x1F);
+    rgb.blue  = convert((bits >> 10) & 0x1F);
+    rgb.alpha = 0xFF;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 GPU::SpriteData::SpriteData(
     GPU & gpu,
@@ -579,7 +610,7 @@ void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
         // supposed to be behind the background (i.e. not shown) unless the background pixel
         // that the sprite overlaps with is set to color 0.
         if (this->flags & OBJECT_PRIORITY) {
-            const GB::RGB & bg = NON_CGB_PALETTE[dPalette & 0x03];
+            const GB::RGB & bg = NON_CGB_PALETTE[dPalette & 0x03].second;
             if (!(display[index] == bg)) {
                 continue;
             }

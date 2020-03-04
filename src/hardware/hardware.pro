@@ -19,7 +19,9 @@ TARGET = hardware
 
 PUBLIC_HEADERS += logging.h
 PUBLIC_HEADERS += profiler.h
+PUBLIC_HEADERS += gbrgb.h
 PUBLIC_HEADERS += gameboyinterface.h
+PUBLIC_HEADERS += canvasinterface.h
 
 HEADERS += memory/memoryregion.h
 HEADERS += memory/videoram.h

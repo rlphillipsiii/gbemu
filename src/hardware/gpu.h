@@ -22,14 +22,17 @@
 #define GPU_SPRITE_COUNT 40
 #define GPU_TILES_PER_SET 256
 #define GPU_TILE_SET_COUNT 3
+#define GPU_COLORS_PER_PALETTE 4
+#define GPU_CGB_PALETTE_COUNT 8
 
 class MemoryController;
 
-namespace GB { struct RGB; };
+#include "gbrgb.h"
 
 typedef std::vector<GB::RGB> ColorArray;
 typedef std::vector<const uint8_t*> Tile;
-typedef std::array<GB::RGB, 4> BWPalette;
+typedef std::array<std::pair<uint16_t, GB::RGB>, GPU_COLORS_PER_PALETTE> BWPalette;
+typedef std::array<BWPalette, GPU_CGB_PALETTE_COUNT> CgbPalette;
 
 class GPU {
 public:
@@ -46,6 +49,9 @@ public:
         std::lock_guard<std::mutex> guard(m_lock);
         return std::move(m_screen);
     }
+
+    void onBgPaletteWrite(uint8_t index, uint8_t value);
+    void onSpritePaletteWrite(uint8_t index, uint8_t value);
 
 private:
     static const BWPalette NON_CGB_PALETTE;
@@ -193,6 +199,11 @@ private:
     std::array<std::array<Tile, GPU_TILES_PER_SET>, GPU_TILE_SET_COUNT> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
 
+    struct {
+        CgbPalette bg;
+        CgbPalette sprite;
+    } m_palettes;
+
     void draw(TileSetIndex set, TileMapIndex background, TileMapIndex window);
 
     const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
@@ -227,6 +238,8 @@ private:
     void drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex window);
 
     void readSprite(SpriteData & data);
+
+    void onPaletteWrite(CgbPalette & palette, uint8_t index, uint8_t value);
 };
 
 #endif /* SRC_GPU_H_ */

@@ -2,6 +2,8 @@
 #define _MAPPED_IO_H
 
 #include <cstdint>
+#include <functional>
+#include <vector>
 
 #include "memoryregion.h"
 
@@ -9,6 +11,8 @@ class MemoryController;
 
 class MappedIO : public MemoryRegion {
 public:
+    typedef std::function<void(uint8_t,uint8_t)> PaletteCallback;
+
     explicit MappedIO(MemoryController & parent, uint16_t address, uint16_t offset);
     ~MappedIO() = default;
 
@@ -27,8 +31,17 @@ public:
 
     inline void clearRtcReset() { m_rtcReset = false; }
 
+    inline void setBgPaletteWrite(PaletteCallback && callback)
+        { m_bgWritePalette = callback; }
+
+    inline void setSpritePaletteWrite(PaletteCallback && callback)
+        { m_spriteWritePalette = callback; }
+
 private:
     bool m_rtcReset;
+
+    PaletteCallback m_spriteWritePalette;
+    PaletteCallback m_bgWritePalette;
 };
 
 #endif
