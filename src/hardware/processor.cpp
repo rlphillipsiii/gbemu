@@ -55,7 +55,7 @@ string Processor::Command::str() const
 {
     const int size = 32;
     char buffer[size];
-    
+
     stringstream stream;
 
     sprintf(buffer, "0x%04x", pc);
@@ -81,7 +81,7 @@ string Processor::Command::str() const
 
     return stream.str();
 }
-   
+
 void Processor::history() const
 {
     for (const Command & cmd : m_executed) {
@@ -92,7 +92,7 @@ void Processor::history() const
 vector<Processor::Command> Processor::disassemble()
 {
     vector<Command> cmds;
-    
+
     uint16_t pc = 0x100;
     while (pc < GPU_RAM_OFFSET) {
         Command cmd;
@@ -102,12 +102,12 @@ vector<Processor::Command> Processor::disassemble()
         if (ILLEGAL_OPCODES.find(cmd.opcode) != ILLEGAL_OPCODES.end()) {
             continue;
         }
-        
+
         Operation *operation = lookup(pc, cmd.opcode);
         if (!operation) { continue; }
 
         cmd.operation = operation;
-        
+
         for (uint8_t i = 0; i < operation->length - 1; i++) {
             cmd.operands[i] = m_memory.read(pc++);
         }
@@ -129,7 +129,7 @@ Processor::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
     uint8_t prefix = 0x00;
     if (CB_PREFIX == opcode) {
         prefix = opcode;
-        
+
         opcode = m_memory.read(pc++);
     }
 
@@ -200,7 +200,7 @@ uint8_t Processor::execute()
     // If we've gotten to this point, then we were either never halted in the first
     // place, or we just executed an interrupt and were woken up.
     m_halted = false;
-    
+
     // Make sure that our operands are always in a known state.  We can take advantage
     // of this later on during our command execution.
     m_operands[0] = m_operands[1] = 0x00;
@@ -234,7 +234,7 @@ uint8_t Processor::execute()
         logRegisters();
     }
 #endif
-    
+
     // Call the function pointer in our Operation struct.  Any arguments to the function
     // will have already been put in to the operands array.
     operation->handler();
@@ -246,7 +246,7 @@ uint8_t Processor::execute()
     // and leave it at 0 if it was not).
     m_ticks += operation->cycles;
     m_ticks *= 4;
-    
+
     // The flags register only uses the upper 4 bits, so let's go ahead and make sure
     // that the lower nibble is always 0.
     m_flags &= 0xF0;
@@ -257,7 +257,7 @@ uint8_t Processor::execute()
 uint8_t Processor::cycle()
 {
     if (!m_memory.inBios() && !m_memory.isCartridgeValid()) { return 1; }
-    
+
     bool interrupted = interrupt();
 
     uint8_t ticks = (m_halted && !interrupted) ? 1 : execute();
@@ -293,7 +293,8 @@ void Processor::logRegisters() const
     stream << ((isCarryFlagSet())     ? "C" : "-");
 
     LOG("PC:0x%04x SP:0x%04x IME:%d A:0x%02x F:%s BC:0x%04x DE:0x%04x HL:0x%04x | ",
-        m_instr, m_sp, int(m_interrupts.enable), m_gpr.a, stream.str().c_str(), m_gpr.bc, m_gpr.de, m_gpr.hl);
+        m_instr, m_sp, int(m_interrupts.enable), m_gpr.a, stream.str().c_str(),
+        m_gpr.bc, m_gpr.de, m_gpr.hl);
 
     const Command & c = m_executed.back();
     LOG("%s (0x%02x): ", c.operation->name.c_str(), c.opcode);
@@ -394,7 +395,7 @@ void Processor::sbc(uint8_t value)
 void Processor::add16(uint16_t & reg, uint16_t value)
 {
     clrNegFlag();
-    
+
     uint32_t result = uint32_t(reg) + uint32_t(value);
     (result > 0xFFFF) ? setCarryFlag() : clrCarryFlag();
 
@@ -411,16 +412,16 @@ void Processor::add16(uint16_t & reg, uint16_t value)
 void Processor::add16(uint16_t & dest, uint16_t reg, uint8_t value)
 {
     m_flags = 0x00;
-    
+
     union { int8_t sVal; uint8_t uVal; } input = { .uVal = value };
-   
+
     const uint16_t cMask = 0xFF;
     if ((reg & cMask) + (input.sVal & cMask) > cMask) {
         setCarryFlag();
     } else {
         clrCarryFlag();
     }
-    
+
     const uint16_t hMask = 0xF;
     if ((reg & hMask) + (input.sVal & hMask) > hMask) {
         setHalfCarryFlag();
@@ -430,7 +431,7 @@ void Processor::add16(uint16_t & dest, uint16_t reg, uint8_t value)
 
     dest = reg + input.sVal;
 }
-    
+
 void Processor::swap(uint8_t & reg)
 {
     m_flags = 0x00;
@@ -460,7 +461,7 @@ void Processor::jump()
 void Processor::jumprel()
 {
     union { uint8_t uVal; int8_t sVal; } temp = { .uVal = m_operands[0] };
-    
+
     uint16_t address = m_pc + temp.sVal;
     jump(address);
 }
@@ -609,7 +610,7 @@ void Processor::rlc(uint8_t & reg, bool ignoreZero)
     (lsb) ? setCarryFlag() : clrCarryFlag();
 
     reg = (reg << 1) | lsb;
-    
+
     if (!ignoreZero) {
         (!reg) ? setZeroFlag() : clrZeroFlag();
     } else {
@@ -691,7 +692,7 @@ void Processor::srl(uint8_t & reg)
 void Processor::sra(uint8_t & reg)
 {
     m_flags = 0x00;
-    
+
     if (reg & 0x01) { setCarryFlag(); }
 
     uint8_t msb = reg & 0x80;
@@ -726,7 +727,7 @@ void Processor::daa()
         if (isCarryFlagSet())     { value -= 0x60;                 }
     } else {
         if (isHalfCarryFlagSet() || ((value & 0xF) > 0x09)) { value += 0x06; }
-        if (isCarryFlagSet() || (value > 0x9F))             { value += 0x60; }              
+        if (isCarryFlagSet() || (value > 0x9F))             { value += 0x60; }
     }
 
     clrHalfCarryFlag();
@@ -1000,7 +1001,7 @@ Processor::Processor(MemoryController & memory)
         { 0xFF, { "RST_$38", [this]() { rst(0x38); }, 1, 4 } },
 
         { 0x37, { "SCF", [this]() { scf(); }, 1, 1 } },
-        
+
         { 0x10, { "STOP", [this]() { stop(); }, 1, 1 } },
 
         { 0xDE, { "SBC_a_n",  [this]() { sbc(m_operands[0]); }, 2, 2 } },
@@ -1012,7 +1013,7 @@ Processor::Processor(MemoryController & memory)
         { 0x9C, { "SBC_a_h",  [this]() { sbc(m_gpr.h);       }, 1, 1 } },
         { 0x9D, { "SBC_a_l",  [this]() { sbc(m_gpr.l);       }, 1, 1 } },
         { 0x9E, { "SBC_(hl)", [this]() { sbc(m_memory.read(m_gpr.hl)); }, 1, 2 } },
-        
+
         { 0xD6, { "SUB_a_n",  [this]() { sub8(m_operands[0], false); }, 2, 2 } },
         { 0x97, { "SUB_a_a",  [this]() { sub8(m_gpr.a, false);       }, 1, 1 } },
         { 0x90, { "SUB_a_b",  [this]() { sub8(m_gpr.b, false);       }, 1, 1 } },
@@ -1022,7 +1023,7 @@ Processor::Processor(MemoryController & memory)
         { 0x94, { "SUB_a_h",  [this]() { sub8(m_gpr.h, false);       }, 1, 1 } },
         { 0x95, { "SUB_a_l",  [this]() { sub8(m_gpr.l, false);       }, 1, 1 } },
         { 0x96, { "SUB_(hl)", [this]() { sub8(m_memory.read(m_gpr.hl), false); }, 1, 2 } },
-        
+
         { 0xEE, { "XOR_a_n",  [this]() { xor8(m_operands[0]); }, 2, 2 } },
         { 0xAF, { "XOR_a_a",  [this]() { xor8(m_gpr.a);       }, 1, 1 } },
         { 0xA8, { "XOR_a_b",  [this]() { xor8(m_gpr.b);       }, 1, 1 } },
@@ -1191,7 +1192,7 @@ Processor::Processor(MemoryController & memory)
         { 0x0A, { "RRC_d",    [this]() { rrc(m_gpr.d, false); }, 1, 1 } },
         { 0x0B, { "RRC_e",    [this]() { rrc(m_gpr.e, false); }, 1, 1 } },
         { 0x0C, { "RRC_h",    [this]() { rrc(m_gpr.h, false); }, 1, 1 } },
-        { 0x0D, { "RRC_l",    [this]() { rrc(m_gpr.l, false); }, 1, 1 } },        
+        { 0x0D, { "RRC_l",    [this]() { rrc(m_gpr.l, false); }, 1, 1 } },
 
         { 0x1E, { "RR_(hl)", [this]() { rotater(m_memory.read(m_gpr.hl), true, false); }, 1, 4 } },
         { 0x1F, { "RR_a",    [this]() { rotater(m_gpr.a, true, false); }, 1, 2 } },
@@ -1266,7 +1267,7 @@ Processor::Processor(MemoryController & memory)
         { 0xFB, { "SET_7_e", [this]() { set(m_gpr.e, 7); }, 1, 2 } },
         { 0xFC, { "SET_7_h", [this]() { set(m_gpr.h, 7); }, 1, 2 } },
         { 0xFD, { "SET_7_l", [this]() { set(m_gpr.l, 7); }, 1, 2 } },
-        
+
         { 0x26, { "SLA_(hl)", [this]() { sla(m_memory.read(m_gpr.hl)); }, 1, 4 } },
         { 0x27, { "SLA_a",    [this]() { sla(m_gpr.a); }, 1, 2 } },
         { 0x20, { "SLA_b",    [this]() { sla(m_gpr.b); }, 1, 2 } },
@@ -1293,7 +1294,7 @@ Processor::Processor(MemoryController & memory)
         { 0x33, { "SWAP_e",    [this]() { swap(m_gpr.e); }, 1, 2 } },
         { 0x34, { "SWAP_h",    [this]() { swap(m_gpr.h); }, 1, 2 } },
         { 0x35, { "SWAP_l",    [this]() { swap(m_gpr.l); }, 1, 2 } },
-        
+
         { 0x3E, { "SRL_(hl)", [this]() { srl(m_memory.read(m_gpr.hl)); }, 1, 4 } },
         { 0x3F, { "SRL_a",    [this]() { srl(m_gpr.a); }, 1, 2 } },
         { 0x38, { "SRL_b",    [this]() { srl(m_gpr.b); }, 1, 2 } },
@@ -1308,7 +1309,7 @@ Processor::Processor(MemoryController & memory)
         0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD,
     };
 
-#ifdef DEBUG    
+#ifdef DEBUG
     for (uint16_t i = 0; i < 0x100; i++) {
         if ((CB_PREFIX == i)
             || (ILLEGAL_OPCODES.end() != ILLEGAL_OPCODES.find(i))
@@ -1324,4 +1325,3 @@ Processor::Processor(MemoryController & memory)
     }
 #endif
 }
-

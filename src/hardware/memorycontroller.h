@@ -30,12 +30,17 @@ public:
     MemoryController(GameBoy & parent);
     ~MemoryController() = default;
 
+    MemoryController(const MemoryController &) = delete;
+    MemoryController(MemoryController &&) = delete;
+    MemoryController(const MemoryController &&) = delete;
+    MemoryController & operator=(const MemoryController &) = delete;
+
     void initialize(uint16_t address, uint8_t value);
 
     void write(uint16_t address, uint8_t value);
     uint8_t & read(uint16_t address);
 
-    void reset(bool init = false);
+    void reset();
     void setCartridge(const std::string & filename);
 
     void saveBIOS(const std::string & filename);
@@ -55,7 +60,8 @@ private:
     static uint8_t DUMMY;
     static const uint16_t MBC_TYPE_ADDRESS;
 
-    static const std::vector<uint8_t> BIOS_REGION;
+    static const std::vector<uint8_t> DMR_BIOS_REGION;
+    static const std::vector<uint8_t> CGB_BIOS_REGION;
 
     enum BankType { MBC_NONE, MBC1, MBC2, MBC3 };
     enum BankMode { MBC_ROM, MBC_RAM };
@@ -81,6 +87,7 @@ private:
 
     std::optional<std::reference_wrapper<MemoryRegion>> find(uint16_t address) const;
 
+    void init();
     void initMemoryBank();
 };
 

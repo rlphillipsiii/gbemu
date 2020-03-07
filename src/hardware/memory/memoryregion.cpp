@@ -17,7 +17,7 @@ MemoryRegion::MemoryRegion(
       m_initializing(false),
       m_memory(banks + 1)
 {
-    for (auto & bank : m_memory) { bank.resize(size); }
+    resize(size);
 }
 
 MemoryRegion::MemoryRegion(
@@ -31,6 +31,14 @@ MemoryRegion::MemoryRegion(
 bool MemoryRegion::isAddressed(uint16_t address) const
 {
     return ((address >= m_offset) && (address < (m_offset + m_size)));
+}
+
+void MemoryRegion::resize(uint16_t size)
+{
+    for (auto & bank : m_memory) {
+        bank.resize(size);
+    }
+    m_size = size;
 }
 
 void MemoryRegion::reset()

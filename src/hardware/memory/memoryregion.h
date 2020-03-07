@@ -40,6 +40,7 @@ public:
 
     virtual inline uint8_t resetValue() const { return 0x00; }
 
+    void resize(uint16_t size);
     inline std::vector<std::vector<uint8_t>> & memory() { return m_memory; }
 
 protected:

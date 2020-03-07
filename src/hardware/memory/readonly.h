@@ -13,6 +13,7 @@ public:
     ~ReadOnly() = default;
 
     inline bool isWritable() const override { return false; }
+    inline void reset() override { }
 
     void write(uint16_t address, uint8_t value) override;
 };

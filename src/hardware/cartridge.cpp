@@ -87,7 +87,6 @@ Cartridge::Cartridge(const string & path)
     m_cgb = (m_memory.at(ROM_CGB_OFFSET) == 0xC0) || (m_memory.at(ROM_CGB_OFFSET) == 0x80);
     if (m_cgb) {
         WARN("%s\n", "CGB ROM detected, but CGB not yet support");
-        m_cgb = false;
     }
 
     NOTE("ROM Name: %s\n", m_info.name.c_str());
