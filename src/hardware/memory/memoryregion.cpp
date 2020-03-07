@@ -9,15 +9,13 @@ MemoryRegion::MemoryRegion(
     MemoryController & parent,
     uint16_t size,
     uint16_t offset,
-    uint8_t banks,
-    uint16_t address)
+    uint8_t banks)
     : m_parent(parent),
       m_offset(offset),
       m_size(size),
       m_banks(banks + 1),
-      m_address(address),
       m_initializing(false),
-      m_memory(size)
+      m_memory(banks + 1)
 {
     for (auto & bank : m_memory) { bank.resize(size); }
 }
@@ -26,7 +24,7 @@ MemoryRegion::MemoryRegion(
     MemoryController & parent,
     uint16_t size,
     uint16_t offset)
-    : MemoryRegion(parent, size, offset, 0, 0x0000)
+    : MemoryRegion(parent, size, offset, 0)
 {
 }
 
@@ -42,28 +40,12 @@ void MemoryRegion::reset()
     }
 }
 
-vector<uint8_t> & MemoryRegion::getSelectedBank(uint16_t index)
-{
-    if (!isBankingActive(index)) { return m_memory[index / m_memory.size()]; }
-
-    uint8_t selected = m_parent.read(m_address);
-    assert(selected < m_memory.size());
-
-    return m_memory[std::min(selected, uint8_t(m_memory.size()))];
-}
-
 void MemoryRegion::write(uint16_t address, uint8_t value)
 {
-    uint16_t index = address - m_offset;
-
-    auto & bank = getSelectedBank(index);
-    bank[index % bank.size()] = value;
+    m_memory[0][address - m_offset] = value;
 }
 
 uint8_t & MemoryRegion::read(uint16_t address)
 {
-    uint16_t index = address - m_offset;
-
-    auto & bank = getSelectedBank(index);
-    return bank[index % bank.size()];
+    return m_memory[0][address - m_offset];
 }

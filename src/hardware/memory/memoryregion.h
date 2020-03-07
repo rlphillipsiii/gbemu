@@ -16,8 +16,7 @@ public:
         MemoryController & parent,
         uint16_t size,
         uint16_t offset,
-        uint8_t banks,
-        uint16_t address);
+        uint8_t banks);
     virtual ~MemoryRegion() = default;
 
     MemoryRegion & operator=(const MemoryRegion &) = delete;
@@ -27,12 +26,12 @@ public:
 
     virtual bool isAddressed(uint16_t address) const;
     virtual inline bool isWritable() const { return true; }
-    virtual inline bool isBankingActive(uint16_t) const { return false; }
 
     virtual void write(uint16_t address, uint8_t value);
     virtual uint8_t & read(uint16_t address);
 
     virtual inline uint16_t size() const { return m_size; }
+    inline uint16_t offset() const { return m_offset; }
 
     virtual void reset();
 
@@ -41,6 +40,8 @@ public:
 
     virtual inline uint8_t resetValue() const { return 0x00; }
 
+    inline std::vector<std::vector<uint8_t>> & memory() { return m_memory; }
+
 protected:
     MemoryController & m_parent;
 
@@ -48,13 +49,9 @@ protected:
     uint16_t m_size;
     uint8_t m_banks;
 
-    uint16_t m_address;
-
     bool m_initializing;
 
     std::vector<std::vector<uint8_t>> m_memory;
-
-    std::vector<uint8_t> & getSelectedBank(uint16_t index);
 };
 
 #endif

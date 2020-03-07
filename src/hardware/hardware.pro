@@ -24,7 +24,6 @@ PUBLIC_HEADERS += gameboyinterface.h
 PUBLIC_HEADERS += canvasinterface.h
 
 HEADERS += memory/memoryregion.h
-HEADERS += memory/videoram.h
 HEADERS += memory/mappedio.h
 HEADERS += memory/workingram.h
 HEADERS += memory/readonly.h
@@ -32,7 +31,6 @@ HEADERS += memory/unusable.h
 HEADERS += memory/removable.h
 
 SOURCES += memory/memoryregion.cpp
-SOURCES += memory/videoram.cpp
 SOURCES += memory/mappedio.cpp
 SOURCES += memory/workingram.cpp
 SOURCES += memory/readonly.cpp

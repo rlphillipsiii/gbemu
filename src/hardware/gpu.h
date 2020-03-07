@@ -18,6 +18,8 @@
 
 #include "interrupt.h"
 #include "memmap.h"
+#include "memoryregion.h"
+#include "gbrgb.h"
 
 #define GPU_SPRITE_COUNT 40
 #define GPU_TILES_PER_SET 256
@@ -27,20 +29,20 @@
 
 class MemoryController;
 
-#include "gbrgb.h"
-
 typedef std::vector<GB::RGB> ColorArray;
 typedef std::vector<const uint8_t*> Tile;
-typedef std::array<std::pair<uint16_t, GB::RGB>, GPU_COLORS_PER_PALETTE> BWPalette;
+typedef std::array<std::pair<std::array<uint8_t, 2>, GB::RGB>, GPU_COLORS_PER_PALETTE> BWPalette;
 typedef std::array<BWPalette, GPU_CGB_PALETTE_COUNT> CgbPalette;
 
-class GPU {
+class GPU : public MemoryRegion {
 public:
+    enum MemoryBank { BANK_0 = 0, BANK_1 = 1 };
+
     explicit GPU(MemoryController & memory);
     ~GPU() = default;
 
     void cycle(uint8_t ticks);
-    void reset();
+    void reset() override;
 
     inline uint8_t scanline() const { return m_scanline; }
 
@@ -50,11 +52,21 @@ public:
         return std::move(m_screen);
     }
 
-    void onBgPaletteWrite(uint8_t index, uint8_t value);
-    void onSpritePaletteWrite(uint8_t index, uint8_t value);
+    void write(uint16_t address, uint8_t value) override;
+    void write(MemoryBank bank, uint16_t index, uint8_t value);
+    uint8_t & read(uint16_t address) override;
+    uint8_t & read(MemoryBank bank, uint16_t index);
+
+    void writeBgPalette(uint8_t index, uint8_t value);
+    void writeSpritePalette(uint8_t index, uint8_t value);
+
+    uint8_t & readBgPalette(uint8_t index);
+    uint8_t & readSpritePalette(uint8_t index);
 
 private:
     static const BWPalette NON_CGB_PALETTE;
+
+    static const uint8_t BANK_COUNT;
 
     static const uint16_t TILE_SIZE;
     static const uint16_t TILES_PER_SET;
@@ -176,7 +188,7 @@ private:
     inline bool isOAMInterruptEnabled()         const { return (m_status & OAM_INTERRUPT);         }
     inline bool isCoincidenceInterruptEnabled() const { return (m_status & COINCIDENCE_INTERRUPT); }
 
-    MemoryController & m_memory;
+    MemoryController & m_mmc;
 
     uint8_t & m_control;
     uint8_t & m_status;
@@ -196,7 +208,8 @@ private:
     ColorArray m_screen;
     ColorArray m_buffer;
 
-    std::array<std::array<Tile, GPU_TILES_PER_SET>, GPU_TILE_SET_COUNT> m_tiles;
+    std::array<std::pair<
+        uint8_t*, std::array<Tile, GPU_TILES_PER_SET>>, GPU_TILE_SET_COUNT> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
 
     struct {
@@ -225,7 +238,7 @@ private:
     RenderState next();
 
     inline const Tile & getTile(TileSetIndex index, uint16_t tile) const
-        { return m_tiles.at(index).at(tile); }
+        { return m_tiles.at(index).second.at(tile); }
 
     inline void updateRenderStateStatus(RenderState state)
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
@@ -239,7 +252,13 @@ private:
 
     void readSprite(SpriteData & data);
 
-    void onPaletteWrite(CgbPalette & palette, uint8_t index, uint8_t value);
+    void writePalette(CgbPalette & palette, uint8_t index, uint8_t value);
+    uint8_t & readPalette(CgbPalette & palette, uint8_t index);
+
+    void initSpriteCache();
+    void initTileCache();
+
+    std::vector<uint8_t> & bank();
 };
 
 #endif /* SRC_GPU_H_ */

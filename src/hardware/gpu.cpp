@@ -36,11 +36,13 @@ using std::lock_guard;
 using std::mutex;
 
 const BWPalette GPU::NON_CGB_PALETTE = {{
-    { 0, { 255, 255, 255, 0xFF } }, // white
-    { 0, { 192, 192, 192, 0xFF } }, // light grey
-    { 0, { 96,  96,  96,  0xFF } }, // grey
-    { 0, { 0,   0,   0,   0xFF } }, // black
+    { { 0, 0 }, { 255, 255, 255, 0xFF } }, // white
+    { { 0, 0 }, { 192, 192, 192, 0xFF } }, // light grey
+    { { 0, 0 }, { 96,  96,  96,  0xFF } }, // grey
+    { { 0, 0 }, { 0,   0,   0,   0xFF } }, // black
 }};
+
+const uint8_t GPU::BANK_COUNT = 2;
 
 /** 16 byte tile size (8x8 bit tile w/ 2 bytes per pixel) */
 const uint16_t GPU::TILE_SIZE = 16;
@@ -98,35 +100,42 @@ const uint8_t GPU::ALPHA_TRANSPARENT = 0x00;
 const uint8_t GPU::WINDOW_ROW_OFFSET = 7;
 
 GPU::GPU(MemoryController & memory)
-    : m_memory(memory),
-      m_control(m_memory.read(GPU_CONTROL_ADDRESS)),
-      m_status(m_memory.read(GPU_STATUS_ADDRESS)),
-      m_palette(m_memory.read(GPU_PALETTE_ADDRESS)),
-      m_x(m_memory.read(GPU_SCROLLX_ADDRESS)),
-      m_y(m_memory.read(GPU_SCROLLY_ADDRESS)),
-      m_winX(m_memory.read(GPU_WINDOW_X_ADDRESS)),
-      m_winY(m_memory.read(GPU_WINDOW_Y_ADDRESS)),
-      m_scanline(m_memory.read(GPU_SCANLINE_ADDRESS)),
+    : MemoryRegion(memory, GPU_RAM_SIZE, GPU_RAM_OFFSET, BANK_COUNT - 1),
+      m_mmc(memory),
+      m_control(m_mmc.read(GPU_CONTROL_ADDRESS)),
+      m_status(m_mmc.read(GPU_STATUS_ADDRESS)),
+      m_palette(m_mmc.read(GPU_PALETTE_ADDRESS)),
+      m_x(m_mmc.read(GPU_SCROLLX_ADDRESS)),
+      m_y(m_mmc.read(GPU_SCROLLY_ADDRESS)),
+      m_winX(m_mmc.read(GPU_WINDOW_X_ADDRESS)),
+      m_winY(m_mmc.read(GPU_WINDOW_Y_ADDRESS)),
+      m_scanline(m_mmc.read(GPU_SCANLINE_ADDRESS)),
       m_screen(PIXELS_PER_ROW * PIXELS_PER_COL),
       m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL)
 {
     reset();
 
+    initSpriteCache();
+    initTileCache();
+}
+
+void GPU::initSpriteCache()
+{
     for (size_t i = 0; i < m_sprites.size(); i++) {
         uint16_t address = SPRITE_ATTRIBUTES_TABLE + (i * SPRITE_BYTES_PER_ATTRIBUTE);
 
-        const uint8_t & y     = m_memory.read(address);
-        const uint8_t & x     = m_memory.read(address + 1);
-        const uint8_t & tile  = m_memory.read(address + 2);
-        const uint8_t & flags = m_memory.read(address + 3);
+        const uint8_t & y     = m_mmc.read(address);
+        const uint8_t & x     = m_mmc.read(address + 1);
+        const uint8_t & tile  = m_mmc.read(address + 2);
+        const uint8_t & flags = m_mmc.read(address + 3);
 
         shared_ptr<SpriteData> data = std::make_shared<SpriteData>(*this, x, y, tile, flags);
 
-        data->mono = { &m_memory.read(GPU_OBP1_ADDRESS), &m_memory.read(GPU_OBP2_ADDRESS) };
+        data->mono = { &m_mmc.read(GPU_OBP1_ADDRESS), &m_mmc.read(GPU_OBP2_ADDRESS) };
 
         data->cgb.resize(SPRITE_CGB_PALETTE_COUNT);
         for (size_t j = 0; j < data->cgb.size(); j++) {
-            data->cgb[j] = &m_memory.read(GPU_OBP1_ADDRESS + j);
+            data->cgb[j] = &m_mmc.read(GPU_OBP1_ADDRESS + j);
         }
 
         data->address = address;
@@ -134,24 +143,36 @@ GPU::GPU(MemoryController & memory)
 
         m_sprites[i] = data;
     }
+}
 
+void GPU::initTileCache()
+{
     for (uint16_t i = 0; i < TILES_PER_SET; i++) {
-        uint16_t address = TILE_SET_0_OFFSET + (i * TILE_SIZE);
+        uint16_t index = (TILE_SET_0_OFFSET + (i * TILE_SIZE)) - m_offset;
         for (uint8_t j = 0; j < TILE_SIZE; j++) {
-            m_tiles[TILESET_0][i].push_back(&m_memory.read(address + j));
+            auto & [atts, tiles] = m_tiles[TILESET_0];
+            tiles[i].push_back(&read(BANK_0, index + j));
+
+            atts = &read(BANK_1, index + j);
         }
 
         union { uint8_t uVal; int8_t sVal; } offset = { .uVal = uint8_t(i) };
 
-        address = TILE_SET_0_OFFSET + (TILES_PER_SET * TILE_SIZE) + (offset.sVal * TILE_SIZE);
+        index = (TILE_SET_0_OFFSET + (TILES_PER_SET * TILE_SIZE) + (offset.sVal * TILE_SIZE))
+            - m_offset;
         for (uint8_t j = 0; j < TILE_SIZE; j++) {
-            m_tiles[TILESET_1][i].push_back(&m_memory.read(address + j));
+            auto & [atts, tiles] = m_tiles[TILESET_1];
+            tiles[i].push_back(&read(BANK_0, index + j));
+
+            atts = &read(BANK_1, index + j);
         }
     }
 }
 
 void GPU::reset()
 {
+    MemoryRegion::reset();
+
     m_control = 0x91;
     m_status  = 0x85;
 
@@ -160,6 +181,28 @@ void GPU::reset()
     m_state = OAM;
 
     m_x = m_y = m_scanline = m_ticks = 0;
+}
+
+void GPU::write(uint16_t address, uint8_t value)
+{
+    MemoryBank selected = (MemoryBank)(m_mmc.read(GPU_BANK_SELECT_ADDRESS) & 0x01);
+    write(selected, address - m_offset, value);
+}
+
+void GPU::write(GPU::MemoryBank selected, uint16_t index, uint8_t value)
+{
+    m_memory[int(selected)][index] = value;
+}
+
+uint8_t & GPU::read(uint16_t address)
+{
+    MemoryBank selected = (MemoryBank)(m_mmc.read(GPU_BANK_SELECT_ADDRESS) & 0x01);
+    return read(selected, address - m_offset);
+}
+
+uint8_t & GPU::read(GPU::MemoryBank selected, uint16_t index)
+{
+    return m_memory[int(selected)][index];
 }
 
 GPU::RenderState GPU::next()
@@ -232,7 +275,7 @@ void GPU::handleHBlank()
         }
 
         if (isHBlankInterruptEnabled()) {
-            Interrupts::set(m_memory, InterruptMask::LCD);
+            Interrupts::set(m_mmc, InterruptMask::LCD);
         }
         updateRenderStateStatus(HBLANK);
     }
@@ -247,10 +290,10 @@ void GPU::handleVBlank()
 {
     if (VBLANK != (m_status & RENDER_MODE)) {
         if (isVBlankInterruptEnabled()) {
-            Interrupts::set(m_memory, InterruptMask::LCD);
+            Interrupts::set(m_mmc, InterruptMask::LCD);
         }
 
-        Interrupts::set(m_memory, InterruptMask::VBLANK);
+        Interrupts::set(m_mmc, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
 
         // We've move in to the hblank state, so move the internal buffer
@@ -276,7 +319,7 @@ void GPU::handleOAM()
 {
     if (OAM != (m_status & RENDER_MODE)) {
         if (isOAMInterruptEnabled()) {
-            Interrupts::set(m_memory, InterruptMask::LCD);
+            Interrupts::set(m_mmc, InterruptMask::LCD);
         }
         updateRenderStateStatus(OAM);
     }
@@ -310,7 +353,7 @@ const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, u
     // needing to look up.
     uint16_t address = offset + ((y * TILE_MAP_COLUMNS) + x);
 
-    return getTile(sIndex, m_memory.read(address));
+    return getTile(sIndex, m_mmc.read(address));
 }
 
 GB::RGB GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
@@ -501,7 +544,7 @@ void GPU::drawSprites(ColorArray & display)
     // determine the priority (same rule as CGB mode).
     std::sort(enabled.begin(), enabled.end(),
             [this](const shared_ptr<SpriteData> & a, const shared_ptr<SpriteData> & b) {
-                return (this->m_memory.isCGB() || (a->x == b->x))
+                return (this->m_mmc.isCGB() || (a->x == b->x))
                     ? (a->address < b->address) : (a->x < b->x);
         });
 
@@ -510,35 +553,57 @@ void GPU::drawSprites(ColorArray & display)
     }
 }
 
-void GPU::onBgPaletteWrite(uint8_t index, uint8_t value)
+void GPU::writeBgPalette(uint8_t index, uint8_t value)
 {
-    onPaletteWrite(m_palettes.bg, index, value);
+    writePalette(m_palettes.bg, index, value);
 }
 
-void GPU::onSpritePaletteWrite(uint8_t index, uint8_t value)
+void GPU::writeSpritePalette(uint8_t index, uint8_t value)
 {
-    onPaletteWrite(m_palettes.sprite, index, value);
+    writePalette(m_palettes.sprite, index, value);
 }
 
-void GPU::onPaletteWrite(CgbPalette & palette, uint8_t index, uint8_t value)
+void GPU::writePalette(CgbPalette & palette, uint8_t index, uint8_t value)
 {
-    bool msb = (index & 0x01);
     uint8_t color = (index >> 1) & 0x03;
     uint8_t pIdx  = (index >> 3) & 0x07;
 
-    auto & [bits, rgb] = palette[pIdx][color];
+    auto & [bytes, rgb] = palette[pIdx][color];
 
-    bits |= ((msb) ? (value << 8) : value);
+    bytes[index & 0x01] = value;
 
     auto convert = [](uint8_t value) {
-        double normalized = value / 31.;
+        double normalized = double(value) / 31.;
         return uint8_t(0xFF * normalized);
     };
+
+    uint16_t bits = (bytes[1] << 8) | bytes[0];
 
     rgb.red   = convert(bits & 0x1F);
     rgb.green = convert((bits >> 5) & 0x1F);
     rgb.blue  = convert((bits >> 10) & 0x1F);
     rgb.alpha = 0xFF;
+}
+
+uint8_t & GPU::readBgPalette(uint8_t index)
+{
+    return readPalette(m_palettes.bg, index);
+}
+
+uint8_t & GPU::readSpritePalette(uint8_t index)
+{
+    return readPalette(m_palettes.sprite, index);
+}
+
+uint8_t & GPU::readPalette(CgbPalette & palette, uint8_t index)
+{
+    uint8_t color = (index >> 1) & 0x03;
+    uint8_t pIdx  = (index >> 3) & 0x07;
+
+    auto & [bytes, rgb] = palette[pIdx][color];
+    (void)rgb;
+
+    return bytes[index & 0x01];
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -559,7 +624,7 @@ GPU::SpriteData::SpriteData(
 
 uint8_t GPU::SpriteData::palette() const
 {
-    if (m_gpu.m_memory.isCGB()) {
+    if (m_gpu.m_mmc.isCGB()) {
         return *cgb.at(this->flags & PALETTE_NUMBER_CGB);
     } else {
         return ((this->flags & PALETTE_NUMBER_NON_CGB) ? *mono.at(1) : *mono.at(0));

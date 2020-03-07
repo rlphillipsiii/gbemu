@@ -16,6 +16,7 @@
 #include "memorycontroller.h"
 #include "memmap.h"
 #include "logging.h"
+#include "gameboy.h"
 
 using std::vector;
 using std::string;
@@ -47,17 +48,17 @@ const vector<uint8_t> MemoryController::BIOS_REGION = {
     0xF5, 0x06, 0x19, 0x78, 0x86, 0x23, 0x05, 0x20, 0xFB, 0x86, 0x20, 0xFE, 0x3E, 0x01, 0xE0, 0x50,
 };
 
-MemoryController::MemoryController()
-    : m_bios(*this, 0x8F0, BIOS_OFFSET),
+MemoryController::MemoryController(GameBoy & parent)
+    : m_bios(*this, BIOS_SIZE, BIOS_OFFSET),
       m_cartridge(*this),
-      m_vram(*this, GPU_RAM_SIZE, GPU_RAM_OFFSET),
       m_working(*this, WORKING_RAM_SIZE, WORKING_RAM_OFFSET),
       m_oam(*this, GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
-      m_io(*this, IO_SIZE, IO_OFFSET),
+      m_io(parent, IO_SIZE, IO_OFFSET),
       m_zero(*this, ZRAM_SIZE, ZRAM_OFFSET),
-      m_unusable(*this, UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET)
+      m_unusable(*this, UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET),
+      m_parent(parent)
 {
-    reset();
+    reset(true);
 
     assert(uint16_t(BIOS_REGION.size()) == m_bios.size());
 
@@ -83,14 +84,16 @@ MemoryController::MemoryController()
     m_bios.disableInit();
 }
 
-void MemoryController::reset()
+void MemoryController::reset(bool init)
 {
     m_memory = {
-        m_bios, m_cartridge, m_vram, m_working, m_oam, m_unusable, m_io, m_zero
+        m_bios, m_cartridge, m_parent.gpu(), m_working, m_oam, m_unusable, m_io, m_zero
     };
 
-    for (auto it = std::next(m_memory.begin()); it != m_memory.end(); ++it) {
-        (*it).get().reset();
+    if (!init) {
+        for (auto it = std::next(m_memory.begin()); it != m_memory.end(); ++it) {
+            (*it).get().reset();
+        }
     }
 }
 

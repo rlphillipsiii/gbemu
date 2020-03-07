@@ -7,13 +7,11 @@
 
 #include "memoryregion.h"
 
-class MemoryController;
+class GameBoy;
 
 class MappedIO : public MemoryRegion {
 public:
-    typedef std::function<void(uint8_t,uint8_t)> PaletteCallback;
-
-    explicit MappedIO(MemoryController & parent, uint16_t address, uint16_t offset);
+    explicit MappedIO(GameBoy & gameboy, uint16_t address, uint16_t offset);
     ~MappedIO() = default;
 
     void write(uint16_t address, uint8_t value) override;
@@ -31,16 +29,10 @@ public:
 
     inline void clearRtcReset() { m_rtcReset = false; }
 
-    inline void setBgPaletteWrite(PaletteCallback && callback)
-        { m_bgWritePalette = callback; }
-    inline void setSpritePaletteWrite(PaletteCallback && callback)
-        { m_spriteWritePalette = callback; }
-
 private:
-    bool m_rtcReset;
+    GameBoy & m_gameboy;
 
-    PaletteCallback m_spriteWritePalette;
-    PaletteCallback m_bgWritePalette;
+    bool m_rtcReset;
 };
 
 #endif

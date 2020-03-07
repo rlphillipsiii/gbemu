@@ -37,10 +37,15 @@ public:
 
     inline ColorArray && getRGB() override { return m_gpu.getColorMap(); }
 
+    inline GPU & gpu() { return m_gpu; }
+    inline Processor & cpu() { return m_cpu; }
+    inline MemoryController & mmc() { return m_memory; }
+    inline JoyPad & joypad() { return m_joypad; }
+
 private:
     MemoryController m_memory;
-    Processor m_cpu;
     GPU m_gpu;
+    Processor m_cpu;
     JoyPad m_joypad;
 
     std::atomic<bool> m_run;
@@ -50,6 +55,7 @@ private:
     std::vector<Processor::Command> m_assembly;
 
     void run();
+    void step();
 };
 
 

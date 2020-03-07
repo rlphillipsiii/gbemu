@@ -1,12 +1,14 @@
 #include "mappedio.h"
 #include "memorycontroller.h"
 #include "memmap.h"
+#include "gameboy.h"
 
 MappedIO::MappedIO(
-    MemoryController & parent,
+    GameBoy & gameboy,
     uint16_t size,
     uint16_t offset)
-    : MemoryRegion(parent, size, offset),
+    : MemoryRegion(gameboy.mmc(), size, offset),
+      m_gameboy(gameboy),
       m_rtcReset(false)
 {
     MemoryRegion::write(JOYPAD_INPUT_ADDRESS, 0xFF);
@@ -31,7 +33,7 @@ void MappedIO::write(uint16_t address, uint8_t value)
     case GPU_BG_PALETTE_DATA: {
         uint8_t pointer = m_parent.read(GPU_BG_PALETTE_INDEX);
 
-        m_bgWritePalette(pointer, value);
+        m_gameboy.gpu().writeBgPalette(pointer, value);
 
         // If the MSB of the bg palette index is set, then we need to auto increment
         // the pointer that we just read out of the register, which is contained in
@@ -45,7 +47,7 @@ void MappedIO::write(uint16_t address, uint8_t value)
     case GPU_SPRITE_PALETTE_DATA: {
         uint8_t pointer = m_parent.read(GPU_SPRITE_PALETTE_INDEX);
 
-        m_spriteWritePalette(pointer, value);
+        m_gameboy.gpu().writeSpritePalette(pointer, value);
 
         // If the MSB of the sprite palette index is set, then we need to auto
         // increment the pointer that we just read out of the register, which is

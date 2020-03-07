@@ -49,18 +49,18 @@ public:
     uint8_t cycle();
 
     std::vector<Command> disassemble();
-    
+
 private:
 #ifdef UNIT_TEST
-    friend int main(int argc, char **argv);
+    friend class TestCpu_Init_Test;
 #endif
 
     static const uint16_t HISTORY_SIZE;
-    
+
     static const uint8_t CB_PREFIX;
 
     static const uint16_t ROM_ENTRY_POINT;
-    
+
     enum FlagMask {
         ZERO_FLAG_MASK       = 0x80,
         NEG_FLAG_MASK        = 0x40,
@@ -72,7 +72,7 @@ private:
     std::unordered_map<uint8_t, Operation> CB_OPCODES;
 
     std::unordered_set<uint16_t> ILLEGAL_OPCODES;
-    
+
     MemoryController & m_memory;
 
     uint8_t m_ticks;
@@ -80,7 +80,7 @@ private:
     /** Program counter that holds the address of the next instruction to fetch */
     uint16_t m_pc;
     uint16_t m_instr;
-    
+
     /** Stack pointer that holds the next available address in the stack memory space */
     uint16_t m_sp;
 
@@ -174,16 +174,16 @@ private:
     void scf();
     void stop();
     void daa();
-    
+
     bool interrupt();
 
     uint8_t execute();
-    
+
     void history() const;
 
     void log(uint8_t opcode, const Operation *operation);
     void logRegisters() const;
-    
+
     inline uint16_t args() const { return (uint16_t(m_operands[1]) << 8) | m_operands[0]; }
 };
 

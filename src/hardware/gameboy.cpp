@@ -29,18 +29,12 @@ using std::mutex;
 using std::lock_guard;
 
 GameBoy::GameBoy()
-    : m_cpu(m_memory),
+    : m_memory(*this),
       m_gpu(m_memory),
+      m_cpu(m_memory),
       m_joypad(m_memory),
       m_run(false)
 {
-    m_memory.setBgPaletteWrite([&](uint8_t index, uint8_t value) {
-            m_gpu.onBgPaletteWrite(index, value);
-        });
-
-    m_memory.setSpritePaletteWrite([&](uint8_t index, uint8_t value) {
-            m_gpu.onSpritePaletteWrite(index, value);
-        });
 }
 
 bool GameBoy::load(const string & filename)
@@ -60,9 +54,7 @@ void GameBoy::start()
 {
     m_run = true;
 
-    m_thread = std::thread([this]() {
-        this->run();
-    });
+    m_thread = std::thread([&] { run(); });
 }
 
 void GameBoy::run()
@@ -70,10 +62,7 @@ void GameBoy::run()
     LOG("%s\n", "Gameboy thread running");
 
     while (m_run.load()) {
-        uint8_t ticks = m_cpu.cycle();
-
-        m_gpu.cycle(ticks);
-        m_joypad.cycle(ticks);
+        step();
     }
 }
 
@@ -84,4 +73,12 @@ void GameBoy::stop()
     if (m_thread.joinable()) {
         m_thread.join();
     }
+}
+
+void GameBoy::step()
+{
+    uint8_t ticks = m_cpu.cycle();
+
+    m_gpu.cycle(ticks);
+    m_joypad.cycle(ticks);
 }

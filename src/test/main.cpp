@@ -1,15 +1,19 @@
-#include "memorycontroller.h"
-#include "processor.h"
+#include <gtest/gtest.h>
+
+#include "gameboy.h"
+
+TEST(TestCpu, Init)
+{
+    GameBoy gb;
+
+    Processor & cpu = gb.cpu();
+
+    EXPECT_EQ(cpu.m_gpr.a, 0);
+}
 
 int main(int argc, char **argv)
 {
-    (void)argc; (void)argv;
+    testing::InitGoogleTest(&argc, argv);
 
-    MemoryController memory;
-    
-    Processor cpu(memory);
-
-    printf("%d\n", cpu.m_gpr.a);
-    
-    return 0;
+    return RUN_ALL_TESTS();
 }

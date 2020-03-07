@@ -23,14 +23,11 @@
 #include "readonly.h"
 #include "removable.h"
 #include "unusable.h"
-#include "videoram.h"
 #include "workingram.h"
 
 class MemoryController {
 public:
-    typedef std::function<void(uint8_t,uint8_t)> PaletteCallback;
-
-    MemoryController();
+    MemoryController(GameBoy & parent);
     ~MemoryController() = default;
 
     void initialize(uint16_t address, uint8_t value);
@@ -38,7 +35,7 @@ public:
     void write(uint16_t address, uint8_t value);
     uint8_t & read(uint16_t address);
 
-    void reset();
+    void reset(bool init = false);
     void setCartridge(const std::string & filename);
 
     void saveBIOS(const std::string & filename);
@@ -54,11 +51,6 @@ public:
 
     inline bool isCGB() const { return m_cartridge.isCGB(); }
 
-    inline void setBgPaletteWrite(MappedIO::PaletteCallback callback)
-        { m_io.setBgPaletteWrite(std::move(callback)); }
-    inline void setSpritePaletteWrite(MappedIO::PaletteCallback callback)
-        { m_io.setSpritePaletteWrite(std::move(callback)); }
-
 private:
     static uint8_t DUMMY;
     static const uint16_t MBC_TYPE_ADDRESS;
@@ -70,7 +62,6 @@ private:
 
     ReadOnly m_bios;
     Removable m_cartridge;
-    VideoRam m_vram;
     WorkingRam m_working;
     MemoryRegion m_oam;
     MappedIO m_io;
@@ -83,6 +74,8 @@ private:
         uint8_t bank;
         BankMode mode;
     } m_mbc;
+
+    GameBoy & m_parent;
 
     std::list<std::reference_wrapper<MemoryRegion>> m_memory;
 

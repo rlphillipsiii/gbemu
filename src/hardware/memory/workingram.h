@@ -18,13 +18,13 @@ public:
 
     bool isAddressed(uint16_t address) const override;
 
-    bool isBankingActive(uint16_t index) const override;
-
 private:
     static const uint8_t BANK_COUNT;
     static const uint16_t BANK_SELECT_ADDRESS;
 
     bool isShadowAddressed(uint16_t address) const;
+
+    std::vector<uint8_t> & bank(uint16_t index);
 };
 
 #endif
