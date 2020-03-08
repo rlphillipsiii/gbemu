@@ -219,7 +219,7 @@ uint8_t Processor::execute()
     // than 1, then we also need to grab the next length - 1 bytes as they are the
     // arguments to the next operation that we are going to execute.
     Operation *operation = lookup(m_pc, opcode);
-    if (!operation) { assert(0); return 1; }
+    if (!operation) { FATAL("Unknown opcode: 0x%02x\n", opcode); return 1; }
 
     // If we have any operands, we need to read them in and increment the PC.
     for (uint8_t i = 0; i < operation->length - 1; i++) {

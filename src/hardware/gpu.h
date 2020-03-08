@@ -23,16 +23,24 @@
 
 #define GPU_SPRITE_COUNT 40
 #define GPU_TILES_PER_SET 256
-#define GPU_TILE_SET_COUNT 3
+#define GPU_TILE_SET_COUNT 2
 #define GPU_COLORS_PER_PALETTE 4
 #define GPU_CGB_PALETTE_COUNT 8
+#define GPU_BANK_COUNT 2
 
 class MemoryController;
 
-typedef std::vector<GB::RGB> ColorArray;
-typedef std::vector<const uint8_t*> Tile;
-typedef std::array<std::pair<std::array<uint8_t, 2>, GB::RGB>, GPU_COLORS_PER_PALETTE> BWPalette;
-typedef std::array<BWPalette, GPU_CGB_PALETTE_COUNT> CgbPalette;
+using Tile     = std::vector<const uint8_t*>;
+using TileSet  = std::array<Tile, GPU_TILES_PER_SET>;
+using TileBank = std::array<TileSet, GPU_TILE_SET_COUNT>;
+
+using ColorArray   = std::vector<GB::RGB>;
+using ColorPixel   = std::pair<std::array<uint8_t, 2>, GB::RGB>;
+using ColorPalette = std::array<ColorPixel, GPU_COLORS_PER_PALETTE>;
+
+using CgbColors  = std::array<ColorPalette, GPU_CGB_PALETTE_COUNT>;
+using CgbPalette = std::array<uint8_t, GPU_CGB_PALETTE_COUNT>;
+using CgbPaletteMemory = std::pair<CgbPalette, CgbColors>;
 
 class GPU : public MemoryRegion {
 public:
@@ -64,7 +72,7 @@ public:
     uint8_t & readSpritePalette(uint8_t index);
 
 private:
-    static const BWPalette NON_CGB_PALETTE;
+    static const ColorPalette DMR_PALETTE;
 
     static const uint8_t BANK_COUNT;
 
@@ -83,6 +91,8 @@ private:
     static const uint16_t TILE_MAP_0_OFFSET;
     static const uint16_t TILE_MAP_1_OFFSET;
 
+    static const uint16_t BG_ATTRIBUTES_TABLE;
+
     static const uint16_t SPRITE_ATTRIBUTES_TABLE;
     static const uint8_t SPRITE_COUNT;
     static const uint8_t SPRITE_BYTES_PER_ATTRIBUTE;
@@ -92,7 +102,7 @@ private:
     static const uint8_t SPRITE_X_OFFSET;
     static const uint8_t SPRITE_Y_OFFSET;
     static const uint8_t SPRITE_CGB_PALETTE_COUNT;
-    static const uint8_t SPRITE_NON_CGB_PALETTE_COUNT;
+    static const uint8_t SPRITE_DMR_PALETTE_COUNT;
 
     static const uint16_t SCREEN_ROWS;
     static const uint16_t SCREEN_COLUMNS;
@@ -126,8 +136,7 @@ private:
 
         ColorArray colors;
 
-        std::vector<const uint8_t*> mono;
-        std::vector<const uint8_t*> cgb;
+        std::array<const uint8_t*, 2> mono;
 
         SpriteData(
             GPU & gpu,
@@ -141,7 +150,7 @@ private:
         bool isVisible() const;
         void render(ColorArray & display, uint8_t dPalette);
 
-        uint8_t palette() const;
+        std::pair<const uint8_t&, const ColorPalette&> palette() const;
     };
 
     enum TileMapIndex { TILEMAP_0 = 0, TILEMAP_1 = 1, };
@@ -175,18 +184,30 @@ private:
     };
 
     enum SpriteAttributesMask {
-        PALETTE_NUMBER_CGB     = 0x07,
-        TILE_BANK_CGB          = 0x08,
-        PALETTE_NUMBER_NON_CGB = 0x10,
-        FLIP_X                 = 0x20,
-        FLIP_Y                 = 0x40,
-        OBJECT_PRIORITY        = 0x80,
+        PALETTE_NUMBER_CGB = 0x07,
+        TILE_BANK_CGB      = 0x08,
+        PALETTE_NUMBER_DMR = 0x10,
+        FLIP_X             = 0x20,
+        FLIP_Y             = 0x40,
+        OBJECT_PRIORITY    = 0x80,
     };
 
-    inline bool isHBlankInterruptEnabled()      const { return (m_status & HBLANK_INTERRUPT);      }
-    inline bool isVBlankInterruptEnabled()      const { return (m_status & VBLANK_INTERRUPT);      }
-    inline bool isOAMInterruptEnabled()         const { return (m_status & OAM_INTERRUPT);         }
-    inline bool isCoincidenceInterruptEnabled() const { return (m_status & COINCIDENCE_INTERRUPT); }
+    enum BackgroundAttributesMask {
+        BG_PALETTE_NUMBER = 0x07,
+        BG_TILE_BANK      = 0x08,
+        BG_FLIP_X         = 0x20,
+        BG_FLIP_Y         = 0x40,
+        BG_OAM_PRIORITY   = 0x80,
+    };
+
+    inline bool isHBlankInterruptEnabled() const
+        { return (m_status & HBLANK_INTERRUPT); }
+    inline bool isVBlankInterruptEnabled() const
+        { return (m_status & VBLANK_INTERRUPT); }
+    inline bool isOAMInterruptEnabled() const
+        { return (m_status & OAM_INTERRUPT); }
+    inline bool isCoincidenceInterruptEnabled() const
+        { return (m_status & COINCIDENCE_INTERRUPT); }
 
     MemoryController & m_mmc;
 
@@ -208,27 +229,32 @@ private:
     ColorArray m_screen;
     ColorArray m_buffer;
 
-    std::array<std::pair<
-        uint8_t*, std::array<Tile, GPU_TILES_PER_SET>>, GPU_TILE_SET_COUNT> m_tiles;
+    std::array<TileBank, GPU_BANK_COUNT> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
 
     struct {
-        CgbPalette bg;
-        CgbPalette sprite;
+        CgbPaletteMemory bg;
+        CgbPaletteMemory sprite;
     } m_palettes;
 
     void draw(TileSetIndex set, TileMapIndex background, TileMapIndex window);
 
-    const Tile & lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
+    std::pair<const uint8_t&, const Tile&>
+        lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
     ColorArray toRGB(
-        const uint8_t & pal,
+        const ColorPalette & colors,
+        uint8_t pal,
         const Tile & tile,
         uint8_t row,
         bool white,
         bool flip) const;
 
-    GB::RGB palette(const uint8_t & pal, uint8_t pixel, bool white) const;
+    GB::RGB palette(
+        const ColorPalette & colors,
+        uint8_t pal,
+        uint8_t pixel,
+        bool white) const;
 
     void handleHBlank();
     void handleVBlank();
@@ -237,8 +263,8 @@ private:
 
     RenderState next();
 
-    inline const Tile & getTile(TileSetIndex index, uint16_t tile) const
-        { return m_tiles.at(index).second.at(tile); }
+    inline const Tile & getTile(MemoryBank bank, TileSetIndex index, uint16_t tile) const
+        { return m_tiles.at(bank).at(index).at(tile); }
 
     inline void updateRenderStateStatus(RenderState state)
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
@@ -252,8 +278,8 @@ private:
 
     void readSprite(SpriteData & data);
 
-    void writePalette(CgbPalette & palette, uint8_t index, uint8_t value);
-    uint8_t & readPalette(CgbPalette & palette, uint8_t index);
+    void writePalette(CgbPaletteMemory & palette, uint8_t index, uint8_t value);
+    uint8_t & readPalette(CgbPaletteMemory & palette, uint8_t index);
 
     void initSpriteCache();
     void initTileCache();

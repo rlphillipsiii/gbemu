@@ -3,29 +3,24 @@
 
 #include <cstdio>
 #include <iostream>
+#include <cassert>
 
 #define TRACE(format, ...) printf(format, __VA_ARGS__); std::cout.flush();
 
 #ifdef DEBUG
-
-#define LOG(format, ...) TRACE(format, __VA_ARGS__)
-
-#define NOTE(format, ...) printf("n %s ==> ", __PRETTY_FUNCTION__); TRACE(format, __VA_ARGS__);
-
-#define WARN(format, ...) printf("w %s ==> ", __PRETTY_FUNCTION__); TRACE(format, __VA_ARGS__);
-
-#define ERROR(format, ...) printf("e %s ==> ", __PRETTY_FUNCTION__); TRACE(format, __VA_ARGS__);
-
+#    define HEADER(type) printf("%s %s ==> ", type, __PRETTY_FUNCTION__);
+#    define LOG(format, ...) TRACE(format, __VA_ARGS__)
 #else
-
-#define LOG(format, ...)
-
-#define NOTE(format, ...) TRACE(format, __VA_ARGS__);
-
-#define WARN(format, ...) TRACE(format, __VA_ARGS__);
-
-#define ERROR(format, ...) TRACE(format, __VA_ARGS__);
-
+#    define HEADER(type) printf("%s ", type);
+#    define LOG(format, ...)
 #endif
+
+#define NOTE(format, ...) HEADER("n"); TRACE(format, __VA_ARGS__);
+
+#define WARN(format, ...) HEADER("w"); TRACE(format, __VA_ARGS__);
+
+#define ERROR(format, ...) HEADER("e"); TRACE(format, __VA_ARGS__);
+
+#define FATAL(format, ...) HEADER("f"); TRACE(format, __VA_ARGS__); assert(0);
 
 #endif

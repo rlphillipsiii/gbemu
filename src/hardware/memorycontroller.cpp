@@ -75,9 +75,7 @@ void MemoryController::setCartridge(const string & filename)
     // We are going to rewrite the BIOS memory, which has no banking, so we
     // always need to grab the first entry in the memory vector.
     m_bios.resize(uint16_t(image.size()));
-    auto & bios = m_bios.memory()[0];
-
-    std::copy(image.begin(), image.end(), bios.begin());
+    std::copy(image.begin(), image.end(), m_bios.memory()[0].begin());
 }
 
 optional<reference_wrapper<MemoryRegion>> MemoryController::find(uint16_t address) const
@@ -106,8 +104,7 @@ void MemoryController::write(uint16_t address, uint8_t value)
 {
     auto found = find(address);
     if (!found) {
-        LOG("MemoryController::write - Unhandled address 0x%04x\n", address);
-        assert(0);
+        FATAL("Unhandled address 0x%04x\n", address);
         return;
     }
 
@@ -124,9 +121,7 @@ uint8_t & MemoryController::read(uint16_t address)
         return region->get().read(address);
     }
 
-    LOG("MemoryController::read - Unhandled address 0x%04x\n", address);
-    assert(0);
-
+    FATAL("Unhandled address 0x%04x\n", address);
     return DUMMY;
 }
 

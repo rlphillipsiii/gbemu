@@ -35,14 +35,14 @@ using std::unordered_map;
 using std::lock_guard;
 using std::mutex;
 
-const BWPalette GPU::NON_CGB_PALETTE = {{
+const ColorPalette GPU::DMR_PALETTE = {{
     { { 0, 0 }, { 255, 255, 255, 0xFF } }, // white
     { { 0, 0 }, { 192, 192, 192, 0xFF } }, // light grey
     { { 0, 0 }, { 96,  96,  96,  0xFF } }, // grey
     { { 0, 0 }, { 0,   0,   0,   0xFF } }, // black
 }};
 
-const uint8_t GPU::BANK_COUNT = 2;
+const uint8_t GPU::BANK_COUNT = GPU_BANK_COUNT;
 
 /** 16 byte tile size (8x8 bit tile w/ 2 bytes per pixel) */
 const uint16_t GPU::TILE_SIZE = 16;
@@ -65,6 +65,8 @@ const uint16_t GPU::TILE_MAP_0_OFFSET = TILE_SET_1_OFFSET + (TILES_PER_SET * TIL
 /** Tile map 1 comes directly after the end of tile map 0 */
 const uint16_t GPU::TILE_MAP_1_OFFSET = TILE_MAP_0_OFFSET + (TILE_MAP_ROWS * TILE_MAP_COLUMNS);
 
+const uint16_t GPU::BG_ATTRIBUTES_TABLE = TILE_SET_1_OFFSET + (TILES_PER_SET * TILE_SIZE);
+
 const uint16_t GPU::SPRITE_ATTRIBUTES_TABLE = GPU_SPRITE_TABLE_ADDRESS;
 
 const uint8_t GPU::SPRITE_COUNT = 40;
@@ -79,8 +81,8 @@ const uint8_t GPU::SPRITE_HEIGHT_EXTENDED = 16;
 const uint8_t GPU::SPRITE_X_OFFSET = 8;
 const uint8_t GPU::SPRITE_Y_OFFSET = 16;
 
-const uint8_t GPU::SPRITE_CGB_PALETTE_COUNT     = 7;
-const uint8_t GPU::SPRITE_NON_CGB_PALETTE_COUNT = 2;
+const uint8_t GPU::SPRITE_CGB_PALETTE_COUNT = 7;
+const uint8_t GPU::SPRITE_DMR_PALETTE_COUNT = 2;
 
 const uint16_t GPU::OAM_TICKS    = 80;
 const uint16_t GPU::VRAM_TICKS   = 172;
@@ -133,11 +135,6 @@ void GPU::initSpriteCache()
 
         data->mono = { &m_mmc.read(GPU_OBP1_ADDRESS), &m_mmc.read(GPU_OBP2_ADDRESS) };
 
-        data->cgb.resize(SPRITE_CGB_PALETTE_COUNT);
-        for (size_t j = 0; j < data->cgb.size(); j++) {
-            data->cgb[j] = &m_mmc.read(GPU_OBP1_ADDRESS + j);
-        }
-
         data->address = address;
         data->height  = SPRITE_HEIGHT_NORMAL;
 
@@ -148,23 +145,19 @@ void GPU::initSpriteCache()
 void GPU::initTileCache()
 {
     for (uint16_t i = 0; i < TILES_PER_SET; i++) {
-        uint16_t index = (TILE_SET_0_OFFSET + (i * TILE_SIZE)) - m_offset;
-        for (uint8_t j = 0; j < TILE_SIZE; j++) {
-            auto & [atts, tiles] = m_tiles[TILESET_0];
-            tiles[i].push_back(&read(BANK_0, index + j));
-
-            atts = &read(BANK_1, index + j);
-        }
-
         union { uint8_t uVal; int8_t sVal; } offset = { .uVal = uint8_t(i) };
 
-        index = (TILE_SET_0_OFFSET + (TILES_PER_SET * TILE_SIZE) + (offset.sVal * TILE_SIZE))
+        uint16_t i0 = (TILE_SET_0_OFFSET + (offset.uVal * TILE_SIZE)) - m_offset;
+        uint16_t i1 =
+            (TILE_SET_0_OFFSET + (TILES_PER_SET * TILE_SIZE) + (offset.sVal * TILE_SIZE))
             - m_offset;
-        for (uint8_t j = 0; j < TILE_SIZE; j++) {
-            auto & [atts, tiles] = m_tiles[TILESET_1];
-            tiles[i].push_back(&read(BANK_0, index + j));
 
-            atts = &read(BANK_1, index + j);
+        for (uint8_t j = 0; j < TILE_SIZE; j++) {
+            m_tiles[BANK_0][TILESET_0][i].push_back(&read(BANK_0, i0 + j));
+            m_tiles[BANK_1][TILESET_0][i].push_back(&read(BANK_1, i0 + j));
+
+            m_tiles[BANK_0][TILESET_1][i].push_back(&read(BANK_0, i1 + j));
+            m_tiles[BANK_1][TILESET_1][i].push_back(&read(BANK_1, i1 + j));
         }
     }
 }
@@ -344,7 +337,11 @@ void GPU::updateScreen()
     draw(set, background, window);
 }
 
-const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y)
+pair<const uint8_t&, const Tile&> GPU::lookup(
+    TileMapIndex mIndex,
+    TileSetIndex sIndex,
+    uint16_t x,
+    uint16_t y)
 {
     // We have two maps, so figure out which offset we need to use for our address
     uint16_t offset = (TILEMAP_0 == mIndex) ? TILE_MAP_0_OFFSET : TILE_MAP_1_OFFSET;
@@ -353,17 +350,26 @@ const Tile & GPU::lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, u
     // needing to look up.
     uint16_t address = offset + ((y * TILE_MAP_COLUMNS) + x);
 
-    return getTile(sIndex, m_mmc.read(address));
+    uint8_t & attributes = read(BANK_1, address - m_offset);
+
+    MemoryBank bank = BANK_0;
+    if (m_mmc.isCGB()) {
+        bank = (attributes & BG_TILE_BANK) ? BANK_1 : BANK_0;
+    }
+
+    return { attributes, getTile(bank, sIndex, read(address)) };
 }
 
-GB::RGB GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
+GB::RGB GPU::palette(
+    const ColorPalette & colors,
+    uint8_t pal,
+    uint8_t pixel,
+    bool white) const
 {
     uint8_t index = pixel & 0x03;
     uint8_t color = (pal >> (index * 2)) & 0x03;
 
-    const BWPalette & colors = NON_CGB_PALETTE;
-
-    GB::RGB rgb = colors[color].second;
+    GB::RGB rgb = colors.at(color).second;
 
     // If the color palette entry is 0, and we are not allowing the color white, then we
     // need to set our alpha blend entry to transparent so that this pixel won't show up
@@ -375,7 +381,8 @@ GB::RGB GPU::palette(const uint8_t & pal, uint8_t pixel, bool white) const
 }
 
 ColorArray GPU::toRGB(
-    const uint8_t & pal,
+    const ColorPalette & rgb,
+    uint8_t pal,
     const Tile & tile,
     uint8_t row,
     bool white,
@@ -402,7 +409,7 @@ ColorArray GPU::toRGB(
         uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
 
         // Each pixel needs to be run through a palette to get the actual color.
-        colors.emplace_back(palette(pal, pixel, white));
+        colors.emplace_back(palette(rgb, pal, pixel, white));
     }
 
     return colors;
@@ -456,12 +463,19 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
         if (cache.x != xOffset) {
             cache.x = xOffset;
 
-            const Tile & tile = lookup(((win) ? window : background), set, xOffset, yOffset);
+            const auto & [atts, tile] =
+                lookup(((win) ? window : background), set, xOffset, yOffset);
+
+            auto & [palettes, colors] = m_palettes.bg;
+            uint8_t index = atts & BG_PALETTE_NUMBER;
+
+            uint8_t palette          = (m_mmc.isCGB()) ? palettes.at(index) : m_palette;
+            const ColorPalette & rgb = (m_mmc.isCGB()) ? colors.at(index)   : DMR_PALETTE;
 
             // Now that we have the tile that we are interested in, we need to get
             // the RGB values that are associated with the row in the tile that we
             // need to add to our screen buffer.
-            cache.rgb = toRGB(m_palette, tile, row % TILE_PIXELS_PER_COL, true, false);
+            cache.rgb = toRGB(rgb, palette, tile, row % TILE_PIXELS_PER_COL, true, false);
         }
 
         // Move the RGB values from the iterator in to our buffer.
@@ -491,11 +505,18 @@ void GPU::readSprite(SpriteData & data)
         number &= 0xFE;
     }
 
+    // Figure out which VRAM bank the sprite tile is sitting in.  If we aren't in
+    // CGB mode, then we always need to use bank 0.
+    MemoryBank bank = BANK_0;
+    if (m_mmc.isCGB()) {
+        bank = (data.flags & TILE_BANK_CGB) ? BANK_1 : BANK_0;
+    }
+
     // Lookup the tile in our table of sprites.  If we have a sprite that has extended
     // height, then we need to read out the sprite data at the next address as well.
-    Tile tile = getTile(TILESET_0, number);
+    Tile tile = getTile(bank, TILESET_0, number);
     if (SPRITE_HEIGHT_EXTENDED == data.height) {
-        const Tile & additional = getTile(TILESET_0, number + 1);
+        const Tile & additional = getTile(bank, TILESET_0, number + 1);
         tile.insert(tile.end(), additional.begin(), additional.end());
     }
 
@@ -514,7 +535,8 @@ void GPU::readSprite(SpriteData & data)
 
     if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
 
-    data.colors = toRGB(data.palette(), tile, row, false, flipX);
+    const auto & [palette, colors] = data.palette();
+    data.colors = toRGB(colors, palette, tile, row, false, flipX);
 }
 
 void GPU::drawSprites(ColorArray & display)
@@ -540,7 +562,7 @@ void GPU::drawSprites(ColorArray & display)
     //
     // In CGB mode, priority is determined by address (lower address = higher priority).
     // In non-CGB mode, the priority first determined by the x position (farther to the left
-    // has higher priority).  If the x position matches, then the address is used to
+    // Has higher priority).  If the x position matches, then the address is used to
     // determine the priority (same rule as CGB mode).
     std::sort(enabled.begin(), enabled.end(),
             [this](const shared_ptr<SpriteData> & a, const shared_ptr<SpriteData> & b) {
@@ -560,29 +582,55 @@ void GPU::writeBgPalette(uint8_t index, uint8_t value)
 
 void GPU::writeSpritePalette(uint8_t index, uint8_t value)
 {
-    writePalette(m_palettes.sprite, index, value);
+    writePalette(m_palettes.sprite, index & 0x3F, value);
 }
 
-void GPU::writePalette(CgbPalette & palette, uint8_t index, uint8_t value)
+void GPU::writePalette(CgbPaletteMemory & palette, uint8_t index, uint8_t value)
 {
-    uint8_t color = (index >> 1) & 0x03;
-    uint8_t pIdx  = (index >> 3) & 0x07;
+    // The palette that is being passed in is made up of a pair of values.  The first
+    // is the palette byte that maps the colors and the second is the array of actual
+    // RGB values.
+    auto & [palettes, colors] = palette;
 
-    auto & [bytes, rgb] = palette[pIdx][color];
+    // Figure out which area of the palette memory we need to write to.  The first 8
+    // bytes in the memory make up the color palettes.  The rest of the memory is made
+    // up of byte pairs that define the actual color RGB values.
+    if (index < GPU_CGB_PALETTE_COUNT) {
+        palettes[index] = value;
+    } else {
+        uint8_t idx = index - GPU_CGB_PALETTE_COUNT;
 
-    bytes[index & 0x01] = value;
+        uint8_t pIdx = idx / GPU_COLORS_PER_PALETTE;
+        uint8_t cIdx = idx % GPU_COLORS_PER_PALETTE;
 
-    auto convert = [](uint8_t value) {
-        double normalized = double(value) / 31.;
-        return uint8_t(0xFF * normalized);
-    };
+        // The RGB values are held in memory in two different formats.  The first
+        // format is the 2 bytes that define the the mask corresponding to the RGB
+        // values.  The second is the translation of that mask to the RGB8888 value.
+        auto & [bytes, rgb] = colors[pIdx][cIdx];
 
-    uint16_t bits = (bytes[1] << 8) | bytes[0];
+        // Set the requested byte to the value that was passed in.
+        bytes[idx & 0x01] = value;
 
-    rgb.red   = convert(bits & 0x1F);
-    rgb.green = convert((bits >> 5) & 0x1F);
-    rgb.blue  = convert((bits >> 10) & 0x1F);
-    rgb.alpha = 0xFF;
+        // Define a lambda function to convert the mask to its RGB value.  The values
+        // stored in the mask are RGB555, so we need to normalize each value to 1,
+        // and then apply that normalized number to an 8 bit RGB value to get the
+        // value that we are going to store in our RGB8888 structure.
+        auto convert = [](uint8_t value) {
+            double normalized = double(value) / 31.;
+            return uint8_t(0xFF * normalized);
+        };
+
+        // Sticking the two bytes in to a 16 bit number makes the color extraction
+        // easier.
+        uint16_t bits = (bytes[1] << 8) | bytes[0];
+
+        // Extract each color and convert it to RGB8888.
+        // RGB555 format (D = don't care): DBBBBBGGGGGRRRRR
+        rgb.red   = convert(bits & 0x1F);
+        rgb.green = convert((bits >> 5) & 0x1F);
+        rgb.blue  = convert((bits >> 10) & 0x1F);
+        rgb.alpha = 0xFF;
+    }
 }
 
 uint8_t & GPU::readBgPalette(uint8_t index)
@@ -595,15 +643,32 @@ uint8_t & GPU::readSpritePalette(uint8_t index)
     return readPalette(m_palettes.sprite, index);
 }
 
-uint8_t & GPU::readPalette(CgbPalette & palette, uint8_t index)
+uint8_t & GPU::readPalette(CgbPaletteMemory & palette, uint8_t index)
 {
-    uint8_t color = (index >> 1) & 0x03;
-    uint8_t pIdx  = (index >> 3) & 0x07;
+    // The palette that is being passed in is made up of a pair of values.  The first
+    // is the palette byte that maps the colors and the second is the array of actual
+    // RGB values.
+    auto & [palettes, colors] = palette;
 
-    auto & [bytes, rgb] = palette[pIdx][color];
+    // Figure out which area of the palette memory we need to write to.  The first 8
+    // bytes in the memory make up the color palettes.  The rest of the memory is made
+    // up of byte pairs that define the actual color RGB values.
+    if (index < GPU_CGB_PALETTE_COUNT) {
+        return palettes[index];
+    }
+
+    uint8_t idx = index - GPU_CGB_PALETTE_COUNT;
+
+    uint8_t pIdx = idx / GPU_COLORS_PER_PALETTE;
+    uint8_t cIdx = idx % GPU_COLORS_PER_PALETTE;
+
+    // The RGB values are held in memory in two different formats.  The first
+    // format is the 2 bytes that define the the mask corresponding to the RGB
+    // values.  The second is the translation of that mask to the RGB8888 value.
+    auto & [bytes, rgb] = colors[pIdx][cIdx];
     (void)rgb;
 
-    return bytes[index & 0x01];
+    return bytes[idx & 0x01];
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -622,12 +687,17 @@ GPU::SpriteData::SpriteData(
 
 }
 
-uint8_t GPU::SpriteData::palette() const
+pair<const uint8_t&, const ColorPalette&> GPU::SpriteData::palette() const
 {
     if (m_gpu.m_mmc.isCGB()) {
-        return *cgb.at(this->flags & PALETTE_NUMBER_CGB);
+        uint8_t index = this->flags & PALETTE_NUMBER_CGB;
+
+        const auto & [palettes, colors] = m_gpu.m_palettes.sprite;
+        return { palettes.at(index), colors.at(index) };
     } else {
-        return ((this->flags & PALETTE_NUMBER_NON_CGB) ? *mono.at(1) : *mono.at(0));
+        const uint8_t & palette =
+            ((this->flags & PALETTE_NUMBER_DMR) ? *mono.at(1) : *mono.at(0));
+        return { palette, DMR_PALETTE };
     }
 }
 
@@ -675,7 +745,7 @@ void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
         // supposed to be behind the background (i.e. not shown) unless the background pixel
         // that the sprite overlaps with is set to color 0.
         if (this->flags & OBJECT_PRIORITY) {
-            const GB::RGB & bg = NON_CGB_PALETTE[dPalette & 0x03].second;
+            const GB::RGB & bg = DMR_PALETTE[dPalette & 0x03].second;
             if (!(display[index] == bg)) {
                 continue;
             }

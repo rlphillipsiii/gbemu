@@ -14,6 +14,26 @@ MappedIO::MappedIO(
     MemoryRegion::write(JOYPAD_INPUT_ADDRESS, 0xFF);
 }
 
+uint8_t & MappedIO::read(uint16_t address)
+{
+    switch (address) {
+    case GPU_BG_PALETTE_DATA: {
+        uint8_t pointer = m_parent.read(GPU_BG_PALETTE_INDEX);
+
+        return m_gameboy.gpu().readBgPalette(pointer);
+    }
+
+    case GPU_SPRITE_PALETTE_DATA: {
+        uint8_t pointer = m_parent.read(GPU_SPRITE_PALETTE_INDEX);
+
+        return m_gameboy.gpu().readSpritePalette(pointer);
+    }
+    default:break;
+    }
+
+    return MemoryRegion::read(address);
+}
+
 void MappedIO::write(uint16_t address, uint8_t value)
 {
     if (m_initializing) { MemoryRegion::write(address, value); return; }
@@ -33,7 +53,7 @@ void MappedIO::write(uint16_t address, uint8_t value)
     case GPU_BG_PALETTE_DATA: {
         uint8_t pointer = m_parent.read(GPU_BG_PALETTE_INDEX);
 
-        m_gameboy.gpu().writeBgPalette(pointer, value);
+        m_gameboy.gpu().writeBgPalette(pointer & 0x3F, value);
 
         // If the MSB of the bg palette index is set, then we need to auto increment
         // the pointer that we just read out of the register, which is contained in
@@ -47,7 +67,7 @@ void MappedIO::write(uint16_t address, uint8_t value)
     case GPU_SPRITE_PALETTE_DATA: {
         uint8_t pointer = m_parent.read(GPU_SPRITE_PALETTE_INDEX);
 
-        m_gameboy.gpu().writeSpritePalette(pointer, value);
+        m_gameboy.gpu().writeSpritePalette(pointer & 0x3F, value);
 
         // If the MSB of the sprite palette index is set, then we need to auto
         // increment the pointer that we just read out of the register, which is
