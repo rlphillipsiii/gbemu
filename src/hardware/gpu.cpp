@@ -34,6 +34,7 @@ using std::string;
 using std::unordered_map;
 using std::lock_guard;
 using std::mutex;
+using std::optional;
 
 const ColorPalette GPU::DMR_PALETTE = {{
     { { 0, 0 }, { 255, 255, 255, 0xFF } }, // white
@@ -360,29 +361,9 @@ pair<const uint8_t&, const Tile&> GPU::lookup(
     return { attributes, getTile(bank, sIndex, read(address)) };
 }
 
-GB::RGB GPU::palette(
-    const ColorPalette & colors,
-    uint8_t pal,
-    uint8_t pixel,
-    bool white) const
-{
-    uint8_t index = pixel & 0x03;
-    uint8_t color = (pal >> (index * 2)) & 0x03;
-
-    GB::RGB rgb = colors.at(color).second;
-
-    // If the color palette entry is 0, and we are not allowing the color white, then we
-    // need to set our alpha blend entry to transparent so that this pixel won't show up
-    // on the display when we go to draw the screen.
-    if ((0 == index) && !white) {
-        rgb.alpha = ALPHA_TRANSPARENT;
-    }
-    return rgb;
-}
-
 ColorArray GPU::toRGB(
     const ColorPalette & rgb,
-    uint8_t pal,
+    optional<uint8_t> pal,
     const Tile & tile,
     uint8_t row,
     bool white,
@@ -408,8 +389,20 @@ ColorArray GPU::toRGB(
         // significant bit of the second byte.
         uint8_t pixel = (((upper >> shift) & 0x01) << 1) | ((lower >> shift) & 0x01);
 
+        // If a palette was passed in, we need to run the pixel through the palette
+        // in order to get actual color index that we need.
+        uint8_t idx = (pal) ? (((*pal) >> ((pixel & 0x03) * 2)) & 0x03) : pixel;
+
+        // If the color palette entry is 0, and we are not allowing the color white, then we
+        // need to set our alpha blend entry to transparent so that this pixel won't show up
+        // on the display when we go to draw the screen.
+        GB::RGB color = rgb.at(idx).second;
+        if ((0x00 == pixel) && !white) {
+            color.alpha = ALPHA_TRANSPARENT;
+        }
+
         // Each pixel needs to be run through a palette to get the actual color.
-        colors.emplace_back(palette(rgb, pal, pixel, white));
+        colors.emplace_back(color);
     }
 
     return colors;
@@ -466,15 +459,15 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
             const auto & [atts, tile] =
                 lookup(((win) ? window : background), set, xOffset, yOffset);
 
-            auto & [palettes, colors] = m_palettes.bg;
             uint8_t index = atts & BG_PALETTE_NUMBER;
-
-            uint8_t palette          = (m_mmc.isCGB()) ? palettes.at(index) : m_palette;
-            const ColorPalette & rgb = (m_mmc.isCGB()) ? colors.at(index)   : DMR_PALETTE;
+            const ColorPalette & rgb =
+                (m_mmc.isCGB()) ? m_palettes.bg.at(index) : DMR_PALETTE;
 
             // Now that we have the tile that we are interested in, we need to get
             // the RGB values that are associated with the row in the tile that we
             // need to add to our screen buffer.
+            optional<uint8_t> palette =
+                (m_mmc.isCGB()) ? std::nullopt : optional<uint8_t>(m_palette);
             cache.rgb = toRGB(rgb, palette, tile, row % TILE_PIXELS_PER_COL, true, false);
         }
 
@@ -535,8 +528,8 @@ void GPU::readSprite(SpriteData & data)
 
     if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
 
-    const auto & [palette, colors] = data.palette();
-    data.colors = toRGB(colors, palette, tile, row, false, flipX);
+    auto colors = data.palette();
+    data.colors = toRGB(colors.second, colors.first, tile, row, false, flipX);
 }
 
 void GPU::drawSprites(ColorArray & display)
@@ -585,52 +578,38 @@ void GPU::writeSpritePalette(uint8_t index, uint8_t value)
     writePalette(m_palettes.sprite, index & 0x3F, value);
 }
 
-void GPU::writePalette(CgbPaletteMemory & palette, uint8_t index, uint8_t value)
+void GPU::writePalette(CgbColors & colors, uint8_t index, uint8_t value)
 {
-    // The palette that is being passed in is made up of a pair of values.  The first
-    // is the palette byte that maps the colors and the second is the array of actual
-    // RGB values.
-    auto & [palettes, colors] = palette;
+    uint8_t pIdx = index / (GPU_COLORS_PER_PALETTE * 2);
+    uint8_t cIdx = index % (GPU_COLORS_PER_PALETTE * 2);
 
-    // Figure out which area of the palette memory we need to write to.  The first 8
-    // bytes in the memory make up the color palettes.  The rest of the memory is made
-    // up of byte pairs that define the actual color RGB values.
-    if (index < GPU_CGB_PALETTE_COUNT) {
-        palettes[index] = value;
-    } else {
-        uint8_t idx = index - GPU_CGB_PALETTE_COUNT;
+    // The RGB values are held in memory in two different formats.  The first
+    // format is the 2 bytes that define the the mask corresponding to the RGB
+    // values.  The second is the translation of that mask to the RGB8888 value.
+    auto & [bytes, rgb] = colors[pIdx][cIdx];
 
-        uint8_t pIdx = idx / GPU_COLORS_PER_PALETTE;
-        uint8_t cIdx = idx % GPU_COLORS_PER_PALETTE;
+    // Set the requested byte to the value that was passed in.
+    bytes[index & 0x01] = value;
 
-        // The RGB values are held in memory in two different formats.  The first
-        // format is the 2 bytes that define the the mask corresponding to the RGB
-        // values.  The second is the translation of that mask to the RGB8888 value.
-        auto & [bytes, rgb] = colors[pIdx][cIdx];
+    // Define a lambda function to convert the mask to its RGB value.  The values
+    // stored in the mask are RGB555, so we need to normalize each value to 1,
+    // and then apply that normalized number to an 8 bit RGB value to get the
+    // value that we are going to store in our RGB8888 structure.
+    auto convert = [](uint8_t value) {
+        double normalized = double(value) / 31.;
+        return uint8_t(0xFF * normalized);
+    };
 
-        // Set the requested byte to the value that was passed in.
-        bytes[idx & 0x01] = value;
+    // Sticking the two bytes in to a 16 bit number makes the color extraction
+    // easier.
+    uint16_t bits = (bytes[1] << 8) | bytes[0];
 
-        // Define a lambda function to convert the mask to its RGB value.  The values
-        // stored in the mask are RGB555, so we need to normalize each value to 1,
-        // and then apply that normalized number to an 8 bit RGB value to get the
-        // value that we are going to store in our RGB8888 structure.
-        auto convert = [](uint8_t value) {
-            double normalized = double(value) / 31.;
-            return uint8_t(0xFF * normalized);
-        };
-
-        // Sticking the two bytes in to a 16 bit number makes the color extraction
-        // easier.
-        uint16_t bits = (bytes[1] << 8) | bytes[0];
-
-        // Extract each color and convert it to RGB8888.
-        // RGB555 format (D = don't care): DBBBBBGGGGGRRRRR
-        rgb.red   = convert(bits & 0x1F);
-        rgb.green = convert((bits >> 5) & 0x1F);
-        rgb.blue  = convert((bits >> 10) & 0x1F);
-        rgb.alpha = 0xFF;
-    }
+    // Extract each color and convert it to RGB8888.
+    // RGB555 format (D = don't care): DBBBBBGGGGGRRRRR
+    rgb.red   = convert(bits & 0x1F);
+    rgb.green = convert((bits >> 5) & 0x1F);
+    rgb.blue  = convert((bits >> 10) & 0x1F);
+    rgb.alpha = 0xFF;
 }
 
 uint8_t & GPU::readBgPalette(uint8_t index)
@@ -643,24 +622,10 @@ uint8_t & GPU::readSpritePalette(uint8_t index)
     return readPalette(m_palettes.sprite, index);
 }
 
-uint8_t & GPU::readPalette(CgbPaletteMemory & palette, uint8_t index)
+uint8_t & GPU::readPalette(CgbColors & colors, uint8_t index)
 {
-    // The palette that is being passed in is made up of a pair of values.  The first
-    // is the palette byte that maps the colors and the second is the array of actual
-    // RGB values.
-    auto & [palettes, colors] = palette;
-
-    // Figure out which area of the palette memory we need to write to.  The first 8
-    // bytes in the memory make up the color palettes.  The rest of the memory is made
-    // up of byte pairs that define the actual color RGB values.
-    if (index < GPU_CGB_PALETTE_COUNT) {
-        return palettes[index];
-    }
-
-    uint8_t idx = index - GPU_CGB_PALETTE_COUNT;
-
-    uint8_t pIdx = idx / GPU_COLORS_PER_PALETTE;
-    uint8_t cIdx = idx % GPU_COLORS_PER_PALETTE;
+    uint8_t pIdx = index / (GPU_COLORS_PER_PALETTE * 2);
+    uint8_t cIdx = index % (GPU_COLORS_PER_PALETTE * 2);
 
     // The RGB values are held in memory in two different formats.  The first
     // format is the 2 bytes that define the the mask corresponding to the RGB
@@ -668,7 +633,7 @@ uint8_t & GPU::readPalette(CgbPaletteMemory & palette, uint8_t index)
     auto & [bytes, rgb] = colors[pIdx][cIdx];
     (void)rgb;
 
-    return bytes[idx & 0x01];
+    return bytes[index & 0x01];
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -687,16 +652,13 @@ GPU::SpriteData::SpriteData(
 
 }
 
-pair<const uint8_t&, const ColorPalette&> GPU::SpriteData::palette() const
+pair<optional<uint8_t>, const ColorPalette&> GPU::SpriteData::palette() const
 {
     if (m_gpu.m_mmc.isCGB()) {
         uint8_t index = this->flags & PALETTE_NUMBER_CGB;
-
-        const auto & [palettes, colors] = m_gpu.m_palettes.sprite;
-        return { palettes.at(index), colors.at(index) };
+        return { std::nullopt, m_gpu.m_palettes.sprite.at(index) };
     } else {
-        const uint8_t & palette =
-            ((this->flags & PALETTE_NUMBER_DMR) ? *mono.at(1) : *mono.at(0));
+        uint8_t palette = ((this->flags & PALETTE_NUMBER_DMR) ? *mono.at(1) : *mono.at(0));
         return { palette, DMR_PALETTE };
     }
 }

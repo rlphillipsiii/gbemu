@@ -39,8 +39,6 @@ using ColorPixel   = std::pair<std::array<uint8_t, 2>, GB::RGB>;
 using ColorPalette = std::array<ColorPixel, GPU_COLORS_PER_PALETTE>;
 
 using CgbColors  = std::array<ColorPalette, GPU_CGB_PALETTE_COUNT>;
-using CgbPalette = std::array<uint8_t, GPU_CGB_PALETTE_COUNT>;
-using CgbPaletteMemory = std::pair<CgbPalette, CgbColors>;
 
 class GPU : public MemoryRegion {
 public:
@@ -150,7 +148,7 @@ private:
         bool isVisible() const;
         void render(ColorArray & display, uint8_t dPalette);
 
-        std::pair<const uint8_t&, const ColorPalette&> palette() const;
+        std::pair<std::optional<uint8_t>, const ColorPalette&> palette() const;
     };
 
     enum TileMapIndex { TILEMAP_0 = 0, TILEMAP_1 = 1, };
@@ -233,8 +231,8 @@ private:
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
 
     struct {
-        CgbPaletteMemory bg;
-        CgbPaletteMemory sprite;
+        CgbColors bg;
+        CgbColors sprite;
     } m_palettes;
 
     void draw(TileSetIndex set, TileMapIndex background, TileMapIndex window);
@@ -244,17 +242,11 @@ private:
 
     ColorArray toRGB(
         const ColorPalette & colors,
-        uint8_t pal,
+        std::optional<uint8_t> pal,
         const Tile & tile,
         uint8_t row,
         bool white,
         bool flip) const;
-
-    GB::RGB palette(
-        const ColorPalette & colors,
-        uint8_t pal,
-        uint8_t pixel,
-        bool white) const;
 
     void handleHBlank();
     void handleVBlank();
@@ -278,8 +270,8 @@ private:
 
     void readSprite(SpriteData & data);
 
-    void writePalette(CgbPaletteMemory & palette, uint8_t index, uint8_t value);
-    uint8_t & readPalette(CgbPaletteMemory & palette, uint8_t index);
+    void writePalette(CgbColors & colors, uint8_t index, uint8_t value);
+    uint8_t & readPalette(CgbColors & colors, uint8_t index);
 
     void initSpriteCache();
     void initTileCache();
