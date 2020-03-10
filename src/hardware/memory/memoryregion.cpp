@@ -13,7 +13,6 @@ MemoryRegion::MemoryRegion(
     : m_parent(parent),
       m_offset(offset),
       m_size(size),
-      m_banks(banks + 1),
       m_initializing(false),
       m_memory(banks + 1)
 {
@@ -50,10 +49,16 @@ void MemoryRegion::reset()
 
 void MemoryRegion::write(uint16_t address, uint8_t value)
 {
+    assert(!m_memory.empty());
+    assert(size_t(address - m_offset) < m_memory[0].size());
+
     m_memory[0][address - m_offset] = value;
 }
 
 uint8_t & MemoryRegion::read(uint16_t address)
 {
+    assert(!m_memory.empty());
+    assert(size_t(address - m_offset) < m_memory[0].size());
+
     return m_memory[0][address - m_offset];
 }

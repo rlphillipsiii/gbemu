@@ -25,7 +25,9 @@ public:
     MemoryRegion(const MemoryRegion &&) = delete;
 
     virtual bool isAddressed(uint16_t address) const;
-    virtual inline bool isWritable() const { return true; }
+
+    virtual inline bool isWritable() const { return true;  }
+    virtual inline bool isReadOnly() const { return false; }
 
     virtual void write(uint16_t address, uint8_t value);
     virtual uint8_t & read(uint16_t address);
@@ -41,6 +43,7 @@ public:
     virtual inline uint8_t resetValue() const { return 0x00; }
 
     void resize(uint16_t size);
+
     inline std::vector<std::vector<uint8_t>> & memory() { return m_memory; }
 
 protected:
@@ -48,7 +51,6 @@ protected:
 
     uint16_t m_offset;
     uint16_t m_size;
-    uint8_t m_banks;
 
     bool m_initializing;
 

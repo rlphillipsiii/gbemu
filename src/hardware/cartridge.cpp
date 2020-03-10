@@ -57,6 +57,8 @@ Cartridge::Cartridge(const string & path)
     m_memory.resize(m_info.size);
     input.read(reinterpret_cast<char*>(m_memory.data()), m_memory.size());
 
+    m_shadow = m_memory;
+
     // Check for the Nintendo logo.  If the Nintendo logo isn't in the correct
     // location, then the cartridge image is no good, and there is no point in
     // continuing to parse the rest of the header.
@@ -85,9 +87,6 @@ Cartridge::Cartridge(const string & path)
     assert(m_bank);
 
     m_cgb = (m_memory.at(ROM_CGB_OFFSET) == 0xC0) || (m_memory.at(ROM_CGB_OFFSET) == 0x80);
-    if (m_cgb) {
-        WARN("%s\n", "CGB ROM detected, but CGB not yet support");
-    }
 
     NOTE("ROM Name: %s\n", m_info.name.c_str());
 
@@ -101,7 +100,9 @@ Cartridge::MemoryBank *Cartridge::initMemoryBank(uint8_t type)
 {
     MemoryBank *bank = nullptr;
 
-    uint16_t size = RAM_SIZES[m_memory.at(ROM_RAM_SIZE_OFFSET)];
+    uint8_t index = m_memory.at(ROM_RAM_SIZE_OFFSET);
+
+    uint16_t size = (0 == index) ? *RAM_SIZES.rbegin() : RAM_SIZES.at(index);
 
     switch (type) {
     default:
@@ -135,6 +136,8 @@ uint8_t & Cartridge::read(uint16_t address)
     // the ROM, so there is no need to have the MBC handle the read.  Just read it
     // out of the memory buffer.
     if (address < (ROM_0_OFFSET + ROM_0_SIZE)) {
+        assert(address < m_memory.size());
+
         return m_memory[address];
     }
     if (address < (ROM_1_OFFSET + ROM_1_SIZE)) {
@@ -144,7 +147,8 @@ uint8_t & Cartridge::read(uint16_t address)
         return m_bank->readRAM(address);
     }
 
-    assert(0);
+    FATAL("Invalid cartridge read address: 0x%04x\n", address);
+
     static uint8_t EMPTY = 0xFF;
     return EMPTY;
 }
@@ -158,6 +162,21 @@ void Cartridge::write(uint16_t address, uint8_t value)
     } else if ((address >= EXT_RAM_OFFSET) && (address < (EXT_RAM_OFFSET + EXT_RAM_SIZE))) {
         m_bank->writeRAM(address, value);
     }
+}
+
+bool Cartridge::check() const
+{
+    if (m_memory.size() != m_shadow.size()) { return false; }
+
+    vector<uint16_t> mismatches;
+    mismatches.reserve(m_memory.size());
+
+    for (size_t i = 0; i < m_memory.size(); i++) {
+        if (m_memory.at(i) != m_shadow.at(i)) {
+            mismatches.push_back(uint16_t(i));
+        }
+    }
+    return (mismatches.empty());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +224,8 @@ Cartridge::MemoryBank::~MemoryBank()
 void Cartridge::MemoryBank::writeRAM(uint16_t address, uint8_t value)
 {
     uint32_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
+    assert(index < m_ram.size());
+
     m_ram[index] = value;
 
     if (m_nvRam.good()) {
@@ -217,12 +238,16 @@ void Cartridge::MemoryBank::writeRAM(uint16_t address, uint8_t value)
 uint8_t & Cartridge::MemoryBank::readROM(uint16_t address)
 {
     uint32_t index = address + ((m_romBank - 1) * ROM_1_SIZE);
+    assert(index < m_cartridge.m_memory.size());
+
     return m_cartridge.m_memory[index];
 }
 
 uint8_t & Cartridge::MemoryBank::readRAM(uint16_t address)
 {
     uint32_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
+    assert(index < m_ram.size());
+
     return m_ram[index];
 }
 ////////////////////////////////////////////////////////////////////////////////

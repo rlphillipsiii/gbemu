@@ -39,6 +39,7 @@ public:
 
     void write(uint16_t address, uint8_t value);
     uint8_t & read(uint16_t address);
+    const uint8_t & peek(uint16_t address);
 
     void reset();
     void setCartridge(const std::string & filename);
@@ -49,24 +50,26 @@ public:
         { return m_io.isRtcResetRequested(); }
 
     inline void clearRtcReset()    { m_io.clearRtcReset(); }
-    inline void unlockBiosRegion() { m_memory.pop_front(); }
+    inline void unlockBiosRegion() { if (inBios()) { m_memory.pop_front(); } }
 
     inline bool inBios() const { return (&m_memory.front().get() == &m_bios); }
     inline bool isCartridgeValid() const { return m_cartridge.isValid(); }
 
     inline bool isCGB() const { return m_cartridge.isCGB(); }
 
+    inline bool check() const { return m_cartridge.check(); }
+
 private:
     static uint8_t DUMMY;
     static const uint16_t MBC_TYPE_ADDRESS;
 
-    static const std::vector<uint8_t> DMR_BIOS_REGION;
+    static const std::vector<uint8_t> DMG_BIOS_REGION;
     static const std::vector<uint8_t> CGB_BIOS_REGION;
 
     enum BankType { MBC_NONE, MBC1, MBC2, MBC3 };
     enum BankMode { MBC_ROM, MBC_RAM };
 
-    ReadOnly m_bios;
+    Bios m_bios;
     Removable m_cartridge;
     WorkingRam m_working;
     MemoryRegion m_oam;

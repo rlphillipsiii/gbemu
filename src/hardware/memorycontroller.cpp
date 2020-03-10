@@ -18,7 +18,7 @@
 #include "memmap.h"
 #include "logging.h"
 #include "gameboy.h"
-#include "dmrbios.h"
+#include "dmgbios.h"
 #include "cgbbios.h"
 
 using std::vector;
@@ -70,7 +70,7 @@ void MemoryController::setCartridge(const string & filename)
     // We just changed the cartridge, so we are going to change the BIOS to
     // match whether or not the cartridge we just loaded is a CGB game or
     // not
-    const auto & image = (m_cartridge.isCGB()) ? CGB_BIOS_REGION : DMR_BIOS_REGION;
+    const auto & image = (m_cartridge.isCGB()) ? CGB_BIOS_REGION : DMG_BIOS_REGION;
 
     // We are going to rewrite the BIOS memory, which has no banking, so we
     // always need to grab the first entry in the memory vector.
@@ -114,11 +114,25 @@ void MemoryController::write(uint16_t address, uint8_t value)
     }
 }
 
-uint8_t & MemoryController::read(uint16_t address)
+const uint8_t & MemoryController::peek(uint16_t address)
 {
     auto region = find(address);
     if (region) {
         return region->get().read(address);
+    }
+
+    FATAL("Unhandled address 0x%04x\n", address);
+    return DUMMY;
+}
+
+uint8_t & MemoryController::read(uint16_t address)
+{
+    auto found = find(address);
+    if (found) {
+        auto & region = found->get();
+        if (!region.isReadOnly()) {
+            return region.read(address);
+        }
     }
 
     FATAL("Unhandled address 0x%04x\n", address);

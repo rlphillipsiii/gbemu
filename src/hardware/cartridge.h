@@ -20,6 +20,8 @@ public:
 
     inline bool isCGB() const { return m_cgb; }
 
+    bool check() const;
+
 private:
     static const uint16_t NINTENDO_LOGO_OFFSET;
 
@@ -121,6 +123,7 @@ private:
     };
 
     std::vector<uint8_t> m_memory;
+    std::vector<uint8_t> m_shadow;
     std::vector<uint8_t> m_ram;
 
     std::unique_ptr<MemoryBank> m_bank;

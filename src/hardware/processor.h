@@ -34,7 +34,17 @@ public:
 
     struct Command {
         uint16_t pc;
+        uint16_t sp;
         uint8_t opcode;
+        uint8_t flags;
+        bool ints;
+        uint8_t iMask;
+        uint8_t iStatus;
+        uint8_t a;
+        uint16_t bc;
+        uint16_t de;
+        uint16_t hl;
+        uint8_t scanline;
         std::array<uint8_t, 2> operands;
         const Operation *operation;
 
@@ -68,10 +78,10 @@ private:
         CARRY_FLAG_MASK      = 0x10,
     };
 
-    std::unordered_map<uint8_t, Operation> OPCODES;
-    std::unordered_map<uint8_t, Operation> CB_OPCODES;
+    std::array<Operation, 0x100> OPCODES;
+    std::array<Operation, 0x100> CB_OPCODES;
 
-    std::unordered_set<uint16_t> ILLEGAL_OPCODES;
+    std::unordered_set<uint8_t> ILLEGAL_OPCODES;
 
     MemoryController & m_memory;
 
@@ -142,8 +152,11 @@ private:
     void add16(uint16_t & dest, uint16_t reg, uint8_t value);
     void compare(uint8_t value);
     void swap(uint8_t & reg);
+    void swap(uint16_t address);
     void inc(uint8_t & reg);
+    void incP(uint16_t address);
     void dec(uint8_t & reg);
+    void decP(uint16_t address);
     void call();
     void jump();
     void jump(uint16_t address);
@@ -155,11 +168,17 @@ private:
     void compliment();
     void bit(uint8_t reg, uint8_t which);
     void res(uint8_t & reg, uint8_t which);
+    void res(uint16_t address, uint8_t which);
     void set(uint8_t & reg, uint8_t which);
+    void set(uint16_t address, uint8_t which);
     void rotatel(uint8_t & reg, bool wrap, bool ignoreZero);
+    void rotatel(uint16_t address, bool wrap, bool ignoreZero);
     void rotater(uint8_t & reg, bool wrap, bool ignoreZero);
+    void rotater(uint16_t address, bool wrap, bool ignoreZero);
     void rlc(uint8_t & reg, bool ignoreZero);
+    void rlc(uint16_t address, bool ignoreZero);
     void rrc(uint8_t & reg, bool ignoreZero);
+    void rrc(uint16_t address, bool ignoreZero);
     void rst(uint8_t address);
     void loadMem(uint8_t value);
     void loadMem(uint16_t value);
@@ -169,8 +188,11 @@ private:
     void load(uint16_t & reg);
     void load(uint16_t & reg, uint16_t value);
     void sla(uint8_t & reg);
+    void sla(uint16_t address);
     void srl(uint8_t & reg);
+    void srl(uint16_t address);
     void sra(uint8_t & reg);
+    void sra(uint16_t address);
     void scf();
     void stop();
     void daa();

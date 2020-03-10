@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <functional>
+#include <cassert>
 
 #include "interrupt.h"
 #include "memmap.h"
@@ -70,7 +71,7 @@ public:
     uint8_t & readSpritePalette(uint8_t index);
 
 private:
-    static const ColorPalette DMR_PALETTE;
+    static const ColorPalette DMG_PALETTE;
 
     static const uint8_t BANK_COUNT;
 
@@ -100,7 +101,7 @@ private:
     static const uint8_t SPRITE_X_OFFSET;
     static const uint8_t SPRITE_Y_OFFSET;
     static const uint8_t SPRITE_CGB_PALETTE_COUNT;
-    static const uint8_t SPRITE_DMR_PALETTE_COUNT;
+    static const uint8_t SPRITE_DMG_PALETTE_COUNT;
 
     static const uint16_t SCREEN_ROWS;
     static const uint16_t SCREEN_COLUMNS;
@@ -111,6 +112,7 @@ private:
     static const uint16_t VBLANK_TICKS;
 
     static const uint16_t SCANLINE_MAX;
+    static const uint16_t SCANLINE_TICKS;
 
     static const uint16_t PIXELS_PER_ROW;
     static const uint16_t PIXELS_PER_COL;
@@ -146,13 +148,13 @@ private:
 
         std::string toString() const;
         bool isVisible() const;
-        void render(ColorArray & display, uint8_t dPalette);
+        void render(ColorArray & display, ColorArray & bg);
 
         std::pair<std::optional<uint8_t>, const ColorPalette&> palette() const;
     };
 
     enum TileMapIndex { TILEMAP_0 = 0, TILEMAP_1 = 1, };
-    enum TileSetIndex { TILESET_0 = 0, TILESET_1 = 1, TILESET_2 = 2 };
+    enum TileSetIndex { TILESET_0 = 0, TILESET_1 = 1, };
 
     enum RenderState { HBLANK = 0, VBLANK = 1, OAM = 2, VRAM = 3, };
 
@@ -184,7 +186,7 @@ private:
     enum SpriteAttributesMask {
         PALETTE_NUMBER_CGB = 0x07,
         TILE_BANK_CGB      = 0x08,
-        PALETTE_NUMBER_DMR = 0x10,
+        PALETTE_NUMBER_DMG = 0x10,
         FLIP_X             = 0x20,
         FLIP_Y             = 0x40,
         OBJECT_PRIORITY    = 0x80,
@@ -221,11 +223,13 @@ private:
     RenderState m_state;
 
     uint32_t m_ticks;
+    uint8_t m_vscan;
 
     std::mutex m_lock;
 
     ColorArray m_screen;
     ColorArray m_buffer;
+    ColorArray m_bg;
 
     std::array<TileBank, GPU_BANK_COUNT> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
@@ -249,14 +253,19 @@ private:
         bool flip) const;
 
     void handleHBlank();
-    void handleVBlank();
+    void handleVBlank(uint8_t ticks);
     void handleOAM();
     void handleVRAM();
 
     RenderState next();
 
     inline const Tile & getTile(MemoryBank bank, TileSetIndex index, uint16_t tile) const
-        { return m_tiles.at(bank).at(index).at(tile); }
+    {
+        assert(size_t(bank) < m_tiles.size());
+        assert(size_t(index) < m_tiles.at(bank).size());
+        assert(size_t(tile) < m_tiles.at(bank).at(index).size());
+        return m_tiles.at(bank).at(index).at(tile);
+    }
 
     inline void updateRenderStateStatus(RenderState state)
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
@@ -265,7 +274,7 @@ private:
 
     bool isWindowSelected(uint8_t x, uint8_t y);
 
-    void drawSprites(ColorArray & display);
+    void drawSprites(ColorArray & display, ColorArray & bg);
     void drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex window);
 
     void readSprite(SpriteData & data);

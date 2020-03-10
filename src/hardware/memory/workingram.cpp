@@ -20,7 +20,7 @@ vector<uint8_t> & WorkingRam::bank(uint16_t index)
     if (!m_parent.isCGB()) { return m_memory[index / m_size]; }
     if (index < m_size)    { return m_memory[0]; }
 
-    uint8_t idx = std::max(0x01, int(m_parent.read(BANK_SELECT_ADDRESS)));
+    uint8_t idx = std::max(0x01, int(m_parent.peek(BANK_SELECT_ADDRESS)));
     assert(size_t(idx) < m_memory.size());
 
     return m_memory[idx];
@@ -41,6 +41,7 @@ uint8_t & WorkingRam::read(uint16_t address)
     if (isShadowAddressed(address)) {
         address -= (m_size * 2);
     }
+
     uint16_t index = address - m_offset;
     return bank(index)[index % m_size];
 }

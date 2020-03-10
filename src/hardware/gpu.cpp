@@ -36,7 +36,7 @@ using std::lock_guard;
 using std::mutex;
 using std::optional;
 
-const ColorPalette GPU::DMR_PALETTE = {{
+const ColorPalette GPU::DMG_PALETTE = {{
     { { 0, 0 }, { 255, 255, 255, 0xFF } }, // white
     { { 0, 0 }, { 192, 192, 192, 0xFF } }, // light grey
     { { 0, 0 }, { 96,  96,  96,  0xFF } }, // grey
@@ -83,14 +83,15 @@ const uint8_t GPU::SPRITE_X_OFFSET = 8;
 const uint8_t GPU::SPRITE_Y_OFFSET = 16;
 
 const uint8_t GPU::SPRITE_CGB_PALETTE_COUNT = 7;
-const uint8_t GPU::SPRITE_DMR_PALETTE_COUNT = 2;
+const uint8_t GPU::SPRITE_DMG_PALETTE_COUNT = 2;
 
 const uint16_t GPU::OAM_TICKS    = 80;
 const uint16_t GPU::VRAM_TICKS   = 172;
 const uint16_t GPU::HBLANK_TICKS = 204;
 const uint16_t GPU::VBLANK_TICKS = 456;
 
-const uint16_t GPU::SCANLINE_MAX = 155;
+const uint16_t GPU::SCANLINE_MAX   = 155;
+const uint16_t GPU::SCANLINE_TICKS = 41;
 
 const uint16_t GPU::PIXELS_PER_ROW = 160;
 const uint16_t GPU::PIXELS_PER_COL = 144;
@@ -114,7 +115,8 @@ GPU::GPU(MemoryController & memory)
       m_winY(m_mmc.read(GPU_WINDOW_Y_ADDRESS)),
       m_scanline(m_mmc.read(GPU_SCANLINE_ADDRESS)),
       m_screen(PIXELS_PER_ROW * PIXELS_PER_COL),
-      m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL)
+      m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL),
+      m_bg(PIXELS_PER_ROW * PIXELS_PER_COL)
 {
     reset();
 
@@ -174,7 +176,7 @@ void GPU::reset()
 
     m_state = OAM;
 
-    m_x = m_y = m_scanline = m_ticks = 0;
+    m_x = m_y = m_scanline = m_ticks = m_vscan = 0;
 }
 
 void GPU::write(uint16_t address, uint8_t value)
@@ -185,6 +187,9 @@ void GPU::write(uint16_t address, uint8_t value)
 
 void GPU::write(GPU::MemoryBank selected, uint16_t index, uint8_t value)
 {
+    assert(int(selected) < m_memory.size());
+    assert(index < m_memory[int(selected)].size());
+
     m_memory[int(selected)][index] = value;
 }
 
@@ -196,6 +201,9 @@ uint8_t & GPU::read(uint16_t address)
 
 uint8_t & GPU::read(GPU::MemoryBank selected, uint16_t index)
 {
+    assert(int(selected) < m_memory.size());
+    assert(index < m_memory[int(selected)].size());
+
     return m_memory[int(selected)][index];
 }
 
@@ -239,15 +247,13 @@ GPU::RenderState GPU::next()
 
 void GPU::cycle(uint8_t ticks)
 {
-    if (!isDisplayEnabled()) { return; }
-
     m_ticks += ticks;
 
     switch (m_state) {
-    case HBLANK: handleHBlank(); break;
-    case VBLANK: handleVBlank(); break;
-    case OAM:    handleOAM();    break;
-    case VRAM:   handleVRAM();   break;
+    case HBLANK: handleHBlank();      break;
+    case VBLANK: handleVBlank(ticks); break;
+    case OAM:    handleOAM();         break;
+    case VRAM:   handleVRAM();        break;
     default:
         LOG("GPU::cycle : Unknown GPU state %d\n", m_state);
         assert(0);
@@ -280,7 +286,7 @@ void GPU::handleHBlank()
     m_scanline++;
 }
 
-void GPU::handleVBlank()
+void GPU::handleVBlank(uint8_t ticks)
 {
     if (VBLANK != (m_status & RENDER_MODE)) {
         if (isVBlankInterruptEnabled()) {
@@ -301,12 +307,12 @@ void GPU::handleVBlank()
         m_buffer.resize(PIXELS_PER_ROW * PIXELS_PER_COL);
     }
 
-    const int cycles = VBLANK_TICKS / (SCANLINE_MAX - PIXELS_PER_COL);
-    if (0 != m_ticks%cycles) {
-        return;
-    }
+    m_vscan += ticks;
+    if (SCANLINE_TICKS <= m_vscan) {
+        m_vscan -= SCANLINE_TICKS;
 
-    m_scanline = std::min(uint16_t(m_scanline + 1), SCANLINE_MAX);
+        m_scanline = std::min(uint16_t(m_scanline + 1), SCANLINE_MAX);
+    }
 }
 
 void GPU::handleOAM()
@@ -328,6 +334,8 @@ void GPU::handleVRAM()
 
 void GPU::updateScreen()
 {
+    if (!isDisplayEnabled()) { return; }
+
     if (m_scanline >= PIXELS_PER_COL) { return; }
 
     TileSetIndex set = (m_control & TILE_SET_SELECT) ? TILESET_0 : TILESET_1;
@@ -349,16 +357,23 @@ pair<const uint8_t&, const Tile&> GPU::lookup(
 
     // Now that we know our offset, figure out the address of the tile that we are
     // needing to look up.
-    uint16_t address = offset + ((y * TILE_MAP_COLUMNS) + x);
+    uint16_t pointer = offset + ((y * TILE_MAP_COLUMNS) + x) - m_offset;
 
-    uint8_t & attributes = read(BANK_1, address - m_offset);
+    // The attributes map lives in bank 1, so make sure that we are always reading
+    // out of bank 1 for the attributes.
+    const uint8_t & attributes = read(BANK_1, pointer);
 
+    // VRAM banking only happens in CGB mode, so hardcode bank 0 and only look up
+    // the actual bank if CGB mode is active.
     MemoryBank bank = BANK_0;
     if (m_mmc.isCGB()) {
         bank = (attributes & BG_TILE_BANK) ? BANK_1 : BANK_0;
     }
 
-    return { attributes, getTile(bank, sIndex, read(address)) };
+    // The actual background maps, live in bank 0, so make sure that the tile address
+    // comes from bank 0.  Look that tile up and return it with its corresponding
+    // attributes.
+    return { attributes, getTile(bank, sIndex, read(BANK_0, pointer)) };
 }
 
 ColorArray GPU::toRGB(
@@ -373,6 +388,8 @@ ColorArray GPU::toRGB(
     colors.reserve(TILE_PIXELS_PER_ROW);
 
     uint8_t offset = row * 2;
+
+    assert((offset + 1) < tile.size());
 
     uint8_t lower = *tile.at(offset);
     uint8_t upper = *tile.at(offset + 1);
@@ -392,6 +409,7 @@ ColorArray GPU::toRGB(
         // If a palette was passed in, we need to run the pixel through the palette
         // in order to get actual color index that we need.
         uint8_t idx = (pal) ? (((*pal) >> ((pixel & 0x03) * 2)) & 0x03) : pixel;
+        assert(idx < rgb.size());
 
         // If the color palette entry is 0, and we are not allowing the color white, then we
         // need to set our alpha blend entry to transparent so that this pixel won't show up
@@ -426,8 +444,9 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
 {
     if (!isBackgroundEnabled()) { return; }
 
-    struct Cache { uint16_t x; ColorArray rgb; };
-    Cache winCache = { .x = 0xFFFF, .rgb = {} }, bgCache = { .x = 0xFFFF, .rgb = {} };
+    struct Cache { uint16_t x; ColorArray rgb; const ColorPalette *p; };
+    Cache winCache = { .x = 0xFFFF, .rgb = {}, .p = nullptr };
+    Cache bgCache  = { .x = 0xFFFF, .rgb = {}, .p = nullptr };
 
     uint16_t offset = m_scanline * PIXELS_PER_ROW;
 
@@ -461,7 +480,9 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
 
             uint8_t index = atts & BG_PALETTE_NUMBER;
             const ColorPalette & rgb =
-                (m_mmc.isCGB()) ? m_palettes.bg.at(index) : DMR_PALETTE;
+                (m_mmc.isCGB()) ? m_palettes.bg.at(index) : DMG_PALETTE;
+
+            cache.p = &rgb;
 
             // Now that we have the tile that we are interested in, we need to get
             // the RGB values that are associated with the row in the tile that we
@@ -470,6 +491,12 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
                 (m_mmc.isCGB()) ? std::nullopt : optional<uint8_t>(m_palette);
             cache.rgb = toRGB(rgb, palette, tile, row % TILE_PIXELS_PER_COL, true, false);
         }
+
+        // We are also going to keep track of what the background color is for each
+        // pixel so that we can use this data later on for when we are rendering the
+        // sprites.  See the sprite render function for its usage.
+        uint8_t bgIdx = (m_mmc.isCGB()) ? 0 : m_palette & 0x3;
+        m_bg[offset + pixel] = (*cache.p)[bgIdx].second;
 
         // Move the RGB values from the iterator in to our buffer.
         m_buffer[offset + pixel] = cache.rgb[col % TILE_PIXELS_PER_ROW];
@@ -485,7 +512,7 @@ void GPU::draw(TileSetIndex set, TileMapIndex background, TileMapIndex window)
 
     // Background -> Window -> Sprites
     drawBackground(set, background, window);
-    drawSprites(m_buffer);
+    drawSprites(m_buffer, m_bg);
 }
 
 void GPU::readSprite(SpriteData & data)
@@ -532,7 +559,7 @@ void GPU::readSprite(SpriteData & data)
     data.colors = toRGB(colors.second, colors.first, tile, row, false, flipX);
 }
 
-void GPU::drawSprites(ColorArray & display)
+void GPU::drawSprites(ColorArray & display, ColorArray & bg)
 {
     if (!areSpritesEnabled()) { return; }
 
@@ -564,7 +591,7 @@ void GPU::drawSprites(ColorArray & display)
         });
 
     for (const shared_ptr<SpriteData> & sprite : enabled) {
-        sprite->render(display, m_palette);
+        sprite->render(display, bg);
     }
 }
 
@@ -575,18 +602,23 @@ void GPU::writeBgPalette(uint8_t index, uint8_t value)
 
 void GPU::writeSpritePalette(uint8_t index, uint8_t value)
 {
-    writePalette(m_palettes.sprite, index & 0x3F, value);
+    writePalette(m_palettes.sprite, index, value);
 }
 
 void GPU::writePalette(CgbColors & colors, uint8_t index, uint8_t value)
 {
     uint8_t pIdx = index / (GPU_COLORS_PER_PALETTE * 2);
-    uint8_t cIdx = index % (GPU_COLORS_PER_PALETTE * 2);
+    uint8_t cIdx = (index % (GPU_COLORS_PER_PALETTE * 2)) >> 1;
+
+    assert(pIdx < colors.size());
+    assert(cIdx < colors[pIdx].size());
 
     // The RGB values are held in memory in two different formats.  The first
     // format is the 2 bytes that define the the mask corresponding to the RGB
     // values.  The second is the translation of that mask to the RGB8888 value.
     auto & [bytes, rgb] = colors[pIdx][cIdx];
+
+    assert(bytes.size() == 2);
 
     // Set the requested byte to the value that was passed in.
     bytes[index & 0x01] = value;
@@ -596,7 +628,7 @@ void GPU::writePalette(CgbColors & colors, uint8_t index, uint8_t value)
     // and then apply that normalized number to an 8 bit RGB value to get the
     // value that we are going to store in our RGB8888 structure.
     auto convert = [](uint8_t value) {
-        double normalized = double(value) / 31.;
+        double normalized = double(value) / double(0x1F);
         return uint8_t(0xFF * normalized);
     };
 
@@ -625,7 +657,10 @@ uint8_t & GPU::readSpritePalette(uint8_t index)
 uint8_t & GPU::readPalette(CgbColors & colors, uint8_t index)
 {
     uint8_t pIdx = index / (GPU_COLORS_PER_PALETTE * 2);
-    uint8_t cIdx = index % (GPU_COLORS_PER_PALETTE * 2);
+    uint8_t cIdx = (index % (GPU_COLORS_PER_PALETTE * 2)) >> 1;
+
+    assert(pIdx < colors.size());
+    assert(cIdx < colors[pIdx].size());
 
     // The RGB values are held in memory in two different formats.  The first
     // format is the 2 bytes that define the the mask corresponding to the RGB
@@ -633,6 +668,7 @@ uint8_t & GPU::readPalette(CgbColors & colors, uint8_t index)
     auto & [bytes, rgb] = colors[pIdx][cIdx];
     (void)rgb;
 
+    assert(bytes.size() == 2);
     return bytes[index & 0x01];
 }
 
@@ -656,10 +692,12 @@ pair<optional<uint8_t>, const ColorPalette&> GPU::SpriteData::palette() const
 {
     if (m_gpu.m_mmc.isCGB()) {
         uint8_t index = this->flags & PALETTE_NUMBER_CGB;
+        assert(index < m_gpu.m_palettes.sprite.size());
+
         return { std::nullopt, m_gpu.m_palettes.sprite.at(index) };
     } else {
-        uint8_t palette = ((this->flags & PALETTE_NUMBER_DMR) ? *mono.at(1) : *mono.at(0));
-        return { palette, DMR_PALETTE };
+        uint8_t palette = ((this->flags & PALETTE_NUMBER_DMG) ? *mono.at(1) : *mono.at(0));
+        return { palette, DMG_PALETTE };
     }
 }
 
@@ -684,7 +722,7 @@ bool GPU::SpriteData::isVisible() const
     return false;
 }
 
-void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
+void GPU::SpriteData::render(ColorArray & display, ColorArray & bg)
 {
     m_gpu.readSprite(*this);
 
@@ -707,8 +745,7 @@ void GPU::SpriteData::render(ColorArray & display, uint8_t dPalette)
         // supposed to be behind the background (i.e. not shown) unless the background pixel
         // that the sprite overlaps with is set to color 0.
         if (this->flags & OBJECT_PRIORITY) {
-            const GB::RGB & bg = DMR_PALETTE[dPalette & 0x03].second;
-            if (!(display[index] == bg)) {
+            if (!(display[index] == bg[index])) {
                 continue;
             }
         }

@@ -11,6 +11,11 @@ CONFIG -= gui
 CONFIG (profiling): DEFINES += PROFILING
 CONFIG (staticmem): DEFINES += STATIC_MEMORY
 
+CONFIG (asan) {
+    QMAKE_CXXFLAGS += -fsanitize=address
+    QMAKE_LFLAGS   += -fsanitize=address
+}
+
 DEFINES += HARDWARE_EXPORT
 
 INCLUDEPATH += memory
@@ -29,6 +34,8 @@ HEADERS += memory/workingram.h
 HEADERS += memory/readonly.h
 HEADERS += memory/unusable.h
 HEADERS += memory/removable.h
+HEADERS += memory/cgbbios.h
+HEADERS += memory/dmgbios.h
 
 SOURCES += memory/memoryregion.cpp
 SOURCES += memory/mappedio.cpp
@@ -50,6 +57,7 @@ HEADERS += $$PUBLIC_HEADERS
 SOURCES += gpu.cpp
 SOURCES += memorycontroller.cpp
 SOURCES += processor.cpp
+SOURCES += opcodes.cpp
 SOURCES += timermodule.cpp
 SOURCES += gameboy.cpp
 SOURCES += joypad.cpp

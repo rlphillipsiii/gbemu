@@ -18,13 +18,13 @@ uint8_t & MappedIO::read(uint16_t address)
 {
     switch (address) {
     case GPU_BG_PALETTE_DATA: {
-        uint8_t pointer = m_parent.read(GPU_BG_PALETTE_INDEX);
+        uint8_t pointer = m_parent.read(GPU_BG_PALETTE_INDEX) & 0x3F;
 
         return m_gameboy.gpu().readBgPalette(pointer);
     }
 
     case GPU_SPRITE_PALETTE_DATA: {
-        uint8_t pointer = m_parent.read(GPU_SPRITE_PALETTE_INDEX);
+        uint8_t pointer = m_parent.read(GPU_SPRITE_PALETTE_INDEX) & 0x3F;
 
         return m_gameboy.gpu().readSpritePalette(pointer);
     }

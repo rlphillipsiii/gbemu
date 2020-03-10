@@ -19,14 +19,19 @@ public:
     void write(uint16_t address, uint8_t value) override;
     uint8_t & read(uint16_t address) override;
 
+    inline bool isReadOnly() const override { return true; }
+
     bool isAddressed(uint16_t address) const override;
 
     void load(const std::string & filename);
     bool isValid() const;
 
     inline void reset() override { }
+
     inline bool isCGB() const
         { return (m_cartridge) ? m_cartridge->isCGB() : false; }
+    inline bool check() const
+        { return (m_cartridge) ? m_cartridge->check() : false; }
 
 private:
     static uint8_t EMPTY;
