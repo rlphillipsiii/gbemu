@@ -24,8 +24,8 @@ public:
     void paint(QPainter *painter) override;
     // QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *updatePaintNodeData) override;
 
-    void updateCanvas(uint8_t x, uint8_t y, GB::RGB pixel);
-    void renderCanvas();
+    void updateCanvas(uint8_t x, uint8_t y, GB::RGB pixel) override;
+    void renderCanvas() override;
 
 public slots:
     void onTimeout();
