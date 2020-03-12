@@ -61,6 +61,8 @@ void GameBoy::run()
 {
     LOG("%s\n", "Gameboy thread running");
 
+    m_cpu.reset();
+
     while (m_run.load()) {
         step();
     }

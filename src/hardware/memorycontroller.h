@@ -59,6 +59,9 @@ public:
 
     inline bool check() const { return m_cartridge.check(); }
 
+    inline uint8_t romBank() const { return m_cartridge.romBank(); }
+    inline uint8_t ramBank() const { return m_cartridge.ramBank(); }
+
 private:
     static uint8_t DUMMY;
     static const uint16_t MBC_TYPE_ADDRESS;

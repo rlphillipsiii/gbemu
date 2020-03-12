@@ -40,7 +40,6 @@ const vector<uint16_t> Cartridge::RAM_SIZES = {
 Cartridge::Cartridge(const string & path)
     : m_path(path),
       m_valid(false),
-      m_ram(EXT_RAM_SIZE),
       m_cgb(false)
 {
     ifstream input(m_path, std::ios::in | std::ios::binary);
@@ -82,7 +81,7 @@ Cartridge::Cartridge(const string & path)
     // Read the memory bank type and use that to construct an object that
     // will handling reading/writing for this ROM.
     m_info.type = BankType(m_memory.at(ROM_TYPE_OFFSET));
-    m_bank = unique_ptr<MemoryBank>(initMemoryBank(m_info.type));
+    m_bank = unique_ptr<MemoryBankController>(initMemoryBankController(m_info.type));
 
     assert(m_bank);
 
@@ -96,9 +95,9 @@ Cartridge::Cartridge(const string & path)
     m_valid = true;
 }
 
-Cartridge::MemoryBank *Cartridge::initMemoryBank(uint8_t type)
+Cartridge::MemoryBankController *Cartridge::initMemoryBankController(uint8_t type)
 {
-    MemoryBank *bank = nullptr;
+    MemoryBankController *bank = nullptr;
 
     uint8_t index = m_memory.at(ROM_RAM_SIZE_OFFSET);
 
@@ -180,14 +179,16 @@ bool Cartridge::check() const
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-Cartridge::MemoryBank::MemoryBank(
+uint8_t Cartridge::MemoryBankController::RAM_DISABLED = 0xFF;
+
+Cartridge::MemoryBankController::MemoryBankController(
     Cartridge & cartridge,
     const std::string & name,
     uint16_t size,
     bool battery)
     : m_cartridge(cartridge),
       m_name(name),
-      m_ram(size),
+      m_ram(size / EXT_RAM_SIZE),
       m_ramEnable(false),
       m_romBank(1),
       m_ramBank(0),
@@ -216,17 +217,19 @@ Cartridge::MemoryBank::MemoryBank(
     }
 }
 
-Cartridge::MemoryBank::~MemoryBank()
+Cartridge::MemoryBankController::~MemoryBankController()
 {
     if (m_nvRam.is_open()) { m_nvRam.close(); }
 }
 
-void Cartridge::MemoryBank::writeRAM(uint16_t address, uint8_t value)
+void Cartridge::MemoryBankController::writeRAM(uint16_t address, uint8_t value)
 {
-    uint32_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
-    assert(index < m_ram.size());
+    if (!m_ramEnable) { return; }
 
-    m_ram[index] = value;
+    uint16_t index = address - EXT_RAM_OFFSET;
+    assert(index < m_ram[m_ramBank].size());
+
+    m_ram[m_ramBank][index] = value;
 
     if (m_nvRam.good()) {
         m_nvRam.seekp(index);
@@ -235,26 +238,30 @@ void Cartridge::MemoryBank::writeRAM(uint16_t address, uint8_t value)
     }
 }
 
-uint8_t & Cartridge::MemoryBank::readROM(uint16_t address)
+uint8_t & Cartridge::MemoryBankController::readROM(uint16_t address)
 {
+    assert(m_romBank > 0);
+
     uint32_t index = address + ((m_romBank - 1) * ROM_1_SIZE);
     assert(index < m_cartridge.m_memory.size());
 
     return m_cartridge.m_memory[index];
 }
 
-uint8_t & Cartridge::MemoryBank::readRAM(uint16_t address)
+uint8_t & Cartridge::MemoryBankController::readRAM(uint16_t address)
 {
-    uint32_t index = (address - EXT_RAM_OFFSET) + (m_ramBank * EXT_RAM_SIZE);
-    assert(index < m_ram.size());
+    if (!m_ramEnable) { return RAM_DISABLED; }
 
-    return m_ram[index];
+    uint16_t index = address - EXT_RAM_OFFSET;
+    assert(index < m_ram[m_ramBank].size());
+
+    return m_ram[m_ramBank][index];
 }
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
 Cartridge::MBC1::MBC1(Cartridge & cartridge, uint16_t size, bool battery)
-    : MemoryBank(cartridge, "MBC1", size, battery),
+    : MemoryBankController(cartridge, "MBC1", size, battery),
       m_mode(Cartridge::MBC_ROM)
 {
 
@@ -289,7 +296,7 @@ void Cartridge::MBC1::writeROM(uint16_t address, uint8_t value)
 
 ////////////////////////////////////////////////////////////////////////////////
 Cartridge::MBC3::MBC3(Cartridge & cartridge, uint16_t size, bool battery, bool rtc)
-    : MemoryBank(cartridge, "MBC3", size, battery),
+    : MemoryBankController(cartridge, "MBC3", size, battery),
       m_rtc(rtc)
 {
 
@@ -303,9 +310,7 @@ void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
         m_ramEnable = ((value & 0x0F) == 0x0A);
     } else if (address < 0x4000) {
         uint8_t bank = (value & 0x7F);
-        if (0x00 == bank) { bank |= 0x01; }
-
-        m_romBank = bank;
+        m_romBank = (0x00 != bank) ? bank : 0x01;
     } else if (address < 0x6000) {
         if (value <= 0x03) {
             m_ramBank = value;

@@ -33,6 +33,11 @@ public:
     inline bool check() const
         { return (m_cartridge) ? m_cartridge->check() : false; }
 
+    inline uint8_t romBank() const
+        { return (m_cartridge) ? m_cartridge->romBank() : 0; }
+    inline uint8_t ramBank() const
+        { return (m_cartridge) ? m_cartridge->ramBank() : 0; }
+
 private:
     static uint8_t EMPTY;
 

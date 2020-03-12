@@ -28,6 +28,8 @@ enum class InterruptMask : uint8_t {
     TIMER  = 0x04,
     SERIAL = 0x08,
     JOYPAD = 0x10,
+
+    NONE = 0x00,
 };
 
 struct Interrupts {
@@ -51,7 +53,7 @@ struct Interrupts {
     static void clear(MemoryController & memory, InterruptMask interrupt)
     {
         uint8_t & current = memory.read(INTERRUPT_FLAGS_ADDRESS);
-        current &= uint8_t(interrupt);
+        current &= ~uint8_t(interrupt);
     }
 
     static InterruptMask toMask(InterruptVector vector)
@@ -63,7 +65,7 @@ struct Interrupts {
         case InterruptVector::SERIAL: return InterruptMask::SERIAL;
         case InterruptVector::JOYPAD: return InterruptMask::JOYPAD;
 
-        default: return (InterruptMask)0x00;
+        default: return InterruptMask::NONE;
         }
     }
 };

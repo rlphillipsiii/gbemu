@@ -35,16 +35,12 @@ using Tile     = std::vector<const uint8_t*>;
 using TileSet  = std::array<Tile, GPU_TILES_PER_SET>;
 using TileBank = std::array<TileSet, GPU_TILE_SET_COUNT>;
 
-using ColorArray   = std::vector<GB::RGB>;
 using ColorPixel   = std::pair<std::array<uint8_t, 2>, GB::RGB>;
 using ColorPalette = std::array<ColorPixel, GPU_COLORS_PER_PALETTE>;
-
-using CgbColors  = std::array<ColorPalette, GPU_CGB_PALETTE_COUNT>;
+using CgbColors    = std::array<ColorPalette, GPU_CGB_PALETTE_COUNT>;
 
 class GPU : public MemoryRegion {
 public:
-    enum MemoryBank { BANK_0 = 0, BANK_1 = 1 };
-
     explicit GPU(MemoryController & memory);
     ~GPU() = default;
 
@@ -60,9 +56,7 @@ public:
     }
 
     void write(uint16_t address, uint8_t value) override;
-    void write(MemoryBank bank, uint16_t index, uint8_t value);
     uint8_t & read(uint16_t address) override;
-    uint8_t & read(MemoryBank bank, uint16_t index);
 
     void writeBgPalette(uint8_t index, uint8_t value);
     void writeSpritePalette(uint8_t index, uint8_t value);
@@ -100,8 +94,6 @@ private:
     static const uint8_t SPRITE_HEIGHT_EXTENDED;
     static const uint8_t SPRITE_X_OFFSET;
     static const uint8_t SPRITE_Y_OFFSET;
-    static const uint8_t SPRITE_CGB_PALETTE_COUNT;
-    static const uint8_t SPRITE_DMG_PALETTE_COUNT;
 
     static const uint16_t SCREEN_ROWS;
     static const uint16_t SCREEN_COLUMNS;
@@ -152,6 +144,8 @@ private:
 
         std::pair<std::optional<uint8_t>, const ColorPalette&> palette() const;
     };
+
+    enum MemoryBank { BANK_0 = 0, BANK_1 = 1 };
 
     enum TileMapIndex { TILEMAP_0 = 0, TILEMAP_1 = 1, };
     enum TileSetIndex { TILESET_0 = 0, TILESET_1 = 1, };
@@ -223,7 +217,7 @@ private:
     RenderState m_state;
 
     uint32_t m_ticks;
-    uint8_t m_vscan;
+    uint16_t m_vscan;
 
     std::mutex m_lock;
 
@@ -259,6 +253,9 @@ private:
 
     RenderState next();
 
+    void write(MemoryBank bank, uint16_t index, uint8_t value);
+    uint8_t & read(MemoryBank bank, uint16_t index);
+
     inline const Tile & getTile(MemoryBank bank, TileSetIndex index, uint16_t tile) const
     {
         assert(size_t(bank) < m_tiles.size());
@@ -284,8 +281,6 @@ private:
 
     void initSpriteCache();
     void initTileCache();
-
-    std::vector<uint8_t> & bank();
 };
 
 #endif /* SRC_GPU_H_ */

@@ -45,6 +45,8 @@ public:
         uint16_t de;
         uint16_t hl;
         uint8_t scanline;
+        uint8_t romBank;
+        uint8_t ramBank;
         std::array<uint8_t, 2> operands;
         const Operation *operation;
 
@@ -96,6 +98,11 @@ private:
 
     /** Interrupt enable, mask, and status registers */
     Interrupts m_interrupts;
+
+    struct {
+        uint8_t status;
+        uint8_t mask;
+    } m_iCache;
 
     bool m_halted;
 

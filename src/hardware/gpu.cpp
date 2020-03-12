@@ -82,16 +82,13 @@ const uint8_t GPU::SPRITE_HEIGHT_EXTENDED = 16;
 const uint8_t GPU::SPRITE_X_OFFSET = 8;
 const uint8_t GPU::SPRITE_Y_OFFSET = 16;
 
-const uint8_t GPU::SPRITE_CGB_PALETTE_COUNT = 7;
-const uint8_t GPU::SPRITE_DMG_PALETTE_COUNT = 2;
-
 const uint16_t GPU::OAM_TICKS    = 80;
 const uint16_t GPU::VRAM_TICKS   = 172;
 const uint16_t GPU::HBLANK_TICKS = 204;
-const uint16_t GPU::VBLANK_TICKS = 456;
+const uint16_t GPU::VBLANK_TICKS = 4560;
 
 const uint16_t GPU::SCANLINE_MAX   = 155;
-const uint16_t GPU::SCANLINE_TICKS = 41;
+const uint16_t GPU::SCANLINE_TICKS = VBLANK_TICKS / (SCANLINE_MAX - PIXELS_PER_COL);
 
 const uint16_t GPU::PIXELS_PER_ROW = 160;
 const uint16_t GPU::PIXELS_PER_COL = 144;
@@ -247,6 +244,8 @@ GPU::RenderState GPU::next()
 
 void GPU::cycle(uint8_t ticks)
 {
+    if (!isDisplayEnabled()) { return; }
+
     m_ticks += ticks;
 
     switch (m_state) {
@@ -334,8 +333,6 @@ void GPU::handleVRAM()
 
 void GPU::updateScreen()
 {
-    if (!isDisplayEnabled()) { return; }
-
     if (m_scanline >= PIXELS_PER_COL) { return; }
 
     TileSetIndex set = (m_control & TILE_SET_SELECT) ? TILESET_0 : TILESET_1;
@@ -389,7 +386,7 @@ ColorArray GPU::toRGB(
 
     uint8_t offset = row * 2;
 
-    assert((offset + 1) < tile.size());
+    assert(size_t(offset + 1) < tile.size());
 
     uint8_t lower = *tile.at(offset);
     uint8_t upper = *tile.at(offset + 1);
@@ -478,6 +475,8 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
             const auto & [atts, tile] =
                 lookup(((win) ? window : background), set, xOffset, yOffset);
 
+            // Lookup the RGB palette data if we're in CGB mode, otherwise just use
+            // the global DMG palette.
             uint8_t index = atts & BG_PALETTE_NUMBER;
             const ColorPalette & rgb =
                 (m_mmc.isCGB()) ? m_palettes.bg.at(index) : DMG_PALETTE;
@@ -489,7 +488,14 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
             // need to add to our screen buffer.
             optional<uint8_t> palette =
                 (m_mmc.isCGB()) ? std::nullopt : optional<uint8_t>(m_palette);
-            cache.rgb = toRGB(rgb, palette, tile, row % TILE_PIXELS_PER_COL, true, false);
+
+            bool flipX = (m_mmc.isCGB()) ? atts & BG_FLIP_X : false;
+            bool flipY = (m_mmc.isCGB()) ? atts & BG_FLIP_Y : false;
+
+            row %= TILE_PIXELS_PER_COL;
+            if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
+
+            cache.rgb = toRGB(rgb, palette, tile, row, true, flipX);
         }
 
         // We are also going to keep track of what the background color is for each
@@ -750,6 +756,10 @@ void GPU::SpriteData::render(ColorArray & display, ColorArray & bg)
             }
         }
 
+        // TODO: Expand the bg that's passed in here to include the attributes for that pixel
+        //       because the MSB in that mask tells us whether or not the background has
+        //       priority over the sprite regardless of what the sprite's object priority is
+        //       set to.
         display[index] = color;
     }
 }

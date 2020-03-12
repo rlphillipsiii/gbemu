@@ -86,6 +86,7 @@ optional<reference_wrapper<MemoryRegion>> MemoryController::find(uint16_t addres
         }
     }
 
+    ERROR("Failed to find memory region for address 0x%04x\n", address);
     return std::nullopt;
 }
 
@@ -111,6 +112,8 @@ void MemoryController::write(uint16_t address, uint8_t value)
     auto & region = found->get();
     if (region.isWritable()) {
         region.write(address, value);
+    } else {
+        WARN("Attempted to write to non-writable region: 0x%04x\n", address);
     }
 }
 

@@ -22,7 +22,7 @@ using std::vector;
 
 const uint8_t Processor::CB_PREFIX = 0xCB;
 
-const uint16_t Processor::HISTORY_SIZE = 500;
+const uint16_t Processor::HISTORY_SIZE = 1000;
 
 const uint16_t Processor::ROM_ENTRY_POINT = 0x0100;
 
@@ -57,8 +57,16 @@ string Processor::Command::str() const
     char buffer[size];
 
     stringstream stream;
-    sprintf(buffer, "PC:0x%04x SP:0x%04x IME:%d IM:0x%02x INT:0x%02x",
+    sprintf(buffer, "PC:0x%04x SP:0x%04x IME:%d IM:0x%02x INT:0x%02x | ",
         pc, sp, int(ints), iMask, iStatus);
+
+    sprintf(buffer, "%s %s (0x%02x): ", buffer, operation->name.c_str(), opcode);
+    for (int8_t i = operation->length - 2; i >= 0; i--) {
+        sprintf(buffer, "%s %02x", buffer, operands[i]);
+    }
+    sprintf(buffer, "%s\n", buffer);
+
+    stream << buffer;
 
     stringstream temp;
     temp << ((flags & ZERO_FLAG_MASK)       ? "Z" : "-");
@@ -66,13 +74,8 @@ string Processor::Command::str() const
     temp << ((flags & HALF_CARRY_FLAG_MASK) ? "H" : "-");
     temp << ((flags & CARRY_FLAG_MASK)      ? "C" : "-");
 
-    sprintf(buffer, "%s A:0x%02x F:%s BC:0x%04x DE:0x%04x HL:0x%04x SL:%d ==>",
-        buffer, a, temp.str().c_str(), bc, de, hl, scanline);
-
-    sprintf(buffer, "%s %s (0x%02x): ", buffer, operation->name.c_str(), opcode);
-    for (int8_t i = operation->length - 2; i >= 0; i--) {
-        sprintf(buffer, "%s %02x ", buffer, operands[i]);
-    }
+    sprintf(buffer, "    A:0x%02x F:%s BC:0x%04x DE:0x%04x HL:0x%04x ROM:%d RAM:%d SL:%d",
+        a, temp.str().c_str(), bc, de, hl, romBank, ramBank, scanline);
 
     stream << buffer;
     return stream.str();
@@ -222,24 +225,21 @@ uint8_t Processor::execute()
     // than 1, then we also need to grab the next length - 1 bytes as they are the
     // arguments to the next operation that we are going to execute.
     Operation *operation = lookup(m_pc, opcode);
-    if (!operation) {
-        FATAL("Unknown opcode: 0x%02x\n", opcode);
-        return 1;
-    }
+    if (!operation) { FATAL("Unknown opcode: 0x%02x\n", opcode); }
 
     // If we have any operands, we need to read them in and increment the PC.
     for (uint8_t i = 0; i < operation->length - 1; i++) {
         m_operands[i] = m_memory.peek(m_pc++);
     }
 
-//#ifdef DEBUG
+#ifdef DEBUG
     log(opcode, operation);
 
     static bool trace = false;
     if (trace) {
         logRegisters();
     }
-//#endif
+#endif
 
     // Call the function pointer in our Operation struct.  Any arguments to the function
     // will have already been put in to the operands array.
@@ -263,6 +263,11 @@ uint8_t Processor::cycle()
 {
     if (!m_memory.inBios() && !m_memory.isCartridgeValid()) { return 1; }
 
+    // Cache the interrupt state so that we can log it and use it for debugging
+    // if necessary.
+    m_iCache.status = m_interrupts.status;
+    m_iCache.mask   = m_interrupts.mask;
+
     bool interrupted = interrupt();
 
     uint8_t ticks = (m_halted && !interrupted) ? 1 : execute();
@@ -283,13 +288,15 @@ void Processor::log(uint8_t opcode, const Operation *operation)
         opcode,
         m_flags,
         m_interrupts.enable,
-        m_interrupts.mask,
-        m_interrupts.status,
+        m_iCache.mask,
+        m_iCache.status,
         m_gpr.a,
         m_gpr.bc,
         m_gpr.de,
         m_gpr.hl,
         m_memory.peek(GPU_SCANLINE_ADDRESS),
+        m_memory.romBank(),
+        m_memory.ramBank(),
         m_operands,
         operation
     });

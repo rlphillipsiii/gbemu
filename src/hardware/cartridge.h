@@ -6,6 +6,8 @@
 #include <vector>
 #include <memory>
 #include <fstream>
+#include <array>
+
 #include "memmap.h"
 
 class Cartridge {
@@ -19,6 +21,9 @@ public:
     uint8_t & read(uint16_t address);
 
     inline bool isCGB() const { return m_cgb; }
+
+    inline uint8_t romBank() const { return m_bank->romBank(); }
+    inline uint8_t ramBank() const { return m_bank->ramBank(); }
 
     bool check() const;
 
@@ -59,10 +64,14 @@ private:
         BankType type;
     } m_info;
 
-    class MemoryBank {
+    class MemoryBankController {
     public:
-        MemoryBank(Cartridge & cartridge, const std::string & name, uint16_t size, bool battery);
-        virtual ~MemoryBank();
+        MemoryBankController(
+            Cartridge & cartridge,
+            const std::string & name,
+            uint16_t size,
+            bool battery);
+        virtual ~MemoryBankController();
 
         virtual void writeROM(uint16_t address, uint8_t value) = 0;
 
@@ -75,12 +84,15 @@ private:
 
         inline size_t size() const { return m_ram.size(); }
 
+        inline uint8_t romBank() const { return m_romBank; }
+        inline uint8_t ramBank() const { return m_ramBank; }
+
     protected:
         Cartridge & m_cartridge;
 
         std::string m_name;
 
-        std::vector<uint8_t> m_ram;
+        std::vector<std::array<uint8_t, EXT_RAM_SIZE>> m_ram;
 
         bool m_ramEnable;
 
@@ -90,9 +102,12 @@ private:
         bool m_hasBattery;
 
         std::ofstream m_nvRam;
+
+    private:
+        static uint8_t RAM_DISABLED;
     };
 
-    class MBC1 : public MemoryBank {
+    class MBC1 : public MemoryBankController {
     public:
         MBC1(Cartridge & cartridge, uint16_t size, bool battery);
         ~MBC1() = default;
@@ -103,7 +118,7 @@ private:
         Cartridge::BankMode m_mode;
     };
 
-    class MBC2 : public MemoryBank {
+    class MBC2 : public MemoryBankController {
     public:
         MBC2(Cartridge & cartridge, uint16_t size);
         ~MBC2() = default;
@@ -111,7 +126,7 @@ private:
         void writeROM(uint16_t address, uint8_t value) override;
     };
 
-    class MBC3 : public MemoryBank {
+    class MBC3 : public MemoryBankController {
     public:
         MBC3(Cartridge & cartridge, uint16_t size, bool battery, bool rtc);
         ~MBC3() = default;
@@ -124,13 +139,12 @@ private:
 
     std::vector<uint8_t> m_memory;
     std::vector<uint8_t> m_shadow;
-    std::vector<uint8_t> m_ram;
 
-    std::unique_ptr<MemoryBank> m_bank;
+    std::unique_ptr<MemoryBankController> m_bank;
 
     bool m_cgb;
 
-    MemoryBank *initMemoryBank(uint8_t type);
+    MemoryBankController *initMemoryBankController(uint8_t type);
 
     inline std::string game() const { return m_info.name; }
 };

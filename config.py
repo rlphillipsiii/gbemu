@@ -44,6 +44,11 @@ def gdb():
 
     sys.exit(cmd('gdb -tui {0}'.format(binary())))
 
+def valgrind(rom):
+    os.chdir(os.path.join('public', 'release', 'bin'))
+
+    sys.exit(cmd('valgrind --tool=callgrind {0} {1}'.format(binary(), rom)))
+
 def run(spec, rom):
     os.chdir(os.path.join('public', spec, 'bin'))
 
@@ -58,6 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', dest='target', nargs=1, choices=['debug', 'release'])
     parser.add_argument('-t', dest='test', nargs=1, choices=['debug', 'release'])
     parser.add_argument('-d', dest='debug', action='store_true')
+    parser.add_argument('-v', dest='valgrind', nargs=1)
     parser.add_argument('-r', dest='run', nargs=2)
 
 
@@ -77,6 +83,8 @@ if __name__ == '__main__':
         init()
     elif args.debug:
         gdb()
+    elif not args.valgrind is None:
+        valgrind(args.valgrind[0])
     elif not args.test is None:
         test(args.test[0].lower())
     elif not args.target is None:
