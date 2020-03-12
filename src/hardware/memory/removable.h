@@ -30,8 +30,6 @@ public:
 
     inline bool isCGB() const
         { return (m_cartridge) ? m_cartridge->isCGB() : false; }
-    inline bool check() const
-        { return (m_cartridge) ? m_cartridge->check() : false; }
 
     inline uint8_t romBank() const
         { return (m_cartridge) ? m_cartridge->romBank() : 0; }

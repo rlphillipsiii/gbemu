@@ -25,8 +25,6 @@ public:
     inline uint8_t romBank() const { return m_bank->romBank(); }
     inline uint8_t ramBank() const { return m_bank->ramBank(); }
 
-    bool check() const;
-
 private:
     static const uint16_t NINTENDO_LOGO_OFFSET;
 
@@ -78,7 +76,7 @@ private:
         void writeRAM(uint16_t address, uint8_t value);
 
         uint8_t & readROM(uint16_t address);
-        uint8_t & readRAM(uint16_t address);
+        virtual uint8_t & readRAM(uint16_t address);
 
         inline std::string name() const { return m_name; }
 
@@ -105,6 +103,8 @@ private:
 
     private:
         static uint8_t RAM_DISABLED;
+
+        void initRAM(const std::string & name);
     };
 
     class MBC1 : public MemoryBankController {
@@ -128,17 +128,33 @@ private:
 
     class MBC3 : public MemoryBankController {
     public:
-        MBC3(Cartridge & cartridge, uint16_t size, bool battery, bool rtc);
+        MBC3(Cartridge & cartridge, uint16_t size, bool battery);
         ~MBC3() = default;
 
         void writeROM(uint16_t address, uint8_t value) override;
+        uint8_t & readRAM(uint16_t address) override;
 
     private:
-        bool m_rtc;
+        enum RtcRegisterSelect {
+            RtcSeconds  = 0x08,
+            RtcMinutes  = 0x09,
+            RtcHours    = 0x0A,
+            RtcDayLower = 0x0B,
+            RtcDayUpper = 0x0C,
+        };
+
+        struct {
+            uint8_t seconds;
+            uint8_t minutes;
+            uint8_t hours;
+
+            std::array<uint8_t, 2> day;
+        } m_rtc;
+
+        uint8_t m_latch;
     };
 
     std::vector<uint8_t> m_memory;
-    std::vector<uint8_t> m_shadow;
 
     std::unique_ptr<MemoryBankController> m_bank;
 

@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <cassert>
 #include <memory>
+#include <chrono>
+#include <ctime>
 
 #include "cartridge.h"
 #include "logging.h"
@@ -12,6 +14,8 @@ using std::string;
 using std::ifstream;
 using std::ofstream;
 using std::unique_ptr;
+using std::chrono::system_clock;
+using std::time_t;
 
 const uint16_t Cartridge::NINTENDO_LOGO_OFFSET = 0x0104;
 
@@ -55,8 +59,6 @@ Cartridge::Cartridge(const string & path)
 
     m_memory.resize(m_info.size);
     input.read(reinterpret_cast<char*>(m_memory.data()), m_memory.size());
-
-    m_shadow = m_memory;
 
     // Check for the Nintendo logo.  If the Nintendo logo isn't in the correct
     // location, then the cartridge image is no good, and there is no point in
@@ -105,7 +107,7 @@ Cartridge::MemoryBankController *Cartridge::initMemoryBankController(uint8_t typ
 
     switch (type) {
     default:
-        WARN("WARNING : unknown memory bank type: 0x%02x\n", type);
+        ERROR("Unknown memory bank type: 0x%02x\n", type);
         [[fallthrough]];
 
     case MBC_1:
@@ -117,10 +119,8 @@ Cartridge::MemoryBankController *Cartridge::initMemoryBankController(uint8_t typ
         break;
 
     case MBC_3RB:
-        bank = new MBC3(*this, size, true, false);
-        break;
     case MBC_3TRB:
-        bank = new MBC3(*this, size, true, true);
+        bank = new MBC3(*this, size, true);
         break;
     }
 
@@ -163,21 +163,6 @@ void Cartridge::write(uint16_t address, uint8_t value)
     }
 }
 
-bool Cartridge::check() const
-{
-    if (m_memory.size() != m_shadow.size()) { return false; }
-
-    vector<uint16_t> mismatches;
-    mismatches.reserve(m_memory.size());
-
-    for (size_t i = 0; i < m_memory.size(); i++) {
-        if (m_memory.at(i) != m_shadow.at(i)) {
-            mismatches.push_back(uint16_t(i));
-        }
-    }
-    return (mismatches.empty());
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 uint8_t Cartridge::MemoryBankController::RAM_DISABLED = 0xFF;
 
@@ -195,31 +180,37 @@ Cartridge::MemoryBankController::MemoryBankController(
       m_hasBattery(battery)
 {
     string nv = m_cartridge.game() + ".sav";
-
-    ifstream input(nv, std::ios::in | std::ios::binary);
-    if (input.is_open()) {
-        input.read(reinterpret_cast<char*>(m_ram.data()), m_ram.size());
-    }
-    input.close();
+    initRAM(nv);
 
     if (m_hasBattery) {
         LOG("NV RAM Filename: %s\n", nv.c_str());
 
         m_nvRam = ofstream(nv, std::ios::out | std::ios::binary);
-
-        m_nvRam.seekp(m_nvRam.end);
-        if (size_t(m_nvRam.tellp()) != m_ram.size()) {
-            LOG("Initializing NV RAM image: %d bytes\n", int(m_ram.size()));
-
-            m_nvRam.write(reinterpret_cast<char*>(m_ram.data()), m_ram.size());
-            m_nvRam.flush();
-        }
     }
 }
 
 Cartridge::MemoryBankController::~MemoryBankController()
 {
     if (m_nvRam.is_open()) { m_nvRam.close(); }
+}
+
+void Cartridge::MemoryBankController::initRAM(const string & name)
+{
+    if (!m_hasBattery) { return; }
+
+    ifstream input(name, std::ios::in | std::ios::binary);
+    if (input.is_open()) {
+        for (auto & bank : m_ram) {
+            input.read(reinterpret_cast<char*>(bank.data()), bank.size());
+        }
+        input.close();
+    } else {
+        ofstream image(name, std::ios::out | std::ios::binary);
+        for (auto & bank : m_ram) {
+            image.write(reinterpret_cast<char*>(bank.data()), bank.size());
+        }
+        image.close();
+    }
 }
 
 void Cartridge::MemoryBankController::writeRAM(uint16_t address, uint8_t value)
@@ -232,7 +223,7 @@ void Cartridge::MemoryBankController::writeRAM(uint16_t address, uint8_t value)
     m_ram[m_ramBank][index] = value;
 
     if (m_nvRam.good()) {
-        m_nvRam.seekp(index);
+        m_nvRam.seekp(index + (EXT_RAM_SIZE * m_ramBank));
         m_nvRam.write(reinterpret_cast<const char*>(&value), 1);
         m_nvRam.flush();
     }
@@ -273,13 +264,22 @@ void Cartridge::MBC1::writeROM(uint16_t address, uint8_t value)
         m_ramEnable = ((value & 0x0F) == 0x0A);
     } else if (address < 0x4000) {
         uint8_t bank = (value & 0x1F);
+
+        // 0x00, 0x20, 0x40, and 0x60 are all illegal values that cause the bank to
+        // get set to the next bank.
         if ((0x00 == bank) || (0x20 == bank) || (0x40 == bank) || (0x60 == bank)) {
             bank |= 0x01;
         }
 
+        // Writes to this address set the lower 5 bits of the bank number, so or
+        // this value with the upper 3 bits that are already there.
         m_romBank = ((m_romBank & 0xE0) | bank);
     } else if (address < 0x6000) {
         if (MBC_ROM == m_mode) {
+            // If we are in ROM mode, then writes to this address set upper 3 bits
+            // of the ROM bank number, so we need to or the lower 5 bits of the
+            // current bank number with the value that we are writing shifted to
+            // the left by 5.
             m_romBank = (((value << 5) & 0xE0) | m_romBank);
         } else {
             m_ramBank = (value & 0x07);
@@ -295,30 +295,63 @@ void Cartridge::MBC1::writeROM(uint16_t address, uint8_t value)
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-Cartridge::MBC3::MBC3(Cartridge & cartridge, uint16_t size, bool battery, bool rtc)
+Cartridge::MBC3::MBC3(Cartridge & cartridge, uint16_t size, bool battery)
     : MemoryBankController(cartridge, "MBC3", size, battery),
-      m_rtc(rtc)
+      m_latch(0x00)
 {
 
 }
 
+uint8_t & Cartridge::MBC3::readRAM(uint16_t address)
+{
+    if (m_ramBank <= 0x03) { return MemoryBankController::readRAM(address); }
+
+    switch (m_ramBank) {
+    default:
+        ERROR("Unknown RAM bank setting: 0x%02x\n", m_ramBank);
+        [[fallthrough]];
+
+    case RtcSeconds:  return m_rtc.seconds;
+    case RtcMinutes:  return m_rtc.minutes;
+    case RtcHours:    return m_rtc.hours;
+    case RtcDayLower: return m_rtc.day[0];
+    case RtcDayUpper: return m_rtc.day[1];
+    }
+}
+
 void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
 {
-    // TODO: finsih the RTC portion of the ROM writing portion
-
     if (address < 0x2000) {
         m_ramEnable = ((value & 0x0F) == 0x0A);
     } else if (address < 0x4000) {
         uint8_t bank = (value & 0x7F);
         m_romBank = (0x00 != bank) ? bank : 0x01;
     } else if (address < 0x6000) {
-        if (value <= 0x03) {
-            m_ramBank = value;
-        } else {
-
-        }
+        m_ramBank = value;
     } else if (address < 0x8000) {
+        uint8_t last = m_latch;
+        m_latch = value;
 
+        // We only want to latch the RTC values when a value of 0x01 is written
+        // while the current value is 0x00, so if that isn't the case, then we
+        // can just bail out here.
+        if (!((0x00 == last) && (0x01 == m_latch))) { return; }
+
+        time_t timestamp = system_clock::to_time_t(system_clock::now());
+
+        std::tm *now = std::localtime(&timestamp);
+        if (now) {
+            m_rtc.seconds = now->tm_sec;
+            m_rtc.minutes = now->tm_min;
+            m_rtc.hours   = now->tm_hour;
+
+            // The day is stored in 9 bits.  The lower 8 bits are stored in the
+            // lower day register, and the MSB is stored in the LSB of the
+            // upper day register.
+            uint16_t days = now->tm_yday;
+            m_rtc.day[0] = days & 0xFF;
+            m_rtc.day[1] = (m_rtc.day[1] & 0xFE) | ((days >> 8) & 0x01);
+        }
     } else {
         LOG("Illegal MBC3 write to address 0x%04x\n", address);
 

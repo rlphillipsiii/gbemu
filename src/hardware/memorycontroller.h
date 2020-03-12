@@ -57,8 +57,6 @@ public:
 
     inline bool isCGB() const { return m_cartridge.isCGB(); }
 
-    inline bool check() const { return m_cartridge.check(); }
-
     inline uint8_t romBank() const { return m_cartridge.romBank(); }
     inline uint8_t ramBank() const { return m_cartridge.ramBank(); }
 
