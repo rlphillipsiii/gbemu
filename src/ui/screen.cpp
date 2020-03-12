@@ -99,26 +99,36 @@ void Screen::onTimeout()
 {
     ColorArray rgb = m_console->getRGB();
     if (rgb.empty()) { return; }
-    
+
     for (size_t i = 0; i < rgb.size(); i++) {
-        shared_ptr<GB::RGB> color = rgb.at(i);
-        
+        const GB::RGB & color = rgb.at(i);
+
         int x = i % m_width;
         int y = i / m_width;
 
-        QRgb rgb = (color) ? qRgba(color->red, color->green, color->blue, color->alpha) :
-            qRgba(0xFF, 0xFF, 0xFF, 0xFF);
+        QRgb rgb = qRgba(color.red, color.green, color.blue, color.alpha);
         m_canvas.setPixel(x, y, rgb);
     }
 
     update();
 }
 
+void Screen::updateCanvas(uint8_t x, uint8_t y, GB::RGB pixel)
+{
+    QRgb rgb = qRgba(pixel.red, pixel.green, pixel.blue, pixel.alpha);
+    m_canvas.setPixel(x, y, rgb);
+}
+
+void Screen::renderCanvas()
+{
+
+}
+
 #if 0
 QSGNode *Screen::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 {
     QSGGeometryNode *root = static_cast<QSGGeometryNode*>(oldNode);
-    
+
     if (!root) {
         root = new QSGGeometryNode();
         root->setFlag(QSGNode::OwnsMaterial, true);
@@ -142,7 +152,7 @@ QSGNode *Screen::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
 
     QSGVertexColorMaterial *material = new QSGVertexColorMaterial();
     root->setMaterial(material);
- 
+
     return root;
 }
 #endif

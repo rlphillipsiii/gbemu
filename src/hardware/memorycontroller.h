@@ -15,18 +15,31 @@
 #include <string>
 #include <algorithm>
 #include <memory>
+#include <functional>
+#include <optional>
 
-#include "cartridge.h"
+#include "memoryregion.h"
+#include "mappedio.h"
+#include "readonly.h"
+#include "removable.h"
+#include "unusable.h"
+#include "workingram.h"
 
 class MemoryController {
 public:
-    MemoryController();
+    MemoryController(GameBoy & parent);
     ~MemoryController() = default;
+
+    MemoryController(const MemoryController &) = delete;
+    MemoryController(MemoryController &&) = delete;
+    MemoryController(const MemoryController &&) = delete;
+    MemoryController & operator=(const MemoryController &) = delete;
 
     void initialize(uint16_t address, uint8_t value);
 
     void write(uint16_t address, uint8_t value);
     uint8_t & read(uint16_t address);
+    const uint8_t & peek(uint16_t address);
 
     void reset();
     void setCartridge(const std::string & filename);
@@ -37,156 +50,32 @@ public:
         { return m_io.isRtcResetRequested(); }
 
     inline void clearRtcReset()    { m_io.clearRtcReset(); }
-    inline void unlockBiosRegion() { m_memory.pop_front(); }
+    inline void unlockBiosRegion() { if (inBios()) { m_memory.pop_front(); } }
 
-    inline bool inBios() const { return (m_memory.front() == &m_bios); }
+    inline bool inBios() const { return (&m_memory.front().get() == &m_bios); }
     inline bool isCartridgeValid() const { return m_cartridge.isValid(); }
-    
+
+    inline bool isCGB() const { return m_cartridge.isCGB(); }
+
+    inline uint8_t romBank() const { return m_cartridge.romBank(); }
+    inline uint8_t ramBank() const { return m_cartridge.ramBank(); }
+
 private:
     static uint8_t DUMMY;
     static const uint16_t MBC_TYPE_ADDRESS;
-    
-    static const std::vector<uint8_t> BIOS_REGION;
+
+    static const std::vector<uint8_t> DMG_BIOS_REGION;
+    static const std::vector<uint8_t> CGB_BIOS_REGION;
 
     enum BankType { MBC_NONE, MBC1, MBC2, MBC3 };
     enum BankMode { MBC_ROM, MBC_RAM };
-    
-    ////////////////////////////////////////////////////////////////////////////////
-    class Region {
-    public:
-        explicit Region(uint16_t size, uint16_t offset);
-        virtual ~Region() = default;
 
-        Region & operator=(const Region &) = delete;
-        Region(const Region &) = delete;
-
-        virtual bool isAddressed(uint16_t address) const;
-        virtual inline bool isWritable() const { return true; }
-        
-        virtual void write(uint16_t address, uint8_t value);
-        virtual uint8_t & read(uint16_t address);
-
-        virtual inline uint16_t size() const { return m_size; }
-
-        virtual void reset() { std::fill(m_memory.begin(), m_memory.end(), resetValue()); }
-
-        inline void enableInit()  { m_initializing = true;  }
-        inline void disableInit() { m_initializing = false; }
-
-        virtual inline uint8_t resetValue() const { return 0x00; }
-        
-    protected:
-        uint16_t m_offset;
-        uint16_t m_size;
-        
-        bool m_initializing;
-
-        std::vector<uint8_t> m_memory;
-    };
-    ////////////////////////////////////////////////////////////////////////////////
-
-    ////////////////////////////////////////////////////////////////////////////////
-    class MemoryMappedIO : public Region {
-    public:
-        explicit MemoryMappedIO(MemoryController & parent, uint16_t address, uint16_t offset);
-
-        void write(uint16_t address, uint8_t value) override;
-
-        void reset() override;
-
-        inline void writeBytes(uint16_t ptr, uint8_t value, uint8_t mask)
-            { writeBytes(Region::read(ptr), value, mask); }
-        inline void writeBytes(uint8_t & reg, uint8_t value, uint8_t mask)
-            { reg = ((reg & ~mask) | (value & mask)); }
-
-        inline uint8_t resetValue() const override { return 0xFF; }
-
-        inline bool isRtcResetRequested() const { return m_rtcReset; }
-
-        inline void clearRtcReset() { m_rtcReset = false; }
-
-    private:
-        MemoryController & m_parent;
-
-        bool m_rtcReset;
-    };
-    ////////////////////////////////////////////////////////////////////////////////
-
-    ////////////////////////////////////////////////////////////////////////////////
-    class WorkingRam : public Region {
-    public:
-        explicit WorkingRam(uint16_t size, uint16_t offset);
-
-        void write(uint16_t address, uint8_t value) override;
-        uint8_t & read(uint16_t address) override;
-
-        bool isAddressed(uint16_t address) const override;
-
-    private:
-        uint16_t m_shadowOffset;
-
-        std::vector<uint8_t> m_shadow;
-
-        bool isShadowAddressed(uint16_t address) const;
-    };
-    ////////////////////////////////////////////////////////////////////////////////
-
-    ////////////////////////////////////////////////////////////////////////////////
-    class ReadOnly : public Region {
-    public:
-        explicit ReadOnly(uint16_t size, uint16_t offset);
-
-        inline bool isWritable() const override { return false; }
-
-        void write(uint16_t address, uint8_t value) override;
-    };
-    ////////////////////////////////////////////////////////////////////////////////
-
-    ////////////////////////////////////////////////////////////////////////////////
-    class Unusable : public Region {
-    public:
-        explicit Unusable(uint16_t size, uint16_t offset)
-            : Region(size, offset), m_dummy(0xFF) { m_memory.resize(0); }
-        ~Unusable() = default;
-
-        void write(uint16_t, uint8_t) override { }
-        uint8_t & read(uint16_t) override { return m_dummy; }
-
-    private:
-        uint8_t m_dummy;
-    };
-    ////////////////////////////////////////////////////////////////////////////////
-
-    ////////////////////////////////////////////////////////////////////////////////
-    class Removable : public Region {
-    public:
-        explicit Removable() : Region(0, 0) { }
-        ~Removable() = default;
-
-        void write(uint16_t address, uint8_t value) override;
-        uint8_t & read(uint16_t address) override;
-
-        bool isAddressed(uint16_t address) const override;
-
-        void load(const std::string & filename);
-
-        inline void reset() override { }
-        inline bool isValid() const { return m_cartridge->isValid(); }
-        
-    private:
-        static uint8_t EMPTY;
-        
-        std::shared_ptr<Cartridge> m_cartridge;
-    };
-    ////////////////////////////////////////////////////////////////////////////////
-
-    ReadOnly m_bios;
+    Bios m_bios;
     Removable m_cartridge;
-    Region m_gram;
     WorkingRam m_working;
-    Region m_graphics;
-    MemoryMappedIO m_io;
-    Region m_zero;
+    MemoryRegion m_oam;
+    MappedIO m_io;
+    MemoryRegion m_zero;
     Unusable m_unusable;
 
     struct {
@@ -195,11 +84,14 @@ private:
         uint8_t bank;
         BankMode mode;
     } m_mbc;
-    
-    std::list<Region*> m_memory;
-    
-    Region *find(uint16_t address) const;
 
+    GameBoy & m_parent;
+
+    std::list<std::reference_wrapper<MemoryRegion>> m_memory;
+
+    std::optional<std::reference_wrapper<MemoryRegion>> find(uint16_t address) const;
+
+    void init();
     void initMemoryBank();
 };
 

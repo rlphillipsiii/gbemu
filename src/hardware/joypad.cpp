@@ -17,12 +17,12 @@ const unordered_map<JoyPad::ShadowSelect, int> JoyPad::SHADOW_MAP = {
 
 const unordered_map<GameBoyInterface::JoyPadButton, JoyPad::ShadowSelect> JoyPad::BUTTON_MAP = {
     { GameBoyInterface::JOYPAD_A,      SHADOW_BUTTONS },
-	{ GameBoyInterface::JOYPAD_B,      SHADOW_BUTTONS },
-	{ GameBoyInterface::JOYPAD_SELECT, SHADOW_BUTTONS },
-	{ GameBoyInterface::JOYPAD_START,  SHADOW_BUTTONS },
-	{ GameBoyInterface::JOYPAD_RIGHT,  SHADOW_DIRS    },
-	{ GameBoyInterface::JOYPAD_LEFT,   SHADOW_DIRS    },
-	{ GameBoyInterface::JOYPAD_UP,     SHADOW_DIRS    },
+    { GameBoyInterface::JOYPAD_B,      SHADOW_BUTTONS },
+    { GameBoyInterface::JOYPAD_SELECT, SHADOW_BUTTONS },
+    { GameBoyInterface::JOYPAD_START,  SHADOW_BUTTONS },
+    { GameBoyInterface::JOYPAD_RIGHT,  SHADOW_DIRS    },
+    { GameBoyInterface::JOYPAD_LEFT,   SHADOW_DIRS    },
+    { GameBoyInterface::JOYPAD_UP,     SHADOW_DIRS    },
     { GameBoyInterface::JOYPAD_DOWN,   SHADOW_DIRS    },
 };
 
@@ -37,9 +37,9 @@ void JoyPad::cycle(uint8_t)
     lock_guard<mutex> guard(m_lock);
 
     uint8_t state = 0x0F;
-    
+
     if (!(m_register & SHADOW_DIRS)) {
-        state = m_shadow[SHADOW_MAP.at(SHADOW_DIRS)];        
+        state = m_shadow[SHADOW_MAP.at(SHADOW_DIRS)];
     } else if (!(m_register & SHADOW_BUTTONS)) {
         state = m_shadow[SHADOW_MAP.at(SHADOW_BUTTONS)];
     }

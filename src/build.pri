@@ -5,6 +5,7 @@ CONFIG (release, debug|release) {
     DEFINES += RELEASE
 
     QMAKE_CXXFLAGS += -O3
+    QMAKE_LFLAGS += -O3
 }
 
 CONFIG (debug, debug|release) {

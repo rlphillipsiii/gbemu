@@ -10,6 +10,7 @@
 
 #include "gameboyinterface.h"
 #include "gameboy.h"
+#include "logging.h"
 
 using std::shared_ptr;
 
@@ -19,7 +20,9 @@ shared_ptr<GameBoyInterface> GameBoyInterface::Instance(GameBoyInterface::Consol
     case GAMEBOY_EMU:
         return shared_ptr<GameBoyInterface>(new GameBoy());
 
-    default: assert(0);
+    default:
+        ERROR("Fatal Error: Unknown console type = %d\n", int(type));
+        assert(0);
     }
 
     return nullptr;

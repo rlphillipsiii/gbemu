@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Memory Map Addresses and Sizes
 ////////////////////////////////////////////////////////////////////////////////
-#define BIOS_SIZE   256
 #define BIOS_OFFSET 0x0000
 
 #define ROM_0_SIZE   16384
@@ -69,22 +68,29 @@
 
 #define SOUND_CONTROLLER_ARB_BYTES 16
 
-#define GPU_CONTROL_ADDRESS  0xFF40
-#define GPU_STATUS_ADDRESS   0xFF41
-#define GPU_SCROLLY_ADDRESS  0xFF42
-#define GPU_SCROLLX_ADDRESS  0xFF43
-#define GPU_SCANLINE_ADDRESS 0xFF44
-#define GPU_OAM_DMA          0xFF46
-#define GPU_PALETTE_ADDRESS  0xFF47
-#define GPU_OBP1_ADDRESS     0xFF48
-#define GPU_OBP2_ADDRESS     0xFF49
-#define GPU_WINDOW_Y_ADDRESS 0xFF4A
-#define GPU_WINDOW_X_ADDRESS 0xFF4B
+#define GPU_CONTROL_ADDRESS     0xFF40
+#define GPU_STATUS_ADDRESS      0xFF41
+#define GPU_SCROLLY_ADDRESS     0xFF42
+#define GPU_SCROLLX_ADDRESS     0xFF43
+#define GPU_SCANLINE_ADDRESS    0xFF44
+#define GPU_DMA_OAM             0xFF46
+#define GPU_PALETTE_ADDRESS     0xFF47
+#define GPU_OBP1_ADDRESS        0xFF48
+#define GPU_OBP2_ADDRESS        0xFF49
+#define GPU_WINDOW_Y_ADDRESS    0xFF4A
+#define GPU_WINDOW_X_ADDRESS    0xFF4B
+#define GPU_BANK_SELECT_ADDRESS 0xFF4F
 
 #define GPU_BG_PALETTE_INDEX     0xFF68
 #define GPU_BG_PALETTE_DATA      0xFF69
 #define GPU_SPRITE_PALETTE_INDEX 0xFF6A
 #define GPU_SPRITE_PALETTE_DATA  0xFF6B
+
+#define GPU_DMA_SRC_HIGH  0xFF51
+#define GPU_DMA_SRC_LOW   0xFF52
+#define GPU_DMA_DEST_HIGH 0xFF53
+#define GPU_DMA_DEST_LOW  0xFF54
+#define GPU_DMA_MODE      0xFF55
 
 #define GPU_LCD_VRAM_BANK_ADDRESS 0xFF4F
 
