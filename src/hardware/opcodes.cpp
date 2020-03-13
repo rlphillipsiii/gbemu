@@ -110,7 +110,7 @@ Processor::Processor(MemoryController & memory)
     OPCODES[0x33] = { "INC_sp",   [this]() { inc(m_sp);      }, 1, 2 };
 
     OPCODES[0xC3] = { "JP_n",  [this]() { jump();         }, 3, 3 };
-    OPCODES[0xE9] = { "JP_hl", [this]() { jump(m_gpr.hl); }, 1, 1 };
+    OPCODES[0xE9] = { "JP_hl", [this]() { jump(m_gpr.hl); }, 1, 0 };
 
     OPCODES[0xDA] = { "JP_C",  [this]() { if (isCarryFlagSet())  { jump(); }}, 3, 3 };
     OPCODES[0xD2] = { "JP_NC", [this]() { if (!isCarryFlagSet()) { jump(); }}, 3, 3 };
@@ -247,12 +247,12 @@ Processor::Processor(MemoryController & memory)
     OPCODES[0xD0] = { "RET_NC", [this]() { if (!isCarryFlagSet()) { ret(false); }}, 1, 2 };
     OPCODES[0xC0] = { "RET_NZ", [this]() { if (!isZeroFlagSet())  { ret(false); }}, 1, 2 };
     OPCODES[0xC8] = { "RET_Z",  [this]() { if (isZeroFlagSet())   { ret(false); }}, 1, 2 };
-    OPCODES[0xD9] = { "RETI",   [this]() { ret(true);                            }, 1, 4 };
+    OPCODES[0xD9] = { "RETI",   [this]() { ret(true);                            }, 1, 1 };
 
-    OPCODES[0x17] = { "RLA",  [this]() { rotatel(m_gpr.a, true, true); }, 1, 2};
-    OPCODES[0x07] = { "RLCA", [this]() { rlc(m_gpr.a, true); }, 1, 2 };
-    OPCODES[0x1F] = { "RRA",  [this]() { rotater(m_gpr.a, true, true); }, 1, 2 };
-    OPCODES[0x0F] = { "RRCA", [this]() { rrc(m_gpr.a, true); }, 1, 2 };
+    OPCODES[0x17] = { "RLA",  [this]() { rotatel(m_gpr.a, true, true); }, 1, 1 };
+    OPCODES[0x07] = { "RLCA", [this]() { rlc(m_gpr.a, true); }, 1, 1 };
+    OPCODES[0x1F] = { "RRA",  [this]() { rotater(m_gpr.a, true, true); }, 1, 1 };
+    OPCODES[0x0F] = { "RRCA", [this]() { rrc(m_gpr.a, true); }, 1, 1 };
 
     OPCODES[0xC7] = { "RST_$00", [this]() { rst(0x00); }, 1, 4 };
     OPCODES[0xCF] = { "RST_$08", [this]() { rst(0x08); }, 1, 4 };
@@ -364,7 +364,7 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0x7C] = { "BIT_7_h", [this]() { bit(m_gpr.h, 7); }, 1, 2 };
     CB_OPCODES[0x7D] = { "BIT_7_l", [this]() { bit(m_gpr.l, 7); }, 1, 2 };
 
-    CB_OPCODES[0x86] = { "RES_0_(hl)", [this]() { res(m_gpr.hl, 0); }, 1, 3 };
+    CB_OPCODES[0x86] = { "RES_0_(hl)", [this]() { res(m_gpr.hl, 0); }, 1, 4 };
     CB_OPCODES[0x87] = { "RES_0_a", [this]() { res(m_gpr.a, 0); }, 1, 2 };
     CB_OPCODES[0x80] = { "RES_0_b", [this]() { res(m_gpr.b, 0); }, 1, 2 };
     CB_OPCODES[0x81] = { "RES_0_c", [this]() { res(m_gpr.c, 0); }, 1, 2 };
@@ -372,7 +372,7 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0x83] = { "RES_0_e", [this]() { res(m_gpr.e, 0); }, 1, 2 };
     CB_OPCODES[0x84] = { "RES_0_h", [this]() { res(m_gpr.h, 0); }, 1, 2 };
     CB_OPCODES[0x85] = { "RES_0_l", [this]() { res(m_gpr.l, 0); }, 1, 2 };
-    CB_OPCODES[0x8E] = { "RES_1_(hl)", [this]() { res(m_gpr.hl, 1); }, 1, 3 };
+    CB_OPCODES[0x8E] = { "RES_1_(hl)", [this]() { res(m_gpr.hl, 1); }, 1, 4 };
     CB_OPCODES[0x8F] = { "RES_1_a", [this]() { res(m_gpr.a, 1); }, 1, 2 };
     CB_OPCODES[0x88] = { "RES_1_b", [this]() { res(m_gpr.b, 1); }, 1, 2 };
     CB_OPCODES[0x89] = { "RES_1_c", [this]() { res(m_gpr.c, 1); }, 1, 2 };
@@ -380,7 +380,7 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0x8B] = { "RES_1_e", [this]() { res(m_gpr.e, 1); }, 1, 2 };
     CB_OPCODES[0x8C] = { "RES_1_h", [this]() { res(m_gpr.h, 1); }, 1, 2 };
     CB_OPCODES[0x8D] = { "RES_1_l", [this]() { res(m_gpr.l, 1); }, 1, 2 };
-    CB_OPCODES[0x96] = { "RES_2_(hl)", [this]() { res(m_gpr.hl, 2); }, 1, 3 };
+    CB_OPCODES[0x96] = { "RES_2_(hl)", [this]() { res(m_gpr.hl, 2); }, 1, 4 };
     CB_OPCODES[0x97] = { "RES_2_a", [this]() { res(m_gpr.a, 2); }, 1, 2 };
     CB_OPCODES[0x90] = { "RES_2_b", [this]() { res(m_gpr.b, 2); }, 1, 2 };
     CB_OPCODES[0x91] = { "RES_2_c", [this]() { res(m_gpr.c, 2); }, 1, 2 };
@@ -388,7 +388,7 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0x93] = { "RES_2_e", [this]() { res(m_gpr.e, 2); }, 1, 2 };
     CB_OPCODES[0x94] = { "RES_2_h", [this]() { res(m_gpr.h, 2); }, 1, 2 };
     CB_OPCODES[0x95] = { "RES_2_l", [this]() { res(m_gpr.l, 2); }, 1, 2 };
-    CB_OPCODES[0x9E] = { "RES_3_(hl)", [this]() { res(m_gpr.hl, 3); }, 1, 3 };
+    CB_OPCODES[0x9E] = { "RES_3_(hl)", [this]() { res(m_gpr.hl, 3); }, 1, 4 };
     CB_OPCODES[0x9F] = { "RES_3_a", [this]() { res(m_gpr.a, 3); }, 1, 2 };
     CB_OPCODES[0x98] = { "RES_3_b", [this]() { res(m_gpr.b, 3); }, 1, 2 };
     CB_OPCODES[0x99] = { "RES_3_c", [this]() { res(m_gpr.c, 3); }, 1, 2 };
@@ -396,7 +396,7 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0x9B] = { "RES_3_e", [this]() { res(m_gpr.e, 3); }, 1, 2 };
     CB_OPCODES[0x9C] = { "RES_3_h", [this]() { res(m_gpr.h, 3); }, 1, 2 };
     CB_OPCODES[0x9D] = { "RES_3_l", [this]() { res(m_gpr.l, 3); }, 1, 2 };
-    CB_OPCODES[0xA6] = { "RES_4_(hl)", [this]() { res(m_gpr.hl, 4); }, 1, 3 };
+    CB_OPCODES[0xA6] = { "RES_4_(hl)", [this]() { res(m_gpr.hl, 4); }, 1, 4 };
     CB_OPCODES[0xA7] = { "RES_4_a", [this]() { res(m_gpr.a, 4); }, 1, 2 };
     CB_OPCODES[0xA0] = { "RES_4_b", [this]() { res(m_gpr.b, 4); }, 1, 2 };
     CB_OPCODES[0xA1] = { "RES_4_c", [this]() { res(m_gpr.c, 4); }, 1, 2 };
@@ -404,7 +404,7 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0xA3] = { "RES_4_e", [this]() { res(m_gpr.e, 4); }, 1, 2 };
     CB_OPCODES[0xA4] = { "RES_4_h", [this]() { res(m_gpr.h, 4); }, 1, 2 };
     CB_OPCODES[0xA5] = { "RES_4_l", [this]() { res(m_gpr.l, 4); }, 1, 2 };
-    CB_OPCODES[0xAE] = { "RES_5_(hl)", [this]() { res(m_gpr.hl, 5); }, 1, 3 };
+    CB_OPCODES[0xAE] = { "RES_5_(hl)", [this]() { res(m_gpr.hl, 5); }, 1, 4 };
     CB_OPCODES[0xAF] = { "RES_5_a", [this]() { res(m_gpr.a, 5); }, 1, 2 };
     CB_OPCODES[0xA8] = { "RES_5_b", [this]() { res(m_gpr.b, 5); }, 1, 2 };
     CB_OPCODES[0xA9] = { "RES_5_c", [this]() { res(m_gpr.c, 5); }, 1, 2 };
@@ -412,7 +412,7 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0xAB] = { "RES_5_e", [this]() { res(m_gpr.e, 5); }, 1, 2 };
     CB_OPCODES[0xAC] = { "RES_5_h", [this]() { res(m_gpr.h, 5); }, 1, 2 };
     CB_OPCODES[0xAD] = { "RES_5_l", [this]() { res(m_gpr.l, 5); }, 1, 2 };
-    CB_OPCODES[0xB6] = { "RES_6_(hl)", [this]() { res(m_gpr.hl, 6); }, 1, 3 };
+    CB_OPCODES[0xB6] = { "RES_6_(hl)", [this]() { res(m_gpr.hl, 6); }, 1, 4 };
     CB_OPCODES[0xB7] = { "RES_6_a", [this]() { res(m_gpr.a, 6); }, 1, 2 };
     CB_OPCODES[0xB0] = { "RES_6_b", [this]() { res(m_gpr.b, 6); }, 1, 2 };
     CB_OPCODES[0xB1] = { "RES_6_c", [this]() { res(m_gpr.c, 6); }, 1, 2 };
@@ -420,7 +420,7 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0xB3] = { "RES_6_e", [this]() { res(m_gpr.e, 6); }, 1, 2 };
     CB_OPCODES[0xB4] = { "RES_6_h", [this]() { res(m_gpr.h, 6); }, 1, 2 };
     CB_OPCODES[0xB5] = { "RES_6_l", [this]() { res(m_gpr.l, 6); }, 1, 2 };
-    CB_OPCODES[0xBE] = { "RES_7_(hl)", [this]() { res(m_gpr.hl, 7); }, 1, 3 };
+    CB_OPCODES[0xBE] = { "RES_7_(hl)", [this]() { res(m_gpr.hl, 7); }, 1, 4 };
     CB_OPCODES[0xBF] = { "RES_7_a", [this]() { res(m_gpr.a, 7); }, 1, 2 };
     CB_OPCODES[0xB8] = { "RES_7_b", [this]() { res(m_gpr.b, 7); }, 1, 2 };
     CB_OPCODES[0xB9] = { "RES_7_c", [this]() { res(m_gpr.c, 7); }, 1, 2 };
@@ -439,22 +439,22 @@ Processor::Processor(MemoryController & memory)
     CB_OPCODES[0x15] = { "RL_l",    [this]() { rotatel(m_gpr.l, true, false); }, 1, 2 };
 
     CB_OPCODES[0x06] = { "RLC_(hl)", [this]() { rlc(m_gpr.hl, false); }, 1, 4 };
-    CB_OPCODES[0x07] = { "RLC_a",    [this]() { rlc(m_gpr.a, false); }, 1, 1 };
-    CB_OPCODES[0x00] = { "RLC_b",    [this]() { rlc(m_gpr.b, false); }, 1, 1 };
-    CB_OPCODES[0x01] = { "RLC_c",    [this]() { rlc(m_gpr.c, false); }, 1, 1 };
-    CB_OPCODES[0x02] = { "RLC_d",    [this]() { rlc(m_gpr.d, false); }, 1, 1 };
-    CB_OPCODES[0x03] = { "RLC_e",    [this]() { rlc(m_gpr.e, false); }, 1, 1 };
-    CB_OPCODES[0x04] = { "RLC_h",    [this]() { rlc(m_gpr.h, false); }, 1, 1 };
-    CB_OPCODES[0x05] = { "RLC_l",    [this]() { rlc(m_gpr.l, false); }, 1, 1 };
+    CB_OPCODES[0x07] = { "RLC_a",    [this]() { rlc(m_gpr.a, false); }, 1, 2 };
+    CB_OPCODES[0x00] = { "RLC_b",    [this]() { rlc(m_gpr.b, false); }, 1, 2 };
+    CB_OPCODES[0x01] = { "RLC_c",    [this]() { rlc(m_gpr.c, false); }, 1, 2 };
+    CB_OPCODES[0x02] = { "RLC_d",    [this]() { rlc(m_gpr.d, false); }, 1, 2 };
+    CB_OPCODES[0x03] = { "RLC_e",    [this]() { rlc(m_gpr.e, false); }, 1, 2 };
+    CB_OPCODES[0x04] = { "RLC_h",    [this]() { rlc(m_gpr.h, false); }, 1, 2 };
+    CB_OPCODES[0x05] = { "RLC_l",    [this]() { rlc(m_gpr.l, false); }, 1, 2 };
 
     CB_OPCODES[0x0E] = { "RRC_(hl)", [this]() { rrc(m_gpr.hl, false); }, 1, 4 };
-    CB_OPCODES[0x0F] = { "RRC_a",    [this]() { rrc(m_gpr.a, false); }, 1, 1 };
-    CB_OPCODES[0x08] = { "RRC_b",    [this]() { rrc(m_gpr.b, false); }, 1, 1 };
-    CB_OPCODES[0x09] = { "RRC_c",    [this]() { rrc(m_gpr.c, false); }, 1, 1 };
-    CB_OPCODES[0x0A] = { "RRC_d",    [this]() { rrc(m_gpr.d, false); }, 1, 1 };
-    CB_OPCODES[0x0B] = { "RRC_e",    [this]() { rrc(m_gpr.e, false); }, 1, 1 };
-    CB_OPCODES[0x0C] = { "RRC_h",    [this]() { rrc(m_gpr.h, false); }, 1, 1 };
-    CB_OPCODES[0x0D] = { "RRC_l",    [this]() { rrc(m_gpr.l, false); }, 1, 1 };
+    CB_OPCODES[0x0F] = { "RRC_a",    [this]() { rrc(m_gpr.a, false); }, 1, 2 };
+    CB_OPCODES[0x08] = { "RRC_b",    [this]() { rrc(m_gpr.b, false); }, 1, 2 };
+    CB_OPCODES[0x09] = { "RRC_c",    [this]() { rrc(m_gpr.c, false); }, 1, 2 };
+    CB_OPCODES[0x0A] = { "RRC_d",    [this]() { rrc(m_gpr.d, false); }, 1, 2 };
+    CB_OPCODES[0x0B] = { "RRC_e",    [this]() { rrc(m_gpr.e, false); }, 1, 2 };
+    CB_OPCODES[0x0C] = { "RRC_h",    [this]() { rrc(m_gpr.h, false); }, 1, 2 };
+    CB_OPCODES[0x0D] = { "RRC_l",    [this]() { rrc(m_gpr.l, false); }, 1, 2 };
 
     CB_OPCODES[0x1E] = { "RR_(hl)", [this]() { rotater(m_gpr.hl, true, false); }, 1, 4 };
     CB_OPCODES[0x1F] = { "RR_a",    [this]() { rotater(m_gpr.a, true, false); }, 1, 2 };

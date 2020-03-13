@@ -53,7 +53,7 @@ void TimerModule::cycle(uint8_t ticks)
 
     // Check to see if the number of ticks corresponding to 1 increment of
     // the RTC has elapsed and increment it if so.
-    if (m_rtc >= RTC_INCREMENT) {
+    while (m_rtc >= RTC_INCREMENT) {
         m_divider++;
 
         m_rtc -= RTC_INCREMENT;
@@ -68,7 +68,7 @@ void TimerModule::cycle(uint8_t ticks)
     // register.
     m_timeout = TIMEOUT_MAP.at(m_control & TIMER_FREQUENCY);
 
-    if (m_ticks >= m_timeout) {
+    while (m_ticks >= m_timeout) {
         // We've got the correct number of ticks to increment the actual
         // counter, so increment it now.  If the register is set to 0xFF,
         // then this increment is going to overflow the register, so we
@@ -80,6 +80,6 @@ void TimerModule::cycle(uint8_t ticks)
             m_counter = m_modulo;
         }
 
-        while (m_ticks >= m_timeout) { m_ticks -= m_timeout; }
+        m_ticks -= m_timeout;
     }
 }

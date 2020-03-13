@@ -604,7 +604,6 @@ void Processor::ret(bool enable)
     if (enable) {
         m_interrupts.enable = true;
     }
-
     m_ticks = 3;
 }
 
