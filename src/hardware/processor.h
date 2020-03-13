@@ -64,7 +64,8 @@ public:
 
 private:
 #ifdef UNIT_TEST
-    friend class TestCpu_Init_Test;
+    friend class CpuTest;
+    friend class TimerTest;
 #endif
 
     static const uint16_t HISTORY_SIZE;

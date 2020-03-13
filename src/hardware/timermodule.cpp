@@ -5,13 +5,10 @@
  *      Author: Robert Phillips III
  */
 #include <cassert>
-#include <unordered_map>
 
 #include "timermodule.h"
 #include "memmap.h"
 #include "interrupt.h"
-
-using std::unordered_map;
 
 const uint16_t TimerModule::RTC_INCREMENT = 512;
 
@@ -20,9 +17,8 @@ const uint16_t TimerModule::TIMEOUT_252K = 16;
 const uint16_t TimerModule::TIMEOUT_65K  = 64;
 const uint16_t TimerModule::TIMEOUT_16K  = 256;
 
-const unordered_map<uint8_t, uint16_t> TimerModule::TIMEOUT_MAP = {
-    { 0x00, TIMEOUT_4K  }, { 0x01, TIMEOUT_252K },
-    { 0x02, TIMEOUT_65K }, { 0x03, TIMEOUT_16K  },
+const TimeoutMapArray TimerModule::TIMEOUT_MAP = {
+    { TIMEOUT_4K, TIMEOUT_252K, TIMEOUT_65K, TIMEOUT_16K, },
 };
 
 TimerModule::TimerModule(MemoryController & memory)
@@ -38,7 +34,7 @@ TimerModule::TimerModule(MemoryController & memory)
 void TimerModule::reset()
 {
     m_ticks = m_rtc = 0;
-    
+
     m_divider = m_counter = m_modulo = m_control = 0x00;
 }
 
@@ -54,30 +50,24 @@ void TimerModule::cycle(uint8_t ticks)
     }
 
     m_rtc += ticks;
-    
+
     // Check to see if the number of ticks corresponding to 1 increment of
     // the RTC has elapsed and increment it if so.
     if (m_rtc >= RTC_INCREMENT) {
         m_divider++;
-        
+
         m_rtc -= RTC_INCREMENT;
     }
 
     if (!(m_control & TIMER_ENABLE)) { return; }
 
+    m_ticks += ticks;
+
     // Read the frequency bits in the control register and look up how many
     // clock cycles need to elapse until we need to increment the counter
     // register.
-    auto entry = TIMEOUT_MAP.find(m_control & TIMER_FREQUENCY);
-    if (TIMEOUT_MAP.end() == entry) {
-        assert(0);
+    m_timeout = TIMEOUT_MAP.at(m_control & TIMER_FREQUENCY);
 
-        entry = TIMEOUT_MAP.begin();
-    }
-
-    m_ticks += ticks;
-    
-    m_timeout = entry->second;
     if (m_ticks >= m_timeout) {
         // We've got the correct number of ticks to increment the actual
         // counter, so increment it now.  If the register is set to 0xFF,
@@ -89,6 +79,7 @@ void TimerModule::cycle(uint8_t ticks)
 
             m_counter = m_modulo;
         }
-        m_ticks -= m_timeout;
+
+        while (m_ticks >= m_timeout) { m_ticks -= m_timeout; }
     }
 }
