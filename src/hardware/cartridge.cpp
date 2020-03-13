@@ -179,14 +179,7 @@ Cartridge::MemoryBankController::MemoryBankController(
       m_ramBank(0),
       m_hasBattery(battery)
 {
-    string nv = m_cartridge.game() + ".sav";
-    initRAM(nv);
-
-    if (m_hasBattery) {
-        LOG("NV RAM Filename: %s\n", nv.c_str());
-
-        m_nvRam = ofstream(nv, std::ios::out | std::ios::binary);
-    }
+    initRAM(m_cartridge.game() + ".sav");
 }
 
 Cartridge::MemoryBankController::~MemoryBankController()
@@ -198,19 +191,23 @@ void Cartridge::MemoryBankController::initRAM(const string & name)
 {
     if (!m_hasBattery) { return; }
 
+    LOG("NV RAM Filename: %s\n", name.c_str());
+
     ifstream input(name, std::ios::in | std::ios::binary);
     if (input.is_open()) {
         for (auto & bank : m_ram) {
             input.read(reinterpret_cast<char*>(bank.data()), bank.size());
         }
         input.close();
-    } else {
-        ofstream image(name, std::ios::out | std::ios::binary);
-        for (auto & bank : m_ram) {
-            image.write(reinterpret_cast<char*>(bank.data()), bank.size());
-        }
-        image.close();
     }
+
+    m_nvRam = ofstream(name, std::ios::out | std::ios::binary);
+    if (!m_nvRam) { return; }
+
+    for (auto & bank : m_ram) {
+        m_nvRam.write(reinterpret_cast<char*>(bank.data()), bank.size());
+    }
+    m_nvRam.flush();
 }
 
 void Cartridge::MemoryBankController::writeRAM(uint16_t address, uint8_t value)
@@ -224,6 +221,11 @@ void Cartridge::MemoryBankController::writeRAM(uint16_t address, uint8_t value)
 
     if (m_nvRam.good()) {
         m_nvRam.seekp(index + (EXT_RAM_SIZE * m_ramBank));
+        if (m_nvRam.rdstate()) {
+            ERROR("RAM seek failed: 0x%02x\n", m_nvRam.rdstate());
+            return;
+        }
+
         m_nvRam.write(reinterpret_cast<const char*>(&value), 1);
         m_nvRam.flush();
     }
