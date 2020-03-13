@@ -31,7 +31,7 @@ using std::lock_guard;
 GameBoy::GameBoy()
     : m_memory(*this),
       m_gpu(m_memory),
-      m_cpu(m_memory),
+      m_cpu(*this),
       m_joypad(m_memory),
       m_run(false)
 {
@@ -79,7 +79,12 @@ void GameBoy::stop()
 
 void GameBoy::step()
 {
-    uint8_t ticks = m_cpu.cycle();
+    m_cpu.cycle();
+}
+
+void GameBoy::execute(uint8_t ticks)
+{
+    m_cpu.updateTimer(ticks);
 
     m_gpu.cycle(ticks);
     m_joypad.cycle(ticks);

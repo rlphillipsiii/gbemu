@@ -20,6 +20,7 @@
 #include "interrupt.h"
 #include "timermodule.h"
 
+class GameBoy;
 class MemoryController;
 
 class Processor {
@@ -54,11 +55,13 @@ public:
         std::string str() const;
     };
 
-    explicit Processor(MemoryController & memory);
+    explicit Processor(GameBoy & parent);
     ~Processor() = default;
 
     void reset();
-    uint8_t cycle();
+    void cycle();
+
+    inline void updateTimer(uint8_t ticks) { m_timer.cycle(ticks); }
 
     std::vector<Command> disassemble();
 
@@ -74,6 +77,8 @@ private:
 
     static const uint16_t ROM_ENTRY_POINT;
 
+    static const uint8_t CYCLES_PER_TICK;
+
     enum FlagMask {
         ZERO_FLAG_MASK       = 0x80,
         NEG_FLAG_MASK        = 0x40,
@@ -86,9 +91,8 @@ private:
 
     std::unordered_set<uint8_t> ILLEGAL_OPCODES;
 
+    GameBoy & m_parent;
     MemoryController & m_memory;
-
-    uint8_t m_ticks;
 
     /** Program counter that holds the address of the next instruction to fetch */
     uint16_t m_pc;
@@ -207,12 +211,14 @@ private:
 
     bool interrupt();
 
-    uint8_t execute();
+    void execute(bool interrupted);
 
     void history() const;
 
     void log(uint8_t opcode, const Operation *operation);
     void logRegisters() const;
+
+    void tick(uint8_t ticks);
 
     inline uint16_t args() const { return (uint16_t(m_operands[1]) << 8) | m_operands[0]; }
 };

@@ -15,6 +15,7 @@
 #include "memorycontroller.h"
 #include "memmap.h"
 #include "logging.h"
+#include "gameboy.h"
 
 using std::string;
 using std::stringstream;
@@ -25,6 +26,8 @@ const uint8_t Processor::CB_PREFIX = 0xCB;
 const uint16_t Processor::HISTORY_SIZE = 1000;
 
 const uint16_t Processor::ROM_ENTRY_POINT = 0x0100;
+
+const uint8_t Processor::CYCLES_PER_TICK = 4;
 
 void Processor::reset()
 {
@@ -192,9 +195,16 @@ bool Processor::interrupt()
     return false;
 }
 
-uint8_t Processor::execute()
+void Processor::tick(uint8_t ticks)
 {
-    m_ticks = 0;
+    m_parent.execute(ticks * CYCLES_PER_TICK);
+}
+
+void Processor::execute(bool interrupted)
+{
+    // If we are halted, and we are not trying to execute an ISR, then all we need to
+    // do is cycle the rest of the blocks and return.
+    if (m_halted && !interrupted) { tick(1); return; }
 
     // If we've gotten to this point, then we were either never halted in the first
     // place, or we just executed an interrupt and were woken up.
@@ -212,10 +222,6 @@ uint8_t Processor::execute()
     // gotten to this address.  This is a noop of the BIOS region is already disabled.
     if (ROM_ENTRY_POINT == m_pc) {
         NOTE("%s\n", "Starting ROM execution");
-        if (!m_memory.inBios()) {
-            history();
-            exit(1);
-        }
         m_memory.unlockBiosRegion();
     }
 
@@ -241,39 +247,30 @@ uint8_t Processor::execute()
     }
 #endif
 
+    // TODO: We need to change this up a little bit.  We should probably let everything
+    //       else cycle before we do this here so that the memory access happens at the
+    //       correct time
+    if (operation->cycles) { tick(operation->cycles); }
+
     // Call the function pointer in our Operation struct.  Any arguments to the function
     // will have already been put in to the operands array.
     operation->handler();
 
-    // Set the number of ticks so that the next pass through will burn additional cycles
-    // if necessary.  We want to add to the ticks here because conditional commands will
-    // set the base value based on whether or not the condition was hit while we were
-    // executing the command (i.e. call if z will set ticks to 3 if the call was made
-    // and leave it at 0 if it was not).
-    m_ticks += operation->cycles;
-    m_ticks *= 4;
-
     // The flags register only uses the upper 4 bits, so let's go ahead and make sure
     // that the lower nibble is always 0.
     m_flags &= 0xF0;
-    return m_ticks;
 }
 
-uint8_t Processor::cycle()
+void Processor::cycle()
 {
-    if (!m_memory.inBios() && !m_memory.isCartridgeValid()) { return 1; }
+    if (!m_memory.inBios() && !m_memory.isCartridgeValid()) { return; }
 
     // Cache the interrupt state so that we can log it and use it for debugging
     // if necessary.
     m_iCache.status = m_interrupts.status;
     m_iCache.mask   = m_interrupts.mask;
 
-    bool interrupted = interrupt();
-
-    uint8_t ticks = (m_halted && !interrupted) ? 1 : execute();
-
-    m_timer.cycle(ticks);
-    return ticks;
+    execute(interrupt());
 }
 
 void Processor::log(uint8_t opcode, const Operation *operation)
@@ -335,7 +332,10 @@ void Processor::or8(uint8_t value)
 
 void Processor::incP(uint16_t address)
 {
+    tick(2);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     inc(value);
     m_memory.write(address, value);
@@ -354,7 +354,10 @@ void Processor::inc(uint8_t & reg)
 
 void Processor::decP(uint16_t address)
 {
+    tick(2);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     dec(value);
     m_memory.write(address, value);
@@ -453,7 +456,10 @@ void Processor::add16(uint16_t & dest, uint16_t reg, uint8_t value)
 
 void Processor::swap(uint16_t address)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     swap(value);
     m_memory.write(address, value);
@@ -477,7 +483,7 @@ void Processor::call()
 
     m_pc = args();
 
-    m_ticks = 3;
+    tick(3);
 }
 
 void Processor::jump()
@@ -497,7 +503,7 @@ void Processor::jump(uint16_t address)
 {
     m_pc = address;
 
-    m_ticks = 1;
+    tick(1);
 }
 
 void Processor::ccf()
@@ -556,7 +562,10 @@ void Processor::bit(uint8_t reg, uint8_t which)
 
 void Processor::res(uint16_t address, uint8_t which)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     res(value, which);
     m_memory.write(address, value);
@@ -569,7 +578,10 @@ void Processor::res(uint8_t & reg, uint8_t which)
 
 void Processor::set(uint16_t address, uint8_t which)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     set(value, which);
     m_memory.write(address, value);
@@ -604,12 +616,16 @@ void Processor::ret(bool enable)
     if (enable) {
         m_interrupts.enable = true;
     }
-    m_ticks = 3;
+
+    tick(3);
 }
 
 void Processor::rotatel(uint16_t address, bool wrap, bool ignoreZero)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     rotatel(value, wrap, ignoreZero);
     m_memory.write(address, value);
@@ -636,7 +652,10 @@ void Processor::rotatel(uint8_t & reg, bool wrap, bool ignoreZero)
 
 void Processor::rotater(uint16_t address, bool wrap, bool ignoreZero)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     rotater(value, wrap, ignoreZero);
     m_memory.write(address, value);
@@ -663,7 +682,10 @@ void Processor::rotater(uint8_t & reg, bool wrap, bool ignoreZero)
 
 void Processor::rlc(uint16_t address, bool ignoreZero)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     rlc(value, ignoreZero);
     m_memory.write(address, value);
@@ -689,7 +711,10 @@ void Processor::rlc(uint8_t & reg, bool ignoreZero)
 
 void Processor::rrc(uint16_t address, bool ignoreZero)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     rrc(value, ignoreZero);
     m_memory.write(address, value);
@@ -755,7 +780,10 @@ void Processor::load(uint16_t & reg, uint16_t value)
 
 void Processor::sla(uint16_t address)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     sla(value);
     m_memory.write(address, value);
@@ -768,7 +796,10 @@ void Processor::sla(uint8_t & reg)
 
 void Processor::srl(uint16_t address)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     srl(value);
     m_memory.write(address, value);
@@ -781,7 +812,10 @@ void Processor::srl(uint8_t & reg)
 
 void Processor::sra(uint16_t address)
 {
+    tick(3);
     uint8_t value = m_memory.peek(address);
+
+    tick(1);
 
     sra(value);
     m_memory.write(address, value);
