@@ -84,6 +84,19 @@ string Processor::Command::str() const
     return stream.str();
 }
 
+string Processor::Command::abbrev() const
+{
+    const int size = 1024;
+    char buffer[size];
+
+    sprintf(buffer, "%s (0x%02x): ", operation->name.c_str(), opcode);
+    for (int8_t i = operation->length - 2; i >= 0; i--) {
+        sprintf(buffer, "%s %02x", buffer, operands[i]);
+    }
+
+    return string(buffer);
+}
+
 void Processor::history() const
 {
     for (const Command & cmd : m_executed) {
@@ -197,7 +210,8 @@ bool Processor::interrupt()
 
 void Processor::tick(uint8_t ticks)
 {
-    m_parent.execute(ticks * CYCLES_PER_TICK);
+    uint8_t adjustment = CYCLES_PER_TICK >> uint8_t(m_timer.getSpeed());
+    m_parent.execute(ticks * adjustment);
 }
 
 void Processor::execute(bool interrupted)
@@ -247,9 +261,8 @@ void Processor::execute(bool interrupted)
     }
 #endif
 
-    // TODO: We need to change this up a little bit.  We should probably let everything
-    //       else cycle before we do this here so that the memory access happens at the
-    //       correct time
+    // Let everything else sync with the clock before the CPU has a chance to modify
+    // any memory.
     if (operation->cycles) { tick(operation->cycles); }
 
     // Call the function pointer in our Operation struct.  Any arguments to the function
@@ -843,8 +856,22 @@ void Processor::scf()
 
 void Processor::stop()
 {
-    // TODO: prep for clock speed change in CGB mode only
     if (!m_memory.isCGB()) { return; }
+
+    // Check the speed switch register.  If the lowest bit is clear, then stop
+    // was called without requesting a speed switch change, so we'll just bail
+    // now.
+    uint8_t current = m_memory.read(CGB_SPEED_SWITCH_ADDRESS);
+    if (!(current & 0x01)) { return; }
+
+    TimerModule::ClockSpeed speed =
+        (m_timer.getSpeed() == TimerModule::SPEED_NORMAL)
+        ? TimerModule::SPEED_DOUBLE : TimerModule::SPEED_NORMAL;
+
+    // Update the MSB of the speed switch register and clear the LSB.
+    m_memory.write(CGB_SPEED_SWITCH_ADDRESS, uint8_t(speed) << 7);
+
+    m_timer.setSpeed(speed);
 }
 
 void Processor::daa()

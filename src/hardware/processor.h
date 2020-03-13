@@ -53,6 +53,7 @@ public:
 
         void print() const;
         std::string str() const;
+        std::string abbrev() const;
     };
 
     explicit Processor(GameBoy & parent);

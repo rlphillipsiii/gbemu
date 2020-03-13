@@ -26,7 +26,8 @@ TimerModule::TimerModule(MemoryController & memory)
       m_divider(memory.read(CPU_TIMER_DIV_ADDRESS)),
       m_counter(memory.read(CPU_TIMER_COUNTER_ADDRESS)),
       m_modulo(memory.read(CPU_TIMER_MODULO_ADDRESS)),
-      m_control(memory.read(CPU_TIMER_CONTROL_ADDRESS))
+      m_control(memory.read(CPU_TIMER_CONTROL_ADDRESS)),
+      m_speed(SPEED_NORMAL)
 {
     reset();
 }
@@ -51,12 +52,14 @@ void TimerModule::cycle(uint8_t ticks)
 
     m_rtc += ticks;
 
+    const uint16_t rtc = RTC_INCREMENT >> uint8_t(m_speed);
+
     // Check to see if the number of ticks corresponding to 1 increment of
     // the RTC has elapsed and increment it if so.
-    while (m_rtc >= RTC_INCREMENT) {
+    while (m_rtc >= rtc) {
         m_divider++;
 
-        m_rtc -= RTC_INCREMENT;
+        m_rtc -= rtc;
     }
 
     if (!(m_control & TIMER_ENABLE)) { return; }
@@ -66,7 +69,7 @@ void TimerModule::cycle(uint8_t ticks)
     // Read the frequency bits in the control register and look up how many
     // clock cycles need to elapse until we need to increment the counter
     // register.
-    m_timeout = TIMEOUT_MAP.at(m_control & TIMER_FREQUENCY);
+    m_timeout = TIMEOUT_MAP.at(m_control & TIMER_FREQUENCY) >> uint8_t(m_speed);
 
     while (m_ticks >= m_timeout) {
         // We've got the correct number of ticks to increment the actual

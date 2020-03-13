@@ -19,10 +19,7 @@ using TimeoutMapArray = std::array<uint16_t, TIMEOUT_SEL_COUNT>;
 
 struct TimerModule {
 public:
-    enum ControlMask {
-        TIMER_FREQUENCY = 0x03,
-        TIMER_ENABLE    = 0x04,
-    };
+    enum ClockSpeed { SPEED_NORMAL = 0x00, SPEED_DOUBLE = 0x01, };
 
     explicit TimerModule(MemoryController & memory);
     ~TimerModule() = default;
@@ -30,6 +27,10 @@ public:
     void reset();
 
     void cycle(uint8_t ticks);
+
+    void setSpeed(ClockSpeed speed) { m_speed = speed; }
+
+    inline ClockSpeed getSpeed() const { return m_speed; }
 
 private:
 #ifdef UNIT_TEST
@@ -44,6 +45,8 @@ private:
 
     static const TimeoutMapArray TIMEOUT_MAP;
 
+    enum ControlMask { TIMER_FREQUENCY = 0x03, TIMER_ENABLE = 0x04, };
+
     MemoryController & m_memory;
 
     uint8_t & m_divider;
@@ -53,6 +56,8 @@ private:
 
     uint16_t m_ticks;
     uint16_t m_rtc;
+
+    ClockSpeed m_speed;
 
     uint16_t m_timeout;
 };

@@ -43,8 +43,8 @@ bool GameBoy::load(const string & filename)
 
     m_assembly = m_cpu.disassemble();
 #if 0
-    for (const Processor::Command & cmd : m_assembly) {
-        std::cout << cmd.str() << std::endl;
+    for (size_t i = 0; i < m_assembly.size(); ++i) {
+        printf("0x%04x | %s\n", uint(i + 0x100), m_assembly.at(i).abbrev().c_str());
     }
 #endif
     return true;
