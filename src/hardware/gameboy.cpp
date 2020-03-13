@@ -31,7 +31,7 @@ using std::lock_guard;
 GameBoy::GameBoy()
     : m_memory(*this),
       m_gpu(m_memory),
-      m_cpu(m_memory),
+      m_cpu(*this),
       m_joypad(m_memory),
       m_run(false)
 {
@@ -43,8 +43,8 @@ bool GameBoy::load(const string & filename)
 
     m_assembly = m_cpu.disassemble();
 #if 0
-    for (const Processor::Command & cmd : m_assembly) {
-        std::cout << cmd.str() << std::endl;
+    for (size_t i = 0; i < m_assembly.size(); ++i) {
+        printf("0x%04x | %s\n", uint(i + 0x100), m_assembly.at(i).abbrev().c_str());
     }
 #endif
     return true;
@@ -79,7 +79,12 @@ void GameBoy::stop()
 
 void GameBoy::step()
 {
-    uint8_t ticks = m_cpu.cycle();
+    m_cpu.cycle();
+}
+
+void GameBoy::execute(uint8_t ticks)
+{
+    m_cpu.updateTimer(ticks);
 
     m_gpu.cycle(ticks);
     m_joypad.cycle(ticks);

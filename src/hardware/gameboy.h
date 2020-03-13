@@ -32,6 +32,8 @@ public:
     void start() override;
     void stop() override;
 
+    void execute(uint8_t ticks);
+
     inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
     inline void clrButton(JoyPadButton button) override { m_joypad.clr(button); }
 

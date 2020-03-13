@@ -8,18 +8,18 @@
 #ifndef TIMERMODULE_H_
 #define TIMERMODULE_H_
 
+#define TIMEOUT_SEL_COUNT 4
+
 #include <cstdint>
 #include <array>
-#include <unordered_map>
 
 class MemoryController;
 
+using TimeoutMapArray = std::array<uint16_t, TIMEOUT_SEL_COUNT>;
+
 struct TimerModule {
 public:
-    enum ControlMask {
-        TIMER_FREQUENCY = 0x03,
-        TIMER_ENABLE    = 0x04,
-    };
+    enum ClockSpeed { SPEED_NORMAL = 0x00, SPEED_DOUBLE = 0x01, };
 
     explicit TimerModule(MemoryController & memory);
     ~TimerModule() = default;
@@ -28,15 +28,24 @@ public:
 
     void cycle(uint8_t ticks);
 
+    void setSpeed(ClockSpeed speed) { m_speed = speed; }
+
+    inline ClockSpeed getSpeed() const { return m_speed; }
+
 private:
+#ifdef UNIT_TEST
+    friend class TimerTest;
+#endif
     static const uint16_t RTC_INCREMENT;
 
     static const uint16_t TIMEOUT_4K;
     static const uint16_t TIMEOUT_252K;
     static const uint16_t TIMEOUT_65K;
     static const uint16_t TIMEOUT_16K;
-    
-    static const std::unordered_map<uint8_t, uint16_t> TIMEOUT_MAP;
+
+    static const TimeoutMapArray TIMEOUT_MAP;
+
+    enum ControlMask { TIMER_FREQUENCY = 0x03, TIMER_ENABLE = 0x04, };
 
     MemoryController & m_memory;
 
@@ -47,7 +56,9 @@ private:
 
     uint16_t m_ticks;
     uint16_t m_rtc;
-    
+
+    ClockSpeed m_speed;
+
     uint16_t m_timeout;
 };
 
