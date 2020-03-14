@@ -23,7 +23,6 @@
 using std::string;
 using std::vector;
 using std::ifstream;
-using std::chrono::high_resolution_clock;
 using std::unique_lock;
 using std::mutex;
 using std::lock_guard;
