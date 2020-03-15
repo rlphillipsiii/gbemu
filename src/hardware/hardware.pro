@@ -16,15 +16,15 @@ CONFIG (asan) {
     QMAKE_LFLAGS   += -fsanitize=address
 }
 
+LIBS += -lutility
+
 DEFINES += HARDWARE_EXPORT
 
 INCLUDEPATH += memory
+INCLUDEPATH += serial
 
 TARGET = hardware
 
-PUBLIC_HEADERS += logging.h
-PUBLIC_HEADERS += profiler.h
-PUBLIC_HEADERS += gbrgb.h
 PUBLIC_HEADERS += gameboyinterface.h
 PUBLIC_HEADERS += canvasinterface.h
 
@@ -52,6 +52,9 @@ HEADERS += joypad.h
 HEADERS += interrupt.h
 HEADERS += memmap.h
 HEADERS += cartridge.h
+HEADERS += consolelink.h
+HEADERS += pipelink.h
+HEADERS += socketlink.h
 HEADERS += $$PUBLIC_HEADERS
 
 SOURCES += gpu.cpp
@@ -62,7 +65,24 @@ SOURCES += timermodule.cpp
 SOURCES += gameboy.cpp
 SOURCES += joypad.cpp
 SOURCES += cartridge.cpp
+SOURCES += consolelink.cpp
 SOURCES += gameboyinterface.cpp
+
+unix: {
+    HEADERS += serial/pipelink_linux.h
+    HEADERS += serial/socketlink_linux.h
+
+    SOURCES += serial/pipelink_linux.cpp
+    SOURCES += serial/socketlink_linux.cpp
+}
+win32: {
+    HEADERS += serial/pipelink_windows.h
+    HEADERS += serial/socketlink_windows.h
+
+    SOURCES += serial/pipelink_windows.cpp
+    SOURCES += serial/socketlink_windows.cpp
+}
+
 
 publishHeaders($$PUBLIC_HEADERS)
 publishTarget()

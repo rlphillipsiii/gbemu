@@ -113,7 +113,13 @@ void MappedIO::write(uint16_t address, uint8_t value)
         break;
     };
 
-    case SERIAL_TX_CONTROL_ADDRESS: {
+    case SERIAL_CONTROL_ADDRESS: {
+        if (value & ConsoleLink::LINK_TRANSFER) {
+            auto & link = m_gameboy.link();
+            if (link) {
+                link->transfer(value);
+            }
+        }
         break;
     }
 

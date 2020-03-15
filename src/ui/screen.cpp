@@ -16,6 +16,7 @@
 #include "screen.h"
 #include "logging.h"
 #include "gameboyinterface.h"
+#include "configuration.h"
 
 using std::vector;
 using std::shared_ptr;
@@ -50,9 +51,17 @@ Screen::Screen(QQuickItem *parent)
     m_timer.setInterval(10);
     m_timer.start();
 
-    QStringList args = QCoreApplication::arguments();
+    string filename;
 
-    string filename = (args.size() < 2) ? "" : args.at(1).toStdString();
+    QStringList args = QCoreApplication::arguments();
+    if (args.size() < 2) {
+        Configuration::Setting setting = Configuration::instance()[ConfigKey::ROM];
+        if (setting) {
+            filename = setting->toString();
+        }
+    } else {
+        filename = args.at(1).toStdString();
+    }
 
     if (m_console) {
         m_console->load(filename);
@@ -123,36 +132,3 @@ void Screen::renderCanvas()
 {
 
 }
-
-#if 0
-QSGNode *Screen::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *)
-{
-    QSGGeometryNode *root = static_cast<QSGGeometryNode*>(oldNode);
-
-    if (!root) {
-        root = new QSGGeometryNode();
-        root->setFlag(QSGNode::OwnsMaterial, true);
-        root->setFlag(QSGNode::OwnsGeometry, true);
-    }
-
-    QSGGeometry *geometry = new QSGGeometry(QSGGeometry::defaultAttributes_ColoredPoint2D(), m_width * m_height);
-    QSGGeometry::ColoredPoint2D *points = geometry->vertexDataAsColoredPoint2D();
-
-    vector<GPU::RGB> rgb = m_console.getRGB();
-    for (size_t i = 0; i < rgb.size(); i++) {
-        const GPU::RGB & color = rgb.at(i);
-
-        int x = i % m_width;
-        int y = i / m_width;
-
-        points[i].set(x, y, color.red, color.green, color.blue, color.alpha);
-    }
-
-    root->setGeometry(geometry);
-
-    QSGVertexColorMaterial *material = new QSGVertexColorMaterial();
-    root->setMaterial(material);
-
-    return root;
-}
-#endif

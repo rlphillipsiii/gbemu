@@ -14,11 +14,12 @@
 #include <iostream>
 #include <fstream>
 #include <mutex>
+#include <memory>
 
 #include "gameboy.h"
 #include "memmap.h"
 #include "logging.h"
-#include "profiler.h"
+#include "socketlink.h"
 
 using std::string;
 using std::vector;
@@ -27,6 +28,7 @@ using std::chrono::high_resolution_clock;
 using std::unique_lock;
 using std::mutex;
 using std::lock_guard;
+using std::unique_ptr;
 
 GameBoy::GameBoy()
     : m_memory(*this),
@@ -35,10 +37,13 @@ GameBoy::GameBoy()
       m_joypad(m_memory),
       m_run(false)
 {
+    m_link = unique_ptr<ConsoleLink>(new SocketLink(m_memory));
 }
 
 bool GameBoy::load(const string & filename)
 {
+    NOTE("Loading Rom: %s\n", filename.c_str())
+
     m_memory.setCartridge(filename);
 
     m_assembly = m_cpu.disassemble();
@@ -79,6 +84,9 @@ void GameBoy::stop()
 
 void GameBoy::step()
 {
+    if (m_link) {
+        m_link->check();
+    }
     m_cpu.cycle();
 }
 

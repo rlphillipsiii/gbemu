@@ -15,6 +15,7 @@ QT += quick
 
 TARGET = gbc
 
+LIBS += -lutility
 LIBS += -lhardware
 
 RESOURCES += resources.qrc

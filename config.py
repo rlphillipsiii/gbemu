@@ -49,10 +49,13 @@ def valgrind(rom):
 
     sys.exit(cmd('valgrind --tool=callgrind {0} {1}'.format(binary(), rom)))
 
-def run(spec, rom):
+def run(spec, rom=''):
     os.chdir(os.path.join('public', spec, 'bin'))
 
-    sys.exit(cmd('{0} {1}'.format(binary(), rom)))
+    command = binary()
+    if '' != rom:
+        command += ' ' + rom
+    sys.exit(cmd(command))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='General build script')
@@ -64,8 +67,9 @@ if __name__ == '__main__':
     parser.add_argument('-t', dest='test', nargs=1, choices=['debug', 'release'])
     parser.add_argument('-d', dest='debug', action='store_true')
     parser.add_argument('-v', dest='valgrind', nargs=1)
-    parser.add_argument('-r', dest='run', nargs=2)
+    parser.add_argument('-r', dest='run', nargs='*')
 
+    os.environ['LD_PRELOAD'] = '/usr/lib/gcc/x86_64-linux-gnu/7/libasan.so'
 
     base = get_base()
     os.chdir(base)

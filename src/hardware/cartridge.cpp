@@ -6,6 +6,7 @@
 #include <chrono>
 #include <ctime>
 
+#include "configuration.h"
 #include "cartridge.h"
 #include "logging.h"
 
@@ -71,7 +72,7 @@ Cartridge::Cartridge(const string & path)
 
     for (uint8_t i = 0; i < ROM_NAME_MAX_LENGTH; i++) {
         uint8_t entry = m_memory.at(ROM_NAME_OFFSET + i);
-        if ((0x80 == entry) || (0xC0 == entry)) {
+        if ((ROM_CGB_ONLY == entry) || (ROM_DUAL_SUPPORT == entry)) {
             break;
         }
 
@@ -87,7 +88,7 @@ Cartridge::Cartridge(const string & path)
 
     assert(m_bank);
 
-    m_cgb = (m_memory.at(ROM_CGB_OFFSET) == 0xC0) || (m_memory.at(ROM_CGB_OFFSET) == 0x80);
+    m_cgb = getCgbMode();
 
     NOTE("ROM Name: %s\n", m_info.name.c_str());
 
@@ -95,6 +96,34 @@ Cartridge::Cartridge(const string & path)
     LOG("ROM RAM Size: %dKB\n", int(m_bank->size() / 1024));
     LOG("Bank Type: %s (0x%02x)\n", m_bank->name().c_str(), uint8_t(m_info.type));
     m_valid = true;
+}
+
+bool Cartridge::getCgbMode() const
+{
+    uint8_t flag = m_memory.at(ROM_CGB_OFFSET);
+
+    Configuration & config = Configuration::instance();
+
+    Configuration::Setting setting = config[ConfigKey::EMU_MODE];
+
+    EmuMode mode = (setting) ? EmuMode(setting->toInt()) : EmuMode::AUTO;
+    switch (mode) {
+    default:
+        WARN("Requested unknown emulation mode: %d\n", int(mode));
+        [[fallthrough]];
+
+    case EmuMode::AUTO: {
+        return ((ROM_DUAL_SUPPORT == flag) || (ROM_CGB_ONLY == flag));
+    }
+    case EmuMode::CGB: {
+        return true;
+    }
+    case EmuMode::DMG: {
+        return (ROM_CGB_ONLY == flag);
+    }
+    }
+
+    return true;
 }
 
 Cartridge::MemoryBankController *Cartridge::initMemoryBankController(uint8_t type)
@@ -301,23 +330,58 @@ Cartridge::MBC3::MBC3(Cartridge & cartridge, uint16_t size, bool battery)
     : MemoryBankController(cartridge, "MBC3", size, battery),
       m_latch(0x00)
 {
+    m_rtc.seconds = m_rtc.minutes = m_rtc.hours = m_rtc.day[0] = 0x00;
 
+    // Before latching the time, make sure that all of the unused bits in the
+    // day 1 register are set to 1.
+    m_rtc.day[1] = 0x3E;
+
+    latch();
 }
 
 uint8_t & Cartridge::MBC3::readRAM(uint16_t address)
 {
-    if (m_ramBank <= 0x03) { return MemoryBankController::readRAM(address); }
+    if (!m_ramEnable) { return RAM_DISABLED; }
 
-    switch (m_ramBank) {
-    default:
-        ERROR("Unknown RAM bank setting: 0x%02x\n", m_ramBank);
-        [[fallthrough]];
+    if (m_ramBank < RAM_BANK_COUNT) {
+        return MemoryBankController::readRAM(address);
+    }
 
-    case RtcSeconds:  return m_rtc.seconds;
-    case RtcMinutes:  return m_rtc.minutes;
-    case RtcHours:    return m_rtc.hours;
-    case RtcDayLower: return m_rtc.day[0];
-    case RtcDayUpper: return m_rtc.day[1];
+    uint8_t & value = [&]() -> uint8_t & {
+        switch (m_ramBank) {
+        default:
+            ERROR("Unknown RAM bank setting: 0x%02x\n", m_ramBank);
+            [[fallthrough]];
+
+        case RtcSeconds:  return m_rtc.seconds;
+        case RtcMinutes:  return m_rtc.minutes;
+        case RtcHours:    return m_rtc.hours;
+        case RtcDayLower: return m_rtc.day[0];
+        case RtcDayUpper: return m_rtc.day[1];
+        }
+    }();
+
+    return value;
+}
+
+void Cartridge::MBC3::writeRAM(uint16_t address, uint8_t value)
+{
+    if (!m_ramEnable) { return; }
+
+    if (m_ramBank < RAM_BANK_COUNT) {
+        MemoryBankController::writeRAM(address, value);
+    } else {
+        switch (m_ramBank) {
+        default:
+            ERROR("Unknown RAM bank setting: 0x%02x\n", m_ramBank);
+            [[fallthrough]];
+
+        case RtcSeconds:  m_rtc.seconds = value; break;
+        case RtcMinutes:  m_rtc.minutes = value; break;
+        case RtcHours:    m_rtc.hours   = value; break;
+        case RtcDayLower: m_rtc.day[0]  = value; break;
+        case RtcDayUpper: m_rtc.day[1]  = value; break;
+        }
     }
 }
 
@@ -339,25 +403,32 @@ void Cartridge::MBC3::writeROM(uint16_t address, uint8_t value)
         // can just bail out here.
         if (!((0x00 == last) && (0x01 == m_latch))) { return; }
 
-        time_t timestamp = system_clock::to_time_t(system_clock::now());
-
-        std::tm *now = std::localtime(&timestamp);
-        if (now) {
-            m_rtc.seconds = now->tm_sec;
-            m_rtc.minutes = now->tm_min;
-            m_rtc.hours   = now->tm_hour;
-
-            // The day is stored in 9 bits.  The lower 8 bits are stored in the
-            // lower day register, and the MSB is stored in the LSB of the
-            // upper day register.
-            uint16_t days = now->tm_yday;
-            m_rtc.day[0] = days & 0xFF;
-            m_rtc.day[1] = (m_rtc.day[1] & 0xFE) | ((days >> 8) & 0x01);
-        }
+        latch();
     } else {
         LOG("Illegal MBC3 write to address 0x%04x\n", address);
 
         assert(0);
+    }
+}
+
+void Cartridge::MBC3::latch()
+{
+    time_t timestamp = system_clock::to_time_t(system_clock::now());
+
+    std::tm *now = std::localtime(&timestamp);
+    if (now) {
+        m_rtc.seconds = now->tm_sec;
+        m_rtc.minutes = now->tm_min;
+        m_rtc.hours   = now->tm_hour;
+
+        // The day is stored in 9 bits.  The lower 8 bits are stored in the
+        // lower day register, and the MSB is stored in the LSB of the
+        // upper day register.
+        uint16_t days = now->tm_yday;
+        m_rtc.day[0] = days & 0xFF;
+        m_rtc.day[1] = (m_rtc.day[1] & 0xFE) | ((days >> 7) & 0x01);
+    } else {
+        WARN("%s\n", "Failed to latch current time");
     }
 }
 ////////////////////////////////////////////////////////////////////////////////

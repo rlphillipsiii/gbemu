@@ -36,6 +36,9 @@ private:
     static const uint16_t ROM_RAM_SIZE_OFFSET;
     static const uint8_t ROM_NAME_MAX_LENGTH;
 
+    static constexpr uint8_t ROM_DUAL_SUPPORT = 0x80;
+    static constexpr uint8_t ROM_CGB_ONLY     = 0xC0;
+
     static const std::vector<uint8_t> NINTENDO_LOGO;
 
     static const std::vector<uint16_t> RAM_SIZES;
@@ -72,8 +75,7 @@ private:
         virtual ~MemoryBankController();
 
         virtual void writeROM(uint16_t address, uint8_t value) = 0;
-
-        void writeRAM(uint16_t address, uint8_t value);
+        virtual void writeRAM(uint16_t address, uint8_t value);
 
         uint8_t & readROM(uint16_t address);
         virtual uint8_t & readRAM(uint16_t address);
@@ -86,6 +88,8 @@ private:
         inline uint8_t ramBank() const { return m_ramBank; }
 
     protected:
+        static uint8_t RAM_DISABLED;
+
         Cartridge & m_cartridge;
 
         std::string m_name;
@@ -102,8 +106,6 @@ private:
         std::ofstream m_nvRam;
 
     private:
-        static uint8_t RAM_DISABLED;
-
         void initRAM(const std::string & name);
     };
 
@@ -132,9 +134,13 @@ private:
         ~MBC3() = default;
 
         void writeROM(uint16_t address, uint8_t value) override;
+        void writeRAM(uint16_t address, uint8_t value) override;
+
         uint8_t & readRAM(uint16_t address) override;
 
     private:
+        static constexpr uint8_t RAM_BANK_COUNT = 4;
+
         enum RtcRegisterSelect {
             RtcSeconds  = 0x08,
             RtcMinutes  = 0x09,
@@ -152,6 +158,8 @@ private:
         } m_rtc;
 
         uint8_t m_latch;
+
+        void latch();
     };
 
     std::vector<uint8_t> m_memory;
@@ -163,6 +171,8 @@ private:
     MemoryBankController *initMemoryBankController(uint8_t type);
 
     inline std::string game() const { return m_info.name; }
+
+    bool getCgbMode() const;
 };
 
 #endif
