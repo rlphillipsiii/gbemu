@@ -114,10 +114,17 @@ void MappedIO::write(uint16_t address, uint8_t value)
     };
 
     case SERIAL_CONTROL_ADDRESS: {
+        constexpr uint8_t mask =
+            (ConsoleLink::LINK_CLOCK | ConsoleLink::LINK_SPEED | ConsoleLink::LINK_TRANSFER);
+
+        writeBytes(address, value, mask);
+
         if (value & ConsoleLink::LINK_TRANSFER) {
+            uint8_t data = MemoryRegion::read(SERIAL_DATA_ADDRESS);
+
             auto & link = m_gameboy.link();
             if (link) {
-                link->transfer(value);
+                link->transfer(data);
             }
         }
         break;

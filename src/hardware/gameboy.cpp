@@ -84,9 +84,6 @@ void GameBoy::stop()
 
 void GameBoy::step()
 {
-    if (m_link) {
-        m_link->check();
-    }
     m_cpu.cycle();
 }
 
@@ -96,4 +93,8 @@ void GameBoy::execute(uint8_t ticks)
 
     m_gpu.cycle(ticks);
     m_joypad.cycle(ticks);
+
+    if (m_link) {
+        m_link->cycle(ticks);
+    }
 }

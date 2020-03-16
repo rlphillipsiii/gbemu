@@ -43,7 +43,7 @@ const Configuration::ConfigMap Configuration::DEFAULT_CONFIG{
     },
     {
         uint8_t(ConfigKey::LINK_PORT),
-        Configuration::Setting(new IntValue(1148))
+        Configuration::Setting(new IntValue(8008))
     },
 };
 

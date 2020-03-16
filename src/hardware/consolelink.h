@@ -16,15 +16,23 @@ public:
     explicit ConsoleLink(MemoryController & memory);
     virtual ~ConsoleLink() = default;
 
-    virtual void transfer(uint8_t value) = 0;
-    virtual void check() = 0;
-
     virtual void stop() = 0;
 
+    void cycle(uint8_t ticks);
+    void transfer(uint8_t value);
+
 protected:
+    static constexpr uint16_t LINK_SPEED_NORMAL = 4096;
+    static constexpr uint16_t LINK_SPEED_FAST   = 128;
+
     MemoryController & m_memory;
 
     bool m_master;
+
+    uint16_t m_ticks;
+
+    virtual void check() = 0;
+    virtual void start(uint8_t value) = 0;
 };
 
 #endif

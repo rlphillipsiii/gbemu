@@ -3,6 +3,8 @@
 
 #include <atomic>
 #include <thread>
+#include <list>
+#include <mutex>
 
 #include "consolelink.h"
 
@@ -13,7 +15,7 @@ public:
     SocketLink(MemoryController & memory);
     ~SocketLink();
 
-    void transfer(uint8_t value) override;
+    void start(uint8_t value) override;
     void check() override;
 
     void stop() override;
@@ -29,8 +31,11 @@ private:
     std::atomic<bool> m_interrupt;
     std::atomic<bool> m_connected;
 
-    std::atomic<uint8_t> m_rx;
-    std::atomic<uint8_t> m_tx;
+    std::mutex m_txLock;
+    std::mutex m_rxLock;
+
+    std::list<uint8_t> m_rxQueue;
+    std::list<uint8_t> m_txQueue;
 
     std::thread m_server;
     std::thread m_client;
@@ -38,11 +43,17 @@ private:
     void initServer(int port);
     void initClient(int port);
 
-    void executeServer(int socket);
+    void executeServer(int socket, int port);
     void executeClient(int socket, int port);
 
-    void txMaster(uint8_t value);
-    void txSlave(uint8_t value);
+    void stop(std::thread & t);
+
+    bool serverLoop(
+        int conn,
+        std::list<uint8_t> & tx,
+        std::mutex & txLock,
+        std::list<uint8_t> & rx,
+        std::mutex & rxLock);
 };
 
 #endif
