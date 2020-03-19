@@ -28,6 +28,8 @@ private:
 
     int m_socket;
 
+    bool m_pending;
+
     std::atomic<bool> m_interrupt;
     std::atomic<bool> m_connected;
 

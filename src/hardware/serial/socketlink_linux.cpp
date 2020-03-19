@@ -26,11 +26,13 @@ using std::thread;
 using std::lock_guard;
 using std::mutex;
 using std::list;
+using std::unique_lock;
 
 using namespace std::chrono_literals;
 
 SocketLink::SocketLink(MemoryController & memory)
     : ConsoleLink(memory),
+      m_pending(false),
       m_interrupt(false),
       m_connected(false)
 {
@@ -79,30 +81,37 @@ void SocketLink::stop(thread & t)
 
 void SocketLink::start(uint8_t value)
 {
+    m_pending = true;
+
     if (m_connected) {
         lock_guard<mutex> guard(m_txLock);
         m_txQueue.push_back(value);
-
-        //std::this_thread::sleep_for(20ms);
-    } else {
-        m_memory.write(SERIAL_CONTROL_ADDRESS, value & ~ConsoleLink::LINK_TRANSFER);
-
-        m_memory.write(SERIAL_DATA_ADDRESS, 0xFF);
-        Interrupts::set(m_memory, InterruptMask::SERIAL);
     }
 }
 
 void SocketLink::check()
 {
-    uint8_t recv;
-    {
-        lock_guard<mutex> guard(m_rxLock);
+    uint8_t recv = 0xFF;
 
-        if (m_rxQueue.empty()) { return; }
+    if (m_connected) {
+        bool empty = true;
+        while (empty) {
+            unique_lock<mutex> guard(m_rxLock);
 
-        recv = m_rxQueue.front();
-        m_rxQueue.pop_front();
-    }
+            if ((empty = m_rxQueue.empty())) {
+                if (!m_pending)        { return; }
+                else if (!m_connected) { break;  }
+
+                guard.unlock();
+
+                std::this_thread::sleep_for(10ms);
+                continue;
+            }
+
+            recv = m_rxQueue.front();
+            m_rxQueue.pop_front();
+        }
+    } else if (!m_pending) { return; }
 
     m_memory.write(SERIAL_DATA_ADDRESS, recv);
 
@@ -110,6 +119,8 @@ void SocketLink::check()
     current &= ~ConsoleLink::LINK_TRANSFER;
 
     Interrupts::set(m_memory, InterruptMask::SERIAL);
+
+    m_pending = false;
 }
 
 void SocketLink::initServer(int port)
@@ -241,11 +252,23 @@ bool SocketLink::serverLoop(
         return true;
     };
 
+    static uint16_t poll = 0;
+
+    constexpr uint16_t pollCount = 10000;
+
     if (!empty) {
         if (write(conn, &data, 1) != 1) { return false; }
 
         return rd();
     } else if (0 != count) {
+        if (poll++ < pollCount) {
+            std::this_thread::sleep_for(1ms);
+            return true;
+        }
+        poll = 0;
+
+        printf("PACKET DROPPED\n");
+
         if (!rd()) { return false; }
 
         return (write(conn, &data, 1) == 1);
