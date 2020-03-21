@@ -28,13 +28,8 @@ using std::mutex;
 using std::list;
 using std::unique_lock;
 
-using namespace std::chrono_literals;
-
 SocketLink::SocketLink(MemoryController & memory)
-    : ConsoleLink(memory),
-      m_pending(false),
-      m_interrupt(false),
-      m_connected(false)
+    : ConsoleLink(memory)
 {
     m_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (INVALID_FD == m_socket) {
@@ -42,10 +37,7 @@ SocketLink::SocketLink(MemoryController & memory)
         return;
     }
 
-    Configuration & config = Configuration::instance();
-    Configuration::Setting setting = config[ConfigKey::LINK_PORT];
-
-    int port = (setting) ? setting->toInt() : PORT;
+    int port = Configuration::getInt(ConfigKey::LINK_PORT);
 
     NOTE("Socket server config: %s\n", (m_master) ? "master" : "slave");
 
@@ -53,21 +45,16 @@ SocketLink::SocketLink(MemoryController & memory)
     else          { initClient(port); }
 }
 
-SocketLink::~SocketLink()
-{
-    stop();
-}
-
 void SocketLink::stop()
 {
-    m_interrupt = true;
-
     if (INVALID_FD != m_socket) {
         close(m_socket);
     }
 
     stop(m_server);
     stop(m_client);
+
+    ConsoleLink::stop();
 }
 
 void SocketLink::stop(thread & t)
@@ -75,60 +62,9 @@ void SocketLink::stop(thread & t)
     if (!t.joinable()) { return; }
 
     pthread_kill(t.native_handle(), SIGINT);
-
-    t.join();
-}
-
-void SocketLink::start(uint8_t value)
-{
-    m_pending = true;
-
-    if (m_connected) {
-        lock_guard<mutex> guard(m_txLock);
-        m_txQueue.push_back(value);
-    }
-}
-
-void SocketLink::check()
-{
-    uint8_t recv = 0xFF;
-
-    if (m_connected) {
-        bool empty = true;
-        while (empty) {
-            unique_lock<mutex> guard(m_rxLock);
-
-            if ((empty = m_rxQueue.empty())) {
-                if (!m_pending)        { return; }
-                else if (!m_connected) { break;  }
-
-                guard.unlock();
-
-                std::this_thread::sleep_for(10ms);
-                continue;
-            }
-
-            recv = m_rxQueue.front();
-            m_rxQueue.pop_front();
-        }
-    } else if (!m_pending) { return; }
-
-    m_memory.write(SERIAL_DATA_ADDRESS, recv);
-
-    uint8_t & current = m_memory.read(SERIAL_CONTROL_ADDRESS);
-    current &= ~ConsoleLink::LINK_TRANSFER;
-
-    Interrupts::set(m_memory, InterruptMask::SERIAL);
-
-    m_pending = false;
 }
 
 void SocketLink::initServer(int port)
-{
-    m_server = thread([&, port] { executeServer(m_socket, port); });
-}
-
-void SocketLink::executeServer(int socket, int port)
 {
     struct sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
@@ -137,41 +73,45 @@ void SocketLink::executeServer(int socket, int port)
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port        = htons(port);
 
-    if (bind(socket, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+    if (bind(m_socket, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         ERROR("Failed to bind socket to port %d\n", port);
         return;
     }
 
-    if (listen(socket, 1) != 0) {
+    if (listen(m_socket, 1) != 0) {
         ERROR("%s\n", "Failed to listen on bound socket");
         return;
     }
 
-    struct sockaddr_in cli;
-
     NOTE("Starting server thread on port %d (0x%04x)\n", port, htons(port));
 
+    m_server = thread([&, port] { executeServer(m_socket); });
+}
+
+void SocketLink::executeServer(int socket)
+{
     while (!m_interrupt.load()) {
+        struct sockaddr_in cli;
         socklen_t length = sizeof(cli);
 
         NOTE("%s\n", "Waiting for client connection");
 
-        int conn = accept(socket, (struct sockaddr*)&cli, &length);
-        if (INVALID_FD == conn) {
+        m_connection = accept(socket, (struct sockaddr*)&cli, &length);
+        if (INVALID_FD == m_connection) {
             ERROR("Accept failed with errno = %s\n", std::strerror(errno));
             continue;
         }
 
-        NOTE("Server connection established: %d\n", conn);
+        NOTE("Server connection established: %d\n", m_connection);
 
         m_connected = true;
         while (m_connected) {
-            m_connected = serverLoop(conn, m_txQueue, m_txLock, m_rxQueue, m_rxLock);
+            m_connected = serverLoop();
         }
 
         NOTE("%s\n", "Server connection closed");
 
-        close(conn);
+        close(m_connection);
     }
 
     NOTE("%s\n", "Server thread complete");
@@ -200,6 +140,7 @@ void SocketLink::executeClient(int socket, int port)
 
     NOTE("Starting client thread on port %d (0x%04x)\n", port, htons(port));
 
+    m_connection = socket;
     while (!m_interrupt.load()) {
         if (connect(socket, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
             continue;
@@ -209,7 +150,7 @@ void SocketLink::executeClient(int socket, int port)
 
         m_connected = true;
         while (m_connected) {
-            m_connected = serverLoop(socket, m_txQueue, m_txLock, m_rxQueue, m_rxLock);
+            m_connected = serverLoop();
         }
 
         NOTE("%s\n", "Client connection closed");
@@ -218,61 +159,20 @@ void SocketLink::executeClient(int socket, int port)
     NOTE("%s\n", "Client thread complete");
 }
 
-bool SocketLink::serverLoop(
-    int conn,
-    list<uint8_t> & tx,
-    mutex & txLock,
-    list<uint8_t> & rx,
-    mutex & rxLock)
+bool SocketLink::rd(uint8_t & data)
+{
+    return (read(m_connection, (void*)&data, 1) == 1);
+}
+
+bool SocketLink::wr(uint8_t data)
+{
+    return (write(m_connection, (void*)&data, 1) == 1);
+}
+
+int SocketLink::peek()
 {
     int count;
-    ioctl(conn, FIONREAD, &count);
+    ioctl(m_connection, FIONREAD, &count);
 
-    bool empty;
-
-    uint8_t data = 0xFF;
-    {
-        lock_guard<mutex> guard(txLock);
-        empty = tx.empty();
-
-        if (!empty) {
-            data = tx.front();
-            tx.pop_front();
-        }
-    }
-
-    auto rd = [&rxLock, &rx, conn] () -> bool {
-        uint8_t data;
-        if (read(conn, &data, 1) != 1)  {
-            return false;
-        }
-
-        lock_guard<mutex> guard(rxLock);
-        rx.push_back(data);
-        return true;
-    };
-
-    static uint16_t poll = 0;
-
-    constexpr uint16_t pollCount = 10000;
-
-    if (!empty) {
-        if (write(conn, &data, 1) != 1) { return false; }
-
-        return rd();
-    } else if (0 != count) {
-        if (poll++ < pollCount) {
-            std::this_thread::sleep_for(1ms);
-            return true;
-        }
-        poll = 0;
-
-        printf("PACKET DROPPED\n");
-
-        if (!rd()) { return false; }
-
-        return (write(conn, &data, 1) == 1);
-    }
-
-    return true;
+    return count;
 }

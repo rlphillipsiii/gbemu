@@ -51,17 +51,10 @@ Screen::Screen(QQuickItem *parent)
     m_timer.setInterval(10);
     m_timer.start();
 
-    string filename;
-
     QStringList args = QCoreApplication::arguments();
-    if (args.size() < 2) {
-        Configuration::Setting setting = Configuration::instance()[ConfigKey::ROM];
-        if (setting) {
-            filename = setting->toString();
-        }
-    } else {
-        filename = args.at(1).toStdString();
-    }
+
+    string filename = (args.size() < 2) ?
+        Configuration::getString(ConfigKey::ROM) : args.at(1).toStdString();
 
     if (m_console) {
         m_console->load(filename);

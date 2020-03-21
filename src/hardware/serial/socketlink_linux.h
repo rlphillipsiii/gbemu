@@ -10,13 +10,10 @@
 
 class MemoryController;
 
-class SocketLink : public ConsoleLink {
+class SocketLink final : public ConsoleLink {
 public:
     SocketLink(MemoryController & memory);
-    ~SocketLink();
-
-    void start(uint8_t value) override;
-    void check() override;
+    ~SocketLink() { stop(); }
 
     void stop() override;
 
@@ -27,35 +24,20 @@ private:
     static constexpr int IO_ERROR   = -1;
 
     int m_socket;
-
-    bool m_pending;
-
-    std::atomic<bool> m_interrupt;
-    std::atomic<bool> m_connected;
-
-    std::mutex m_txLock;
-    std::mutex m_rxLock;
-
-    std::list<uint8_t> m_rxQueue;
-    std::list<uint8_t> m_txQueue;
-
-    std::thread m_server;
-    std::thread m_client;
+    int m_connection;
 
     void initServer(int port);
     void initClient(int port);
 
-    void executeServer(int socket, int port);
+    void executeServer(int socket);
     void executeClient(int socket, int port);
 
     void stop(std::thread & t);
 
-    bool serverLoop(
-        int conn,
-        std::list<uint8_t> & tx,
-        std::mutex & txLock,
-        std::list<uint8_t> & rx,
-        std::mutex & rxLock);
+    bool rd(uint8_t & data) override;
+    bool wr(uint8_t data) override;
+
+    int peek() override;
 };
 
 #endif

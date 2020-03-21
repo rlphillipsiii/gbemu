@@ -11,8 +11,6 @@
 #include <cstdint>
 #include <thread>
 #include <chrono>
-#include <iostream>
-#include <fstream>
 #include <mutex>
 #include <memory>
 
@@ -20,11 +18,10 @@
 #include "memmap.h"
 #include "logging.h"
 #include "socketlink.h"
+#include "configuration.h"
 
 using std::string;
 using std::vector;
-using std::ifstream;
-using std::chrono::high_resolution_clock;
 using std::unique_lock;
 using std::mutex;
 using std::lock_guard;
@@ -37,7 +34,30 @@ GameBoy::GameBoy()
       m_joypad(m_memory),
       m_run(false)
 {
-    m_link = unique_ptr<ConsoleLink>(new SocketLink(m_memory));
+    initLink();
+}
+
+void GameBoy::initLink()
+{
+    if (m_link) { m_link->stop(); }
+
+    if (Configuration::getBool(ConfigKey::LINK_ENABLE)) {
+        m_link = unique_ptr<ConsoleLink>([&]() -> ConsoleLink* {
+                LinkType link = LinkType(Configuration::getInt(ConfigKey::LINK_TYPE));
+                switch (link) {
+                default:
+                    assert(0);
+                    return nullptr;
+
+                case LinkType::SOCKET:
+                    return new SocketLink(m_memory);
+
+                case LinkType::PIPE:
+                    WARN("%s\n", "Pipe Link not yet supported");
+                    return nullptr;
+                }
+            }());
+    }
 }
 
 bool GameBoy::load(const string & filename)
@@ -76,6 +96,10 @@ void GameBoy::run()
 void GameBoy::stop()
 {
     m_run = false;
+
+    if (m_link) {
+        m_link->stop();
+    }
 
     if (m_thread.joinable()) {
         m_thread.join();

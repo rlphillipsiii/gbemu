@@ -15,6 +15,9 @@ enum class ConfigKey : uint8_t {
     SPEED       = 2,
     EMU_MODE    = 3,
     LINK_PORT   = 4,
+    LINK_TYPE   = 5,
+    LINK_ADDR   = 6,
+    LINK_ENABLE = 7,
 };
 
 enum class EmuMode : uint8_t {
@@ -27,6 +30,11 @@ enum class EmuSpeed : uint8_t {
     NORMAL = 0,
     _2X    = 1,
     FREE   = 2,
+};
+
+enum class LinkType : uint8_t {
+    SOCKET = 0,
+    PIPE   = 1,
 };
 
 class Configuration {
@@ -49,6 +57,10 @@ public:
     std::string str() const;
 
     static std::string toString(ConfigKey key);
+
+    static std::string getString(ConfigKey key, std::string def = "");
+    static int getInt(ConfigKey key, int def = 0);
+    static bool getBool(ConfigKey key, bool def = false);
 
     ////////////////////////////////////////////////////////////////////////////
     class SettingValue {

@@ -22,6 +22,9 @@ const list<ConfigKey> Configuration::KEYS = {
     ConfigKey::SPEED,
     ConfigKey::EMU_MODE,
     ConfigKey::LINK_PORT,
+    ConfigKey::LINK_TYPE,
+    ConfigKey::LINK_ADDR,
+    ConfigKey::LINK_ENABLE,
 };
 
 const Configuration::ConfigMap Configuration::DEFAULT_CONFIG{
@@ -44,6 +47,18 @@ const Configuration::ConfigMap Configuration::DEFAULT_CONFIG{
     {
         uint8_t(ConfigKey::LINK_PORT),
         Configuration::Setting(new IntValue(8008))
+    },
+    {
+        uint8_t(ConfigKey::LINK_TYPE),
+        Configuration::Setting(new IntValue(uint8_t(LinkType::SOCKET)))
+    },
+    {
+        uint8_t(ConfigKey::LINK_ADDR),
+        Configuration::Setting(new StringValue("127.0.0.1"))
+    },
+    {
+        uint8_t(ConfigKey::LINK_ENABLE),
+        Configuration::Setting(new BoolValue(false))
     },
 };
 
@@ -135,13 +150,43 @@ string Configuration::str() const
 
 string Configuration::toString(ConfigKey key)
 {
+#define CASE(name) case name: return #name
+
     switch (key) {
-    case ConfigKey::ROM:         return "ConfigKey::ROM";
-    case ConfigKey::LINK_MASTER: return "ConfigKey::LINK_MASTER";
-    case ConfigKey::SPEED:       return "ConfigKey::SPEED";
-    case ConfigKey::EMU_MODE:    return "ConfigKey::EMU_MODE";
+    CASE(ConfigKey::ROM);
+    CASE(ConfigKey::LINK_MASTER);
+    CASE(ConfigKey::SPEED);
+    CASE(ConfigKey::EMU_MODE);
+    CASE(ConfigKey::LINK_PORT);
+    CASE(ConfigKey::LINK_ADDR);
+    CASE(ConfigKey::LINK_TYPE);
+    CASE(ConfigKey::LINK_ENABLE);
 
     default: break;
     }
     return "ConfigKey::UNKNOWN";
+}
+
+string Configuration::getString(ConfigKey key, string def)
+{
+    Configuration & config = Configuration::instance();
+    Configuration::Setting setting = config[key];
+
+    return (setting) ? setting->toString() : def;
+}
+
+int Configuration::getInt(ConfigKey key, int def)
+{
+    Configuration & config = Configuration::instance();
+    Configuration::Setting setting = config[key];
+
+    return (setting) ? setting->toInt() : def;
+}
+
+bool Configuration::getBool(ConfigKey key, bool def)
+{
+    Configuration & config = Configuration::instance();
+    Configuration::Setting setting = config[key];
+
+    return (setting) ? setting->toBool() : def;
 }

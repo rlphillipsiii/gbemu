@@ -102,11 +102,7 @@ bool Cartridge::getCgbMode() const
 {
     uint8_t flag = m_memory.at(ROM_CGB_OFFSET);
 
-    Configuration & config = Configuration::instance();
-
-    Configuration::Setting setting = config[ConfigKey::EMU_MODE];
-
-    EmuMode mode = (setting) ? EmuMode(setting->toInt()) : EmuMode::AUTO;
+    EmuMode mode = EmuMode(Configuration::getInt(ConfigKey::EMU_MODE));
     switch (mode) {
     default:
         WARN("Requested unknown emulation mode: %d\n", int(mode));

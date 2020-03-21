@@ -60,6 +60,8 @@ private:
 
     void run();
     void step();
+
+    void initLink();
 };
 
 
