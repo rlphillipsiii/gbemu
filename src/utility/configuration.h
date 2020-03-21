@@ -8,6 +8,8 @@
 #include <list>
 #include <cstdint>
 #include <vector>
+#include <optional>
+#include <functional>
 
 enum class ConfigKey : uint8_t {
     ROM         = 0,
@@ -37,6 +39,11 @@ enum class LinkType : uint8_t {
     PIPE   = 1,
 };
 
+class ConfigChangeListener {
+public:
+    virtual void onConfigChange(ConfigKey key);
+};
+
 class Configuration {
 public:
     ~Configuration() = default;
@@ -54,9 +61,16 @@ public:
     inline void save() const { save(DEFAULT_FILE); }
     void save(const std::string & file) const;
 
+    inline void registerListener(ConfigChangeListener & handler)
+        { m_handlers.push_back(std::ref(handler)); }
+
     std::string str() const;
 
     static std::string toString(ConfigKey key);
+
+    static bool updateString(ConfigKey key, const std::string & value);
+    static bool updateBool(ConfigKey key, bool value);
+    static bool updateInt(ConfigKey key, int value);
 
     static std::string getString(ConfigKey key, std::string def = "");
     static int getInt(ConfigKey key, int def = 0);
@@ -66,6 +80,10 @@ public:
     class SettingValue {
     public:
         virtual ~SettingValue() = default;
+
+        virtual inline void set(const std::string & value) { m_value = value; }
+        virtual inline void set(bool value) { m_value = std::to_string(value); }
+        virtual inline void set(int value)  { m_value = std::to_string(value); }
 
         virtual inline std::string toString() const { return m_value; }
 
@@ -106,6 +124,11 @@ public:
         }
         IntValue(int value) : IntValue(std::to_string(value)) { }
 
+        inline void set(int value) override
+        {
+            m_iValue = value; m_value = std::to_string(value);
+        }
+
         ~IntValue() = default;
 
         inline bool toBool() const override { return (0 == m_iValue); }
@@ -134,6 +157,11 @@ public:
         }
         BoolValue(bool value) : BoolValue(std::to_string(value)) { }
         ~BoolValue() = default;
+
+        inline void set(bool value) override
+        {
+            m_bValue = value; m_value = std::to_string(value);
+        }
 
         inline bool toBool() const override { return m_bValue;           }
         inline int  toInt()  const override { return (m_bValue) ? 1 : 0; }
@@ -164,6 +192,10 @@ private:
     explicit Configuration() : m_settings(DEFAULT_CONFIG) { }
 
     ConfigMap m_settings;
+
+    std::vector<std::reference_wrapper<ConfigChangeListener>> m_handlers;
+
+    void broadcastUpdate(ConfigKey key);
 
     static std::vector<std::string> split(const std::string & str);
 };

@@ -167,26 +167,73 @@ string Configuration::toString(ConfigKey key)
     return "ConfigKey::UNKNOWN";
 }
 
+void Configuration::broadcastUpdate(ConfigKey key)
+{
+    for (auto & handler : m_handlers) {
+        handler.get().onConfigChange(key);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 string Configuration::getString(ConfigKey key, string def)
 {
-    Configuration & config = Configuration::instance();
-    Configuration::Setting setting = config[key];
-
+    Setting setting = Configuration::instance()[key];
     return (setting) ? setting->toString() : def;
 }
 
 int Configuration::getInt(ConfigKey key, int def)
 {
-    Configuration & config = Configuration::instance();
-    Configuration::Setting setting = config[key];
-
+    Setting setting = Configuration::instance()[key];
     return (setting) ? setting->toInt() : def;
 }
 
 bool Configuration::getBool(ConfigKey key, bool def)
 {
-    Configuration & config = Configuration::instance();
-    Configuration::Setting setting = config[key];
-
+    Setting setting = Configuration::instance()[key];
     return (setting) ? setting->toBool() : def;
+}
+
+bool Configuration::updateString(ConfigKey key, const string & value)
+{
+    Setting setting = Configuration::instance()[key];
+    if (!setting) { return false; }
+
+    if (SettingValue::TYPE_STRING != setting->type()) {
+        return false;
+    }
+
+    setting->set(value);
+
+    Configuration::instance().broadcastUpdate(key);
+    return true;
+}
+
+bool Configuration::updateBool(ConfigKey key, bool value)
+{
+    Setting setting = Configuration::instance()[key];
+    if (!setting) { return false; }
+
+    if (SettingValue::TYPE_BOOL != setting->type()) {
+        return false;
+    }
+
+    setting->set(value);
+
+    Configuration::instance().broadcastUpdate(key);
+    return true;
+}
+
+bool Configuration::updateInt(ConfigKey key, int value)
+{
+    Setting setting = Configuration::instance()[key];
+    if (!setting) { return false; }
+
+    if (SettingValue::TYPE_INT != setting->type()) {
+        return false;
+    }
+
+    setting->set(value);
+
+    Configuration::instance().broadcastUpdate(key);
+    return true;
 }
