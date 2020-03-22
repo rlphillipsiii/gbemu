@@ -62,7 +62,8 @@ public:
     void save(const std::string & file) const;
 
     inline void registerListener(ConfigChangeListener & handler)
-        { m_handlers.push_back(std::ref(handler)); }
+        { m_handlers.emplace_back(std::ref(handler)); }
+    void unregisterListener(ConfigChangeListener & handler);
 
     std::string str() const;
 
@@ -196,7 +197,7 @@ private:
 
     ConfigMap m_settings;
 
-    std::vector<std::reference_wrapper<ConfigChangeListener>> m_handlers;
+    std::list<std::reference_wrapper<ConfigChangeListener>> m_handlers;
 
     void broadcastUpdate(ConfigKey key);
 

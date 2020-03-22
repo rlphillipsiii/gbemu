@@ -39,6 +39,11 @@ GameBoy::GameBoy()
     Configuration::instance().registerListener(*this);
 }
 
+GameBoy::~GameBoy()
+{
+    Configuration::instance().unregisterListener(*this);
+}
+
 void GameBoy::initLink()
 {
     if (m_link) { m_link->stop(); }

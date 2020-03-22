@@ -23,10 +23,10 @@
 #include "consolelink.h"
 #include "configuration.h"
 
-class GameBoy : public GameBoyInterface, public ConfigChangeListener {
+class GameBoy final : public GameBoyInterface, public ConfigChangeListener {
 public:
-    GameBoy();
-    ~GameBoy() = default;
+    explicit GameBoy();
+    ~GameBoy();
 
     bool load(const std::string & filename) override;
 

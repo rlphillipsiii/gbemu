@@ -98,8 +98,6 @@ ApplicationWindow {
 
         width:  640
         height: 576
-
-
     }
 
     FileDialog {

@@ -167,6 +167,18 @@ string Configuration::toString(ConfigKey key)
     return "ConfigKey::UNKNOWN";
 }
 
+void Configuration::unregisterListener(ConfigChangeListener & handler)
+{
+    for (auto it = m_handlers.begin(); it != m_handlers.end(); ++it) {
+        auto & entry = (*it).get();
+
+        if (&entry != &handler) { continue; }
+
+        m_handlers.erase(it);
+        break;
+    }
+}
+
 void Configuration::broadcastUpdate(ConfigKey key)
 {
     for (auto & handler : m_handlers) {
