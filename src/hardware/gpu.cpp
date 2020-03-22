@@ -541,7 +541,7 @@ void GPU::readSprite(SpriteData & data)
         if (row >= data.height) { return; }
     }
 
-    if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
+    if (flipY) { row = data.height - row - 1; }
 
     // If the row that we are looking up is greater than the height of a tile, then
     // we are in to the extended portion of the sprite and therefore need to increment
@@ -622,7 +622,7 @@ void GPU::writePalette(CgbColors & colors, uint8_t index, uint8_t value)
     // stored in the mask are RGB555, so we need to normalize each value to 1,
     // and then apply that normalized number to an 8 bit RGB value to get the
     // value that we are going to store in our RGB8888 structure.
-    auto convert = [](uint8_t value) {
+    auto convert = [](uint8_t value) -> uint8_t {
         double normalized = double(value) / double(0x1F);
         return uint8_t(0xFF * normalized);
     };

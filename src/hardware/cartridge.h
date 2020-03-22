@@ -26,6 +26,8 @@ public:
     inline uint8_t ramBank() const { return m_bank->ramBank(); }
 
 private:
+    static constexpr uint32_t ROM_MAX_SIZE = 2097152; // 2MB
+
     static const uint16_t NINTENDO_LOGO_OFFSET;
 
     static const uint16_t ROM_HEADER_LENGTH;

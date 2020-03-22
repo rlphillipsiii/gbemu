@@ -16,26 +16,34 @@
 
 class Screen : public QQuickPaintedItem, public CanvasInterface {
     Q_OBJECT
+    Q_PROPERTY(QString rom READ getROM WRITE setROM NOTIFY romChanged)
 
 public:
     explicit Screen(QQuickItem *parent = nullptr);
     ~Screen();
 
     void paint(QPainter *painter) override;
-    // QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *updatePaintNodeData) override;
 
     void updateCanvas(uint8_t x, uint8_t y, GB::RGB pixel) override;
     void renderCanvas() override;
 
+    QString getROM() const { return m_rom; }
+    void setROM(QString rom);
+
 public slots:
     void onTimeout();
     void stop();
+
+signals:
+    void romChanged();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
+    static constexpr int REFRESH_TIMEOUT = 20;
+
     static const std::unordered_map<int, GameBoyInterface::JoyPadButton> BUTTON_MAP;
 
     Screen(const Screen &) = delete;
@@ -51,5 +59,7 @@ private:
     bool m_stopped;
 
     QTimer m_timer;
+
+    QString m_rom;
 };
 #endif

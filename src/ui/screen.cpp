@@ -6,6 +6,7 @@
 #include <QSGVertexColorMaterial>
 #include <QThread>
 #include <QString>
+#include <QUrl>
 
 #include <cassert>
 #include <vector>
@@ -48,18 +49,19 @@ Screen::Screen(QQuickItem *parent)
 
     QObject::connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
 
-    m_timer.setInterval(10);
-    m_timer.start();
-
     QStringList args = QCoreApplication::arguments();
 
     string filename = (args.size() < 2) ?
         Configuration::getString(ConfigKey::ROM) : args.at(1).toStdString();
 
+    m_rom = QString::fromStdString(filename);
     if (m_console) {
         m_console->load(filename);
         m_console->start();
     }
+
+    m_timer.setInterval(REFRESH_TIMEOUT);
+    m_timer.start();
 }
 
 Screen::~Screen()
@@ -74,6 +76,26 @@ void Screen::stop()
     m_timer.stop();
 
     if (m_console) { m_console->stop(); }
+}
+
+void Screen::setROM(QString rom)
+{
+    stop();
+
+    // TODO: probably shouldn't reconstruct the whole object here
+    m_console = shared_ptr<GameBoyInterface>(GameBoyInterface::Instance());
+
+    assert(m_console);
+
+    string filename = QUrl(rom).toLocalFile().toStdString();
+    Configuration::updateString(ConfigKey::ROM, filename);
+
+    m_console->load(filename);
+    m_console->start();
+
+    m_timer.start();
+
+    m_stopped = false;
 }
 
 void Screen::keyPressEvent(QKeyEvent *event)

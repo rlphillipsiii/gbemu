@@ -62,7 +62,6 @@ private:
     enum LinkState {
         STATE_IDLE,
         STATE_PENDING,
-        STATE_WAITING,
         STATE_DISCONNECTED,
         STATE_SIM_RESPONSE,
     };

@@ -72,6 +72,9 @@ public:
     static bool updateBool(ConfigKey key, bool value);
     static bool updateInt(ConfigKey key, int value);
 
+    template <typename T>
+    static bool update(ConfigKey key, const T & value, const char *type);
+
     static std::string getString(ConfigKey key, std::string def = "");
     static int getInt(ConfigKey key, int def = 0);
     static bool getBool(ConfigKey key, bool def = false);
@@ -199,5 +202,24 @@ private:
 
     static std::vector<std::string> split(const std::string & str);
 };
+
+template <typename T>
+bool Configuration::update(ConfigKey key, const T & value, const char *type)
+{
+    Configuration & config = Configuration::instance();
+
+    Setting setting = config[key];
+    if (!setting) { return false; }
+
+    if (type != setting->type()) {
+        return false;
+    }
+
+    setting->set(value);
+    config.save();
+
+    config.broadcastUpdate(key);
+    return true;
+}
 
 #endif

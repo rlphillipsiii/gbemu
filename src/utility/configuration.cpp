@@ -195,45 +195,15 @@ bool Configuration::getBool(ConfigKey key, bool def)
 
 bool Configuration::updateString(ConfigKey key, const string & value)
 {
-    Setting setting = Configuration::instance()[key];
-    if (!setting) { return false; }
-
-    if (SettingValue::TYPE_STRING != setting->type()) {
-        return false;
-    }
-
-    setting->set(value);
-
-    Configuration::instance().broadcastUpdate(key);
-    return true;
+    return update<string>(key, value, SettingValue::TYPE_STRING);
 }
 
 bool Configuration::updateBool(ConfigKey key, bool value)
 {
-    Setting setting = Configuration::instance()[key];
-    if (!setting) { return false; }
-
-    if (SettingValue::TYPE_BOOL != setting->type()) {
-        return false;
-    }
-
-    setting->set(value);
-
-    Configuration::instance().broadcastUpdate(key);
-    return true;
+    return update<bool>(key, value, SettingValue::TYPE_BOOL);
 }
 
 bool Configuration::updateInt(ConfigKey key, int value)
 {
-    Setting setting = Configuration::instance()[key];
-    if (!setting) { return false; }
-
-    if (SettingValue::TYPE_INT != setting->type()) {
-        return false;
-    }
-
-    setting->set(value);
-
-    Configuration::instance().broadcastUpdate(key);
-    return true;
+    return update<int>(key, value, SettingValue::TYPE_INT);
 }

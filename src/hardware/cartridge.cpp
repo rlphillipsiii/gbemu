@@ -57,6 +57,7 @@ Cartridge::Cartridge(const string & path)
     // Sanity check.  This shouldn't ever really happen unless we are reading
     // something that isn't an actual ROM image.
     if (m_info.size < ROM_HEADER_LENGTH) { return; }
+    if (m_info.size > ROM_MAX_SIZE)      { return; }
 
     m_memory.resize(m_info.size);
     input.read(reinterpret_cast<char*>(m_memory.data()), m_memory.size());
