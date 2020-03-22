@@ -87,7 +87,7 @@ void SocketLink::initServer(int port)
 
     NOTE("Starting server thread on port %d (0x%04x)\n", port, htons(port));
 
-    m_server = thread([&, port] { executeServer(m_socket); });
+    m_server = thread([&] { executeServer(m_socket); });
 }
 
 void SocketLink::executeServer(int socket)

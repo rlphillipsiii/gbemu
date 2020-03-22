@@ -1,9 +1,6 @@
 #include <QImage>
 #include <QColor>
 #include <QPainter>
-#include <QSGGeometryNode>
-#include <QSGGeometry>
-#include <QSGVertexColorMaterial>
 #include <QThread>
 #include <QString>
 #include <QUrl>
@@ -76,6 +73,37 @@ void Screen::stop()
     m_timer.stop();
 
     if (m_console) { m_console->stop(); }
+}
+
+void Screen::setLinkMaster(bool master)
+{
+    Configuration::updateBool(ConfigKey::LINK_MASTER, master);
+}
+
+bool Screen::getLinkMaster() const
+{
+    return Configuration::getBool(ConfigKey::LINK_MASTER);
+}
+
+void Screen::setLinkType(ScreenTypes::ConsoleLinkType type)
+{
+    Configuration::updateInt(ConfigKey::LINK_TYPE, type);
+}
+
+ScreenTypes::ConsoleLinkType Screen::getLinkType() const
+{
+    int value = Configuration::getInt(ConfigKey::LINK_TYPE);
+    return ScreenTypes::ConsoleLinkType(value);
+}
+
+void Screen::setLinkEnable(bool enable)
+{
+    Configuration::updateBool(ConfigKey::LINK_ENABLE, enable);
+}
+
+bool Screen::getLinkEnable() const
+{
+    return Configuration::getBool(ConfigKey::LINK_ENABLE);
 }
 
 void Screen::setROM(QString rom)

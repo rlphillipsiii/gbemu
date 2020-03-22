@@ -8,3 +8,4 @@ release/
 moc_*
 qrc_*
 .cproject
+.settings/

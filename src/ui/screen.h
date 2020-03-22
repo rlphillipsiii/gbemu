@@ -14,9 +14,25 @@
 #include "gameboyinterface.h"
 #include "canvasinterface.h"
 
+namespace ScreenTypes {
+    Q_NAMESPACE
+    // Make sure that these values match the values in configuration.h.  There is
+    // a duplicate declaration so that this can be exposed to QML.  It is an
+    // unfortunate implementation, but it is necessary.
+    enum ConsoleLinkType {
+        LINK_SOCKET = 0,
+        LINK_PIPE   = 1,
+    };
+    Q_ENUM_NS(ConsoleLinkType)
+}
+
 class Screen : public QQuickPaintedItem, public CanvasInterface {
     Q_OBJECT
+
     Q_PROPERTY(QString rom READ getROM WRITE setROM NOTIFY romChanged)
+    Q_PROPERTY(bool link_master READ getLinkMaster WRITE setLinkMaster NOTIFY linkMasterChanged)
+    Q_PROPERTY(bool link_enable READ getLinkEnable WRITE setLinkEnable NOTIFY linkEnableChanged)
+    Q_PROPERTY(ScreenTypes::ConsoleLinkType link_type READ getLinkType WRITE setLinkType NOTIFY linkTypeChanged)
 
 public:
     explicit Screen(QQuickItem *parent = nullptr);
@@ -30,12 +46,37 @@ public:
     QString getROM() const { return m_rom; }
     void setROM(QString rom);
 
+    bool getLinkMaster() const;
+    void setLinkMaster(bool master);
+
+    bool getLinkEnable() const;
+    void setLinkEnable(bool enable);
+
+    void setLinkType(ScreenTypes::ConsoleLinkType link);
+    ScreenTypes::ConsoleLinkType getLinkType() const;
+
+    static void registerQML()
+    {
+        qmlRegisterType<Screen>("GameBoy.Screen", 1, 0, "Screen");
+
+        qmlRegisterUncreatableMetaObject(
+            ScreenTypes::staticMetaObject,
+            "GameBoy.Types",
+            1, 0,
+            "ConsoleLinkType",
+            "Can't create ConsoleLinkType instance"
+        );
+    }
+
 public slots:
     void onTimeout();
     void stop();
 
 signals:
     void romChanged();
+    void linkMasterChanged();
+    void linkEnableChanged();
+    void linkTypeChanged();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;

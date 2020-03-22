@@ -35,6 +35,8 @@ GameBoy::GameBoy()
       m_run(false)
 {
     initLink();
+
+    Configuration::instance().registerListener(*this);
 }
 
 void GameBoy::initLink()
@@ -139,6 +141,7 @@ void GameBoy::onConfigChange(ConfigKey key)
         [[fallthrough]];
     }
 
+    case ConfigKey::LINK_MASTER:
     case ConfigKey::LINK_TYPE:
     case ConfigKey::LINK_ENABLE: {
         if (m_link) {

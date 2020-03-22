@@ -26,7 +26,7 @@ int main(int argc, char **argv)
     Configuration & config = Configuration::instance();
     config.parse();
 
-    qmlRegisterType<Screen>("GameBoy.Screen", 1, 0, "Screen");
+    Screen::registerQML();
 
     QQmlApplicationEngine engine;
     engine.load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
