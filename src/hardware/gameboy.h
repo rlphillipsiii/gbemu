@@ -35,7 +35,7 @@ public:
 
     void execute(uint8_t ticks);
 
-    void onConfigChange(ConfigKey key);
+    void onConfigChange(ConfigKey key) override;
 
     inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
     inline void clrButton(JoyPadButton button) override { m_joypad.clr(button); }

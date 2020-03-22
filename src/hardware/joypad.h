@@ -21,6 +21,8 @@ public:
     void clr(GameBoyInterface::JoyPadButton button);
 
 private:
+    static constexpr uint8_t BUTTONS_IDLE = 0x0F;
+
     enum ShadowSelect {
         SHADOW_DIRS    = 0x10,
         SHADOW_BUTTONS = 0x20,
