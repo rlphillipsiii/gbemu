@@ -68,13 +68,16 @@ if __name__ == '__main__':
     parser.add_argument('-d', dest='debug', action='store_true')
     parser.add_argument('-v', dest='valgrind', nargs=1)
     parser.add_argument('-r', dest='run', nargs='*')
-
-    os.environ['LD_PRELOAD'] = '/usr/lib/gcc/x86_64-linux-gnu/7/libasan.so'
+    parser.add_argument('-a', dest='asan', action='store_true')
 
     base = get_base()
     os.chdir(base)
 
     args = parser.parse_args()
+
+    if args.asan:
+        os.environ['LD_PRELOAD'] = '/usr/lib/gcc/x86_64-linux-gnu/7/libasan.so'
+
     if args.path:
         print (os.getcwd())
     elif args.qmake:

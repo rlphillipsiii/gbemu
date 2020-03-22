@@ -72,8 +72,8 @@ private:
     static const uint16_t TILE_SIZE;
     static const uint16_t TILES_PER_SET;
 
-    static const uint16_t TILE_PIXELS_PER_ROW;
-    static const uint16_t TILE_PIXELS_PER_COL;
+    static constexpr uint16_t TILE_PIXELS_PER_ROW = 8;
+    static constexpr uint16_t TILE_PIXELS_PER_COL = 8;
 
     static const uint16_t TILE_SET_0_OFFSET;
     static const uint16_t TILE_SET_1_OFFSET;
@@ -113,6 +113,8 @@ private:
 
     static const uint8_t WINDOW_ROW_OFFSET;
 
+    using TileRow = std::array<GB::RGB, TILE_PIXELS_PER_ROW>;
+
     struct SpriteData {
         GPU & m_gpu;
 
@@ -126,7 +128,7 @@ private:
         uint8_t height;
         uint16_t address;
 
-        ColorArray colors;
+        TileRow colors;
 
         std::array<const uint8_t*, 2> mono;
 
@@ -238,8 +240,9 @@ private:
     std::pair<const uint8_t&, const Tile&>
         lookup(TileMapIndex mIndex, TileSetIndex sIndex, uint16_t x, uint16_t y);
 
-    ColorArray toRGB(
-        const ColorPalette & colors,
+    void toRGB(
+        TileRow & colors,
+        const ColorPalette & rgb,
         std::optional<uint8_t> pal,
         const Tile & tile,
         uint8_t row,

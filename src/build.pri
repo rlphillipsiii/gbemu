@@ -8,13 +8,17 @@ CONFIG (release, debug|release) {
     QMAKE_LFLAGS += -O3
 }
 
+CONFIG (symbols) {
+    QMAKE_CXXFLAGS += -g
+}
+
 CONFIG (debug, debug|release) {
     TARGET_SPEC = debug
 
     DEFINES += DEBUG
 
     QMAKE_CXXFLAGS += -g
-    QMAKE_CXXFLAGS += -O0
+    QMAKE_CXXFLAGS += -Og
 }
 
 defineReplace(combine) {

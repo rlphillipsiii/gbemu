@@ -122,3 +122,23 @@ void GameBoy::execute(uint8_t ticks)
         m_link->cycle(ticks);
     }
 }
+
+void GameBoy::onConfigChange(ConfigKey key)
+{
+    switch (key) {
+    case ConfigKey::LINK_TYPE:
+    case ConfigKey::LINK_ENABLE: {
+        if (m_link) {
+            m_link->stop();
+            m_link.reset();
+        }
+
+        if (Configuration::getBool(key)) {
+            initLink();
+        }
+        break;
+    }
+
+    default: break;
+    }
+}

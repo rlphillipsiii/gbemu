@@ -21,8 +21,9 @@
 #include "processor.h"
 #include "joypad.h"
 #include "consolelink.h"
+#include "configuration.h"
 
-class GameBoy : public GameBoyInterface {
+class GameBoy : public GameBoyInterface, public ConfigChangeListener {
 public:
     GameBoy();
     ~GameBoy() = default;
@@ -33,6 +34,8 @@ public:
     void stop() override;
 
     void execute(uint8_t ticks);
+
+    void onConfigChange(ConfigKey key);
 
     inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
     inline void clrButton(JoyPadButton button) override { m_joypad.clr(button); }

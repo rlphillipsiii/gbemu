@@ -41,7 +41,7 @@ enum class LinkType : uint8_t {
 
 class ConfigChangeListener {
 public:
-    virtual void onConfigChange(ConfigKey key);
+    virtual void onConfigChange(ConfigKey key) = 0;
 };
 
 class Configuration {

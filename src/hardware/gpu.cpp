@@ -93,9 +93,6 @@ const uint16_t GPU::SCANLINE_TICKS = VBLANK_TICKS / (SCANLINE_MAX - PIXELS_PER_C
 const uint16_t GPU::PIXELS_PER_ROW = 160;
 const uint16_t GPU::PIXELS_PER_COL = 144;
 
-const uint16_t GPU::TILE_PIXELS_PER_ROW = 8;
-const uint16_t GPU::TILE_PIXELS_PER_COL = 8;
-
 const uint8_t GPU::ALPHA_TRANSPARENT = 0x00;
 
 const uint8_t GPU::WINDOW_ROW_OFFSET = 7;
@@ -295,7 +292,7 @@ void GPU::handleVBlank(uint8_t ticks)
         Interrupts::set(m_mmc, InterruptMask::VBLANK);
         updateRenderStateStatus(VBLANK);
 
-        // We've move in to the hblank state, so move the internal buffer
+        // We've move in to the vblank state, so move the internal buffer
         // over to the screen buffer that the external code can retrieve.
         // This empties out our buffer, so we need to resize it to the size
         // of the screen.
@@ -373,7 +370,8 @@ pair<const uint8_t&, const Tile&> GPU::lookup(
     return { attributes, getTile(bank, sIndex, read(BANK_0, pointer)) };
 }
 
-ColorArray GPU::toRGB(
+void GPU::toRGB(
+    TileRow & colors,
     const ColorPalette & rgb,
     optional<uint8_t> pal,
     const Tile & tile,
@@ -381,17 +379,14 @@ ColorArray GPU::toRGB(
     bool white,
     bool flip) const
 {
-    ColorArray colors;
-    colors.reserve(TILE_PIXELS_PER_ROW);
-
-    uint8_t offset = row * 2;
+    uint8_t offset = (row % TILE_PIXELS_PER_ROW) * 2;
 
     assert(size_t(offset + 1) < tile.size());
 
     uint8_t lower = *tile.at(offset);
     uint8_t upper = *tile.at(offset + 1);
 
-    for (uint8_t j = 0; j < uint8_t(colors.capacity()); j++) {
+    for (uint8_t j = 0; j < uint8_t(colors.size()); j++) {
         uint8_t index = (flip) ? 7 - j : j;
 
         // The left most pixel starts at the most significant bit.
@@ -411,16 +406,11 @@ ColorArray GPU::toRGB(
         // If the color palette entry is 0, and we are not allowing the color white, then we
         // need to set our alpha blend entry to transparent so that this pixel won't show up
         // on the display when we go to draw the screen.
-        GB::RGB color = rgb.at(idx).second;
+        colors[j] = rgb.at(idx).second;
         if ((0x00 == pixel) && !white) {
-            color.alpha = ALPHA_TRANSPARENT;
+            colors[j].alpha = ALPHA_TRANSPARENT;
         }
-
-        // Each pixel needs to be run through a palette to get the actual color.
-        colors.emplace_back(color);
     }
-
-    return colors;
 }
 
 bool GPU::isWindowSelected(uint8_t x, uint8_t y)
@@ -441,7 +431,7 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
 {
     if (!isBackgroundEnabled()) { return; }
 
-    struct Cache { uint16_t x; ColorArray rgb; const ColorPalette *p; };
+    struct Cache { uint16_t x; TileRow rgb; const ColorPalette *p; };
     Cache winCache = { .x = 0xFFFF, .rgb = {}, .p = nullptr };
     Cache bgCache  = { .x = 0xFFFF, .rgb = {}, .p = nullptr };
 
@@ -495,7 +485,7 @@ void GPU::drawBackground(TileSetIndex set, TileMapIndex background, TileMapIndex
             row %= TILE_PIXELS_PER_COL;
             if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
 
-            cache.rgb = toRGB(rgb, palette, tile, row, true, flipX);
+            toRGB(cache.rgb, rgb, palette, tile, row, true, flipX);
         }
 
         // We are also going to keep track of what the background color is for each
@@ -538,14 +528,6 @@ void GPU::readSprite(SpriteData & data)
         bank = (data.flags & TILE_BANK_CGB) ? BANK_1 : BANK_0;
     }
 
-    // Lookup the tile in our table of sprites.  If we have a sprite that has extended
-    // height, then we need to read out the sprite data at the next address as well.
-    Tile tile = getTile(bank, TILESET_0, number);
-    if (SPRITE_HEIGHT_EXTENDED == data.height) {
-        const Tile & additional = getTile(bank, TILESET_0, number + 1);
-        tile.insert(tile.end(), additional.begin(), additional.end());
-    }
-
     bool flipX = data.flags & FLIP_X;
     bool flipY = data.flags & FLIP_Y;
 
@@ -561,8 +543,15 @@ void GPU::readSprite(SpriteData & data)
 
     if (flipY) { row = TILE_PIXELS_PER_COL - row - 1; }
 
+    // If the row that we are looking up is greater than the height of a tile, then
+    // we are in to the extended portion of the sprite and therefore need to increment
+    // the tile number so that we read out the next tile.
+    if (row >= TILE_PIXELS_PER_COL) { ++number; }
+
+    const Tile & tile = getTile(bank, TILESET_0, number);
+
     auto colors = data.palette();
-    data.colors = toRGB(colors.second, colors.first, tile, row, false, flipX);
+    toRGB(data.colors, colors.second, colors.first, tile, row, false, flipX);
 }
 
 void GPU::drawSprites(ColorArray & display, ColorArray & bg)
