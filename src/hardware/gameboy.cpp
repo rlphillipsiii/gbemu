@@ -126,6 +126,19 @@ void GameBoy::execute(uint8_t ticks)
 void GameBoy::onConfigChange(ConfigKey key)
 {
     switch (key) {
+    case ConfigKey::LINK_PORT:
+    case ConfigKey::LINK_ADDR: {
+        // Check the link type to see if we're changing a setting that is going
+        // to apply to the active configuration.  If not, we can don't need to
+        // do anything, so just break here.  Otherwise, fall through and restart
+        // the interface.
+        LinkType link = LinkType(Configuration::getInt(ConfigKey::LINK_TYPE));
+        if (LinkType::SOCKET != link) {
+            break;
+        }
+        [[fallthrough]];
+    }
+
     case ConfigKey::LINK_TYPE:
     case ConfigKey::LINK_ENABLE: {
         if (m_link) {

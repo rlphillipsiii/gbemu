@@ -7,8 +7,6 @@
 #include "memmap.h"
 
 using std::unordered_map;
-using std::mutex;
-using std::lock_guard;
 
 const unordered_map<JoyPad::ShadowSelect, int> JoyPad::SHADOW_MAP = {
     { SHADOW_DIRS,    0 },
@@ -34,8 +32,6 @@ JoyPad::JoyPad(MemoryController & memory)
 
 void JoyPad::cycle(uint8_t)
 {
-    lock_guard<mutex> guard(m_lock);
-
     uint8_t state = 0x0F;
 
     if (!(m_register & SHADOW_DIRS)) {
@@ -49,8 +45,6 @@ void JoyPad::cycle(uint8_t)
 
 void JoyPad::clr(GameBoyInterface::JoyPadButton button)
 {
-    lock_guard<mutex> guard(m_lock);
-
     ShadowSelect select = BUTTON_MAP.at(button);
 
     int index = SHADOW_MAP.at(select);
@@ -59,8 +53,6 @@ void JoyPad::clr(GameBoyInterface::JoyPadButton button)
 
 void JoyPad::set(GameBoyInterface::JoyPadButton button)
 {
-    lock_guard<mutex> guard(m_lock);
-
     ShadowSelect select = BUTTON_MAP.at(button);
 
     int index = SHADOW_MAP.at(select);

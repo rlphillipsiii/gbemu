@@ -14,6 +14,7 @@
 #include <mutex>
 #include <list>
 #include <chrono>
+#include <string>
 
 #include "socketlink_linux.h"
 #include "memorycontroller.h"
@@ -27,6 +28,7 @@ using std::lock_guard;
 using std::mutex;
 using std::list;
 using std::unique_lock;
+using std::string;
 
 SocketLink::SocketLink(MemoryController & memory)
     : ConsoleLink(memory)
@@ -130,7 +132,9 @@ void SocketLink::executeClient(int socket, int port)
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(port);
 
-    struct hostent *info = gethostbyname("127.0.0.1");
+    string host = Configuration::getString(ConfigKey::LINK_ADDR);
+
+    struct hostent *info = gethostbyname(host.c_str());
     if (!info) {
         ERROR("%s\n", "Failed convert host IP");
         return;

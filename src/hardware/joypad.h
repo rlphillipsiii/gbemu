@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <array>
 #include <unordered_map>
-#include <mutex>
+#include <atomic>
 
 #include "gameboyinterface.h"
 
@@ -16,10 +16,10 @@ public:
     ~JoyPad() = default;
 
     void cycle(uint8_t ticks);
-    
+
     void set(GameBoyInterface::JoyPadButton button);
     void clr(GameBoyInterface::JoyPadButton button);
-    
+
 private:
     enum ShadowSelect {
         SHADOW_DIRS    = 0x10,
@@ -29,11 +29,9 @@ private:
     static const std::unordered_map<ShadowSelect, int> SHADOW_MAP;
     static const std::unordered_map<GameBoyInterface::JoyPadButton, ShadowSelect> BUTTON_MAP;
 
-    std::mutex m_lock;
-    
     uint8_t & m_register;
 
-    std::array<uint8_t, 2> m_shadow;
+    std::array<std::atomic<uint8_t>, 2> m_shadow;
 };
 
 #endif
