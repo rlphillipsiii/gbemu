@@ -3,9 +3,9 @@
 
 #include <cstdint>
 #include <list>
-#include <mutex>
 #include <thread>
 #include <atomic>
+#include <utility>
 
 class MemoryController;
 
@@ -40,8 +40,14 @@ protected:
     std::atomic<bool> m_connected;
 
     struct {
-        struct { std::mutex lock; std::list<uint8_t> data; } tx;
-        struct { std::mutex lock; std::list<uint8_t> data; } rx;
+        struct {
+            std::atomic<bool> ready;
+            std::atomic<uint8_t> data;
+        } tx;
+        struct {
+            std::atomic<bool> ready;
+            std::atomic<uint8_t> data;
+        } rx;
     } m_queue;
 
     std::thread m_server;

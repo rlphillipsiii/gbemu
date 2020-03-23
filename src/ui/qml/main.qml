@@ -16,6 +16,7 @@ ApplicationWindow {
 
     ActionGroup { id: m_link  }
     ActionGroup { id: m_speed }
+    ActionGroup { id: m_mode  }
 
     menuBar : MenuBar {
         Menu {
@@ -92,6 +93,47 @@ ApplicationWindow {
 
         Menu {
             title: qsTr("&Settings")
+
+            Menu {
+                title: qsTr("Emulation Mode")
+
+                Action {
+                    id: m_auto
+
+                    text: qsTr("Auto Select")
+                    checkable: true
+                    ActionGroup.group: m_mode
+                    onTriggered: {
+                        if (true === m_auto.checked) {
+                            m_screen.emu_mode = EmulationMode.MODE_AUTO;
+                        }
+                    }
+                }
+                Action {
+                    id: m_dmg
+
+                    text: qsTr("DMG")
+                    checkable: true
+                    ActionGroup.group: m_mode
+                    onTriggered: {
+                        if (true === m_dmg.checked) {
+                            m_screen.emu_mode = EmulationMode.MODE_DMG;
+                        }
+                    }
+                }
+                Action {
+                    id: m_cgb
+
+                    text: qsTr("CGB")
+                    checkable: true
+                    ActionGroup.group: m_mode
+                    onTriggered: {
+                        if (true === m_cgb.checked) {
+                            m_screen.emu_mode = EmulationMode.MODE_CGB;
+                        }
+                    }
+                }
+            }
 
             Menu {
                 title: qsTr("Emulation Speed")
@@ -186,5 +228,15 @@ ApplicationWindow {
         } else if (EmulationSpeed.SPEED_FREE === speed) {
             m_free.checked = true;
         }
+
+        var mode = m_screen.emu_mode;
+        if (EmulationMode.MODE_AUTO === mode) {
+            m_auto.checked = true;
+        } else if (EmulationMode.MODE_DMG === mode) {
+            m_dmg.checked = true;
+        } else if (EmulationMode.MODE_CGB === mode) {
+            m_cgb.checked = true;
+        }
+
     }
 }

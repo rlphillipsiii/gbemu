@@ -7,10 +7,6 @@
 #include "logging.h"
 #include "interrupt.h"
 
-using std::unique_lock;
-using std::lock_guard;
-using std::mutex;
-
 using namespace std::chrono_literals;
 
 ConsoleLink::ConsoleLink(MemoryController & memory)
@@ -22,6 +18,9 @@ ConsoleLink::ConsoleLink(MemoryController & memory)
       m_state(ConsoleLink::STATE_DISCONNECTED)
 {
     m_master = Configuration::getBool(ConfigKey::LINK_MASTER);
+
+    m_queue.tx.ready = false;
+    m_queue.rx.ready = false;
 }
 
 void ConsoleLink::stop()
@@ -70,26 +69,15 @@ void ConsoleLink::check()
 
 void ConsoleLink::handlePending()
 {
-    uint8_t recv = 0xFF;
-
-    bool empty = true;
-    while (empty) {
+    while (!m_queue.rx.ready.load(std::memory_order_acquire)) {
         if (!m_connected) { break; }
 
-        unique_lock<mutex> guard(m_queue.rx.lock);
-
-        if ((empty = m_queue.rx.data.empty())) {
-            guard.unlock();
-
-            std::this_thread::sleep_for(1ms);
-            continue;
-        }
-
-        recv = m_queue.rx.data.front();
-        m_queue.rx.data.pop_front();
+        std::this_thread::sleep_for(1ms);
     }
 
-    finishTransfer(recv);
+    m_queue.rx.ready.store(false, std::memory_order_release);
+
+    finishTransfer(m_queue.rx.data.load(std::memory_order_acquire));
 }
 
 void ConsoleLink::finishTransfer(uint8_t data)
@@ -112,8 +100,8 @@ void ConsoleLink::transfer(uint8_t data)
     if (m_connected) {
         m_state = STATE_PENDING;
 
-        lock_guard<mutex> guard(m_queue.tx.lock);
-        m_queue.tx.data.push_back(data);
+        m_queue.tx.data.store(data, std::memory_order_release);
+        m_queue.tx.ready.store(true, std::memory_order_release);
     } else {
         m_state = STATE_SIM_RESPONSE;
     }
@@ -121,20 +109,20 @@ void ConsoleLink::transfer(uint8_t data)
 
 bool ConsoleLink::serverLoop()
 {
-    uint8_t data = 0xFF;
-    {
-        lock_guard<mutex> guard(m_queue.tx.lock);
-        if (m_queue.tx.data.empty()) { return true; }
-
-        data = m_queue.tx.data.front();
-        m_queue.tx.data.pop_front();
+    if (!m_queue.tx.ready.load(std::memory_order_acquire)
+        || m_queue.rx.ready.load(std::memory_order_acquire)) {
+        std::this_thread::sleep_for(10ms);
+        return true;
     }
 
+    m_queue.tx.ready.store(false, std::memory_order_release);
+
+    uint8_t data = m_queue.tx.data.load(std::memory_order_acquire);
     if (!wr(data)) { return false; }
     if (!rd(data)) { return false; }
 
-    lock_guard<mutex> guard(m_queue.rx.lock);
-    m_queue.rx.data.push_back(data);
+    m_queue.rx.data.store(data, std::memory_order_release);
+    m_queue.rx.ready.store(true, std::memory_order_release);
 
     return true;
 }

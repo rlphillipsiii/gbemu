@@ -79,7 +79,6 @@ void Screen::setLinkMaster(bool master)
 {
     Configuration::updateBool(ConfigKey::LINK_MASTER, master);
 }
-
 bool Screen::getLinkMaster() const
 {
     return Configuration::getBool(ConfigKey::LINK_MASTER);
@@ -89,7 +88,6 @@ void Screen::setLinkType(ScreenTypes::ConsoleLinkType type)
 {
     Configuration::updateInt(ConfigKey::LINK_TYPE, type);
 }
-
 ScreenTypes::ConsoleLinkType Screen::getLinkType() const
 {
     return Configuration::getEnum<ScreenTypes::ConsoleLinkType>(ConfigKey::LINK_TYPE);
@@ -99,17 +97,24 @@ void Screen::setSpeed(ScreenTypes::EmulationSpeed speed)
 {
     Configuration::updateInt(ConfigKey::SPEED, speed);
 }
-
 ScreenTypes::EmulationSpeed Screen::getSpeed() const
 {
     return Configuration::getEnum<ScreenTypes::EmulationSpeed>(ConfigKey::SPEED);
+}
+
+void Screen::setMode(ScreenTypes::EmulationMode mode)
+{
+    Configuration::updateInt(ConfigKey::EMU_MODE, mode);
+}
+ScreenTypes::EmulationMode Screen::getMode() const
+{
+    return Configuration::getEnum<ScreenTypes::EmulationMode>(ConfigKey::EMU_MODE);
 }
 
 void Screen::setLinkEnable(bool enable)
 {
     Configuration::updateBool(ConfigKey::LINK_ENABLE, enable);
 }
-
 bool Screen::getLinkEnable() const
 {
     return Configuration::getBool(ConfigKey::LINK_ENABLE);

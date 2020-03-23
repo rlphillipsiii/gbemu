@@ -63,7 +63,7 @@ void SocketLink::stop(thread & t)
 {
     if (!t.joinable()) { return; }
 
-    pthread_kill(t.native_handle(), SIGINT);
+    pthread_cancel(t.native_handle());
 }
 
 void SocketLink::initServer(int port)

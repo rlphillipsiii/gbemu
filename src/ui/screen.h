@@ -40,6 +40,13 @@ namespace ScreenTypes {
         SPEED_FREE   = 2,
     };
     Q_ENUM_NS(EmulationSpeed);
+
+    enum EmulationMode {
+        MODE_AUTO = 0,
+        MODE_CGB  = 1,
+        MODE_DMG  = 2,
+    };
+    Q_ENUM_NS(EmulationMode);
 }
 
 class Screen : public QQuickPaintedItem, public CanvasInterface {
@@ -50,6 +57,7 @@ class Screen : public QQuickPaintedItem, public CanvasInterface {
     Q_PROPERTY(bool link_enable READ getLinkEnable WRITE setLinkEnable NOTIFY linkEnableChanged)
     Q_PROPERTY(ScreenTypes::ConsoleLinkType link_type READ getLinkType WRITE setLinkType NOTIFY linkTypeChanged)
     Q_PROPERTY(ScreenTypes::EmulationSpeed emu_speed READ getSpeed WRITE setSpeed NOTIFY emuSpeedChanged)
+    Q_PROPERTY(ScreenTypes::EmulationMode emu_mode READ getMode WRITE setMode NOTIFY emuModeChanged)
 
 public:
     explicit Screen(QQuickItem *parent = nullptr);
@@ -75,12 +83,16 @@ public:
     void setSpeed(ScreenTypes::EmulationSpeed speed);
     ScreenTypes::EmulationSpeed getSpeed() const;
 
+    void setMode(ScreenTypes::EmulationMode mode);
+    ScreenTypes::EmulationMode getMode() const;
+
     static void registerQML()
     {
         qmlRegisterType<Screen>("GameBoy.Screen", 1, 0, "Screen");
 
         QML_ENUM(ConsoleLinkType);
         QML_ENUM(EmulationSpeed);
+        QML_ENUM(EmulationMode);
     }
 
 public slots:
@@ -93,6 +105,7 @@ signals:
     void linkEnableChanged();
     void linkTypeChanged();
     void emuSpeedChanged();
+    void emuModeChanged();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;

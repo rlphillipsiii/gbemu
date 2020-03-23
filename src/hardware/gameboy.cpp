@@ -243,6 +243,8 @@ void GameBoy::pause()
 
 void GameBoy::resume()
 {
+    // We are going to resume the two threads that we manage, so we need
+    // reset the tick count and let the CPU sync back with the timer.
     m_ticks = 0;
 
     m_pauseCpu.store(false, std::memory_order_release);
