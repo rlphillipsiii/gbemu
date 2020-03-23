@@ -1,6 +1,31 @@
 /*
  * gameboy.cpp
  *
+ * The GameBoy class is an implementation of the GameBoyInterface that
+ * controls each block of the GameBoy.  This boils down to 3 major
+ * responsibilities
+ *
+ * CPU Thread:
+ *   The GameBoy starts the CPU thread and lets it run until an external
+ *   interface requests that it be stopped.  This thread is responsible
+ *   for running the fetch execute cycle of the CPU as well as updating
+ *   the state of the other emulated pieces of hardware (i.e. GPU).  The
+ *   CPU thread can also be paused in order to allow synchronization.
+ *   The timing of the CPU's fetch execute cycle is controlled by the
+ *   timer thread.
+ *
+ * Timer Thread:
+ *  The GameBoy starts and manages the timer thread in the same way that
+ *  it manages the CPU thread.  The sole purpose of the timer thread is
+ *  to signal the CPU thread at a set interval in order to emulate the
+ *  clock speed of the gameboy hardware.
+ *
+ * Configuration Updates:
+ *   The configuration manager dispatches setting updates when a config
+ *   change is requested.  The GameBoy class is responsible for making
+ *   changes to the execution of the hardware emulation and ensuring that
+ *   the CPU and Timer threads stay in sync with config changes.
+ *
  *  Created on: May 28, 2019
  *      Author: Robert Phillips III
  */
