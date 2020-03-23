@@ -14,6 +14,8 @@
 #include <thread>
 #include <vector>
 #include <memory>
+#include <condition_variable>
+#include <mutex>
 
 #include "gameboyinterface.h"
 #include "gpu.h"
@@ -35,6 +37,9 @@ public:
 
     void execute(uint8_t ticks);
 
+    void pause();
+    void resume();
+
     void onConfigChange(ConfigKey key) override;
 
     inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
@@ -49,22 +54,52 @@ public:
     inline std::unique_ptr<ConsoleLink> & link() { return m_link; }
 
 private:
+    static constexpr uint32_t REFRESH_MS = 20;
+
+    // The number of ticks per interval is the clock rate (~4MHz), divided
+    // by the number refresh intervals per second (number of milliseconds
+    // per second divided by the refresh rate)
+    static constexpr uint32_t TICKS_NORMAL = 4e6 / (1e3 / REFRESH_MS);
+    static constexpr uint32_t TICKS_DOUBLE = TICKS_NORMAL * 2;
+    static constexpr uint32_t TICKS_QUAD   = TICKS_NORMAL * 4;
+    static constexpr uint32_t TICKS_FREE   = 0;
+
     MemoryController m_memory;
     GPU m_gpu;
     Processor m_cpu;
     JoyPad m_joypad;
     std::unique_ptr<ConsoleLink> m_link;
 
-    std::atomic<bool> m_run;
+    std::condition_variable m_cv;
+    std::mutex m_lock;
+
+    bool m_ready;
+
+    std::atomic<bool> m_runCpu;
+    std::atomic<bool> m_runTimer;
+
+    std::atomic<bool> m_pauseCpu;
+    std::atomic<bool> m_pauseTimer;
+
+    std::atomic<bool> m_timerPaused;
+    std::atomic<bool> m_cpuPaused;
 
     std::thread m_thread;
+    std::thread m_timer;
 
     std::vector<Processor::Command> m_assembly;
 
+    uint32_t m_ticks;
+    std::atomic<uint32_t> m_speed;
+
     void run();
     void step();
+    void wait();
 
     void initLink();
+    void readSpeed();
+
+    void executeTimer();
 };
 
 

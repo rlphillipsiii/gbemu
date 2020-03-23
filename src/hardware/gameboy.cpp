@@ -24,17 +24,28 @@ using std::string;
 using std::vector;
 using std::unique_lock;
 using std::mutex;
-using std::lock_guard;
 using std::unique_ptr;
+using std::lock_guard;
+using std::chrono::milliseconds;
+
+using namespace std::chrono_literals;
 
 GameBoy::GameBoy()
     : m_memory(*this),
       m_gpu(m_memory),
       m_cpu(*this),
       m_joypad(m_memory),
-      m_run(false)
+      m_ready(false),
+      m_runCpu(false),
+      m_runTimer(false),
+      m_pauseCpu(false),
+      m_pauseTimer(false),
+      m_timerPaused(true),
+      m_cpuPaused(true),
+      m_ticks(0)
 {
     initLink();
+    readSpeed();
 
     Configuration::instance().registerListener(*this);
 }
@@ -44,13 +55,27 @@ GameBoy::~GameBoy()
     Configuration::instance().unregisterListener(*this);
 }
 
+void GameBoy::readSpeed()
+{
+    EmuSpeed speed = Configuration::getEnum<EmuSpeed>(ConfigKey::SPEED);
+    switch (speed) {
+    default:
+        assert(0);
+        [[fallthrough]];
+
+    case EmuSpeed::NORMAL: m_speed = TICKS_NORMAL; break;
+    case EmuSpeed::_2X:    m_speed = TICKS_DOUBLE; break;
+    case EmuSpeed::FREE:   m_speed = TICKS_FREE;   break;
+    }
+}
+
 void GameBoy::initLink()
 {
     if (m_link) { m_link->stop(); }
 
     if (Configuration::getBool(ConfigKey::LINK_ENABLE)) {
         m_link = unique_ptr<ConsoleLink>([&]() -> ConsoleLink* {
-                LinkType link = LinkType(Configuration::getInt(ConfigKey::LINK_TYPE));
+                LinkType link = Configuration::getEnum<LinkType>(ConfigKey::LINK_TYPE);
                 switch (link) {
                 default:
                     assert(0);
@@ -84,9 +109,11 @@ bool GameBoy::load(const string & filename)
 
 void GameBoy::start()
 {
-    m_run = true;
+    m_runCpu   = true;
+    m_runTimer = true;
 
     m_thread = std::thread([&] { run(); });
+    m_timer  = std::thread([&] { executeTimer(); });
 }
 
 void GameBoy::run()
@@ -95,31 +122,54 @@ void GameBoy::run()
 
     m_cpu.reset();
 
-    while (m_run.load()) {
+    while (m_runCpu) {
         step();
     }
 }
 
 void GameBoy::stop()
 {
-    m_run = false;
+    m_runCpu = false;
 
     if (m_link) {
         m_link->stop();
     }
 
-    if (m_thread.joinable()) {
-        m_thread.join();
-    }
+    if (m_thread.joinable()) { m_thread.join(); }
+
+    m_runTimer = false;
+    if (m_timer.joinable())  { m_timer.join();  }
 }
 
 void GameBoy::step()
 {
+    while (m_pauseCpu) {
+        m_cpuPaused = true;
+        std::this_thread::sleep_for(100ms);
+    }
+
+    m_cpuPaused = false;
+
     m_cpu.cycle();
+}
+
+void GameBoy::wait()
+{
+    unique_lock<mutex> lock(m_lock);
+    m_cv.wait(lock, [&] { return m_ready; });
+
+    m_ready = false;
 }
 
 void GameBoy::execute(uint8_t ticks)
 {
+    m_ticks += ticks;
+    while ((TICKS_FREE != m_speed) && (m_ticks >= m_speed)) {
+        wait();
+
+        m_ticks -= m_speed;
+    }
+
     m_cpu.updateTimer(ticks);
 
     m_gpu.cycle(ticks);
@@ -130,16 +180,58 @@ void GameBoy::execute(uint8_t ticks)
     }
 }
 
+void GameBoy::pause()
+{
+    m_pauseCpu = true;
+    while (!m_cpuPaused)   { std::this_thread::sleep_for(100ms); }
+
+    m_pauseTimer = true;
+    while (!m_timerPaused) { std::this_thread::sleep_for(100ms); }
+}
+
+void GameBoy::resume()
+{
+    m_pauseCpu   = false;
+    m_pauseTimer = false;
+}
+
+void GameBoy::executeTimer()
+{
+    while (m_runTimer) {
+        while (m_pauseTimer) {
+            m_cpuPaused = true;
+            std::this_thread::sleep_for(100ms);
+        }
+
+        m_cpuPaused = false;
+
+        std::this_thread::sleep_for(milliseconds(REFRESH_MS));
+
+        lock_guard<mutex> guard(m_lock);
+
+        m_ready = true;
+        m_cv.notify_one();
+    }
+}
+
 void GameBoy::onConfigChange(ConfigKey key)
 {
     switch (key) {
+    case ConfigKey::SPEED: {
+        pause();
+        readSpeed();
+        resume();
+
+        break;
+    }
+
     case ConfigKey::LINK_PORT:
     case ConfigKey::LINK_ADDR: {
         // Check the link type to see if we're changing a setting that is going
         // to apply to the active configuration.  If not, we can don't need to
         // do anything, so just break here.  Otherwise, fall through and restart
         // the interface.
-        LinkType link = LinkType(Configuration::getInt(ConfigKey::LINK_TYPE));
+        LinkType link = Configuration::getEnum<LinkType>(ConfigKey::LINK_TYPE);
         if (LinkType::SOCKET != link) {
             break;
         }

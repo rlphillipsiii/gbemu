@@ -80,6 +80,9 @@ public:
     static int getInt(ConfigKey key, int def = 0);
     static bool getBool(ConfigKey key, bool def = false);
 
+    template <typename T>
+    static T getEnum(ConfigKey key);
+
     ////////////////////////////////////////////////////////////////////////////
     class SettingValue {
     public:
@@ -221,6 +224,12 @@ bool Configuration::update(ConfigKey key, const T & value, const char *type)
 
     config.broadcastUpdate(key);
     return true;
+}
+
+template <typename T>
+T Configuration::getEnum(ConfigKey key)
+{
+    return T(getInt(key));
 }
 
 #endif

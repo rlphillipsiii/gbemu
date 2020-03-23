@@ -90,6 +90,17 @@ ApplicationWindow {
                 }
             }
         }
+
+        Menu {
+            title: qsTr("&Help")
+
+            MenuItem {
+                text: qsTr("&About")
+                onTriggered: {
+
+                }
+            }
+        }
     }
 
     Screen {

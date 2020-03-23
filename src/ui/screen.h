@@ -88,6 +88,8 @@ private:
     static const std::unordered_map<int, GameBoyInterface::JoyPadButton> BUTTON_MAP;
 
     Screen(const Screen &) = delete;
+    Screen(const Screen &&) = delete;
+    Screen(Screen &&) = delete;
     Screen & operator=(const Screen &) = delete;
 
     int m_width;

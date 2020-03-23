@@ -10,7 +10,7 @@
 
 class MemoryController;
 
-class JoyPad {
+class JoyPad final {
 public:
     explicit JoyPad(MemoryController & memory);
     ~JoyPad() = default;

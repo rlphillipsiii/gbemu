@@ -35,9 +35,11 @@ void JoyPad::cycle(uint8_t)
     uint8_t state = BUTTONS_IDLE;
 
     if (!(m_register & SHADOW_DIRS)) {
-        state = m_shadow[SHADOW_MAP.at(SHADOW_DIRS)];
+        state =
+            m_shadow[SHADOW_MAP.at(SHADOW_DIRS)].load(std::memory_order_acquire);
     } else if (!(m_register & SHADOW_BUTTONS)) {
-        state = m_shadow[SHADOW_MAP.at(SHADOW_BUTTONS)];
+        state =
+            m_shadow[SHADOW_MAP.at(SHADOW_BUTTONS)].load(std::memory_order_acquire);
     }
 
     m_register = (m_register & 0xF0) | state;
@@ -56,5 +58,5 @@ void JoyPad::set(GameBoyInterface::JoyPadButton button)
     ShadowSelect select = BUTTON_MAP.at(button);
 
     int index = SHADOW_MAP.at(select);
-    m_shadow[index] &= (~button >> (4 * index));
+    m_shadow[index].fetch_and(~button >> (4 * index), std::memory_order_release);
 }
