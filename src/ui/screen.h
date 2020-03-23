@@ -14,6 +14,15 @@
 #include "gameboyinterface.h"
 #include "canvasinterface.h"
 
+#define QML_ENUM(name) \
+    qmlRegisterUncreatableMetaObject( \
+        ScreenTypes::staticMetaObject, \
+        "GameBoy.Types", \
+        1, 0, \
+        #name, \
+        "Can't instantiate type " #name \
+    );
+
 namespace ScreenTypes {
     Q_NAMESPACE
     // Make sure that these values match the values in configuration.h.  There is
@@ -23,7 +32,14 @@ namespace ScreenTypes {
         LINK_SOCKET = 0,
         LINK_PIPE   = 1,
     };
-    Q_ENUM_NS(ConsoleLinkType)
+    Q_ENUM_NS(ConsoleLinkType);
+
+    enum EmulationSpeed {
+        SPEED_NORMAL = 0,
+        SPEED_DOUBLE = 1,
+        SPEED_FREE   = 2,
+    };
+    Q_ENUM_NS(EmulationSpeed);
 }
 
 class Screen : public QQuickPaintedItem, public CanvasInterface {
@@ -33,6 +49,7 @@ class Screen : public QQuickPaintedItem, public CanvasInterface {
     Q_PROPERTY(bool link_master READ getLinkMaster WRITE setLinkMaster NOTIFY linkMasterChanged)
     Q_PROPERTY(bool link_enable READ getLinkEnable WRITE setLinkEnable NOTIFY linkEnableChanged)
     Q_PROPERTY(ScreenTypes::ConsoleLinkType link_type READ getLinkType WRITE setLinkType NOTIFY linkTypeChanged)
+    Q_PROPERTY(ScreenTypes::EmulationSpeed emu_speed READ getSpeed WRITE setSpeed NOTIFY emuSpeedChanged)
 
 public:
     explicit Screen(QQuickItem *parent = nullptr);
@@ -55,17 +72,15 @@ public:
     void setLinkType(ScreenTypes::ConsoleLinkType link);
     ScreenTypes::ConsoleLinkType getLinkType() const;
 
+    void setSpeed(ScreenTypes::EmulationSpeed speed);
+    ScreenTypes::EmulationSpeed getSpeed() const;
+
     static void registerQML()
     {
         qmlRegisterType<Screen>("GameBoy.Screen", 1, 0, "Screen");
 
-        qmlRegisterUncreatableMetaObject(
-            ScreenTypes::staticMetaObject,
-            "GameBoy.Types",
-            1, 0,
-            "ConsoleLinkType",
-            "Can't create ConsoleLinkType instance"
-        );
+        QML_ENUM(ConsoleLinkType);
+        QML_ENUM(EmulationSpeed);
     }
 
 public slots:
@@ -77,6 +92,7 @@ signals:
     void linkMasterChanged();
     void linkEnableChanged();
     void linkTypeChanged();
+    void emuSpeedChanged();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -105,4 +121,5 @@ private:
 
     QString m_rom;
 };
+
 #endif

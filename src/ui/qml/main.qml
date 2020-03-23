@@ -14,9 +14,8 @@ ApplicationWindow {
     height: 620
     title: qsTr("GameBoy Trilogy")
 
-    ActionGroup {
-        id: m_link
-    }
+    ActionGroup { id: m_link  }
+    ActionGroup { id: m_speed }
 
     menuBar : MenuBar {
         Menu {
@@ -92,6 +91,51 @@ ApplicationWindow {
         }
 
         Menu {
+            title: qsTr("&Settings")
+
+            Menu {
+                title: qsTr("Emulation Speed")
+
+                Action {
+                    id: m_normal
+
+                    text: qsTr("Normal")
+                    checkable: true
+                    ActionGroup.group: m_speed
+                    onTriggered: {
+                        if (true === m_normal.checked) {
+                            m_screen.emu_speed = EmulationSpeed.SPEED_NORMAL;
+                        }
+                    }
+                }
+                Action {
+                    id: m_double
+
+                    text: qsTr("Double")
+                    checkable: true
+                    ActionGroup.group: m_speed
+                    onTriggered: {
+                        if (true === m_double.checked) {
+                            m_screen.emu_speed = EmulationSpeed.SPEED_DOUBLE;
+                        }
+                    }
+                }
+                Action {
+                    id: m_free
+
+                    text: qsTr("Free Running")
+                    checkable: true
+                    ActionGroup.group: m_speed
+                    onTriggered: {
+                        if (true === m_free.checked) {
+                            m_screen.emu_speed = EmulationSpeed.SPEED_FREE;
+                        }
+                    }
+                }
+            }
+        }
+
+        Menu {
             title: qsTr("&Help")
 
             MenuItem {
@@ -132,6 +176,15 @@ ApplicationWindow {
             m_socket.checked = true;
         } else if (ConsoleLinkType.LINK_PIPE === link) {
             m_pipe.checked = true;
+        }
+
+        var speed = m_screen.emu_speed;
+        if (EmulationSpeed.SPEED_NORMAL === speed) {
+            m_normal.checked = true;
+        } else if (EmulationSpeed.SPEED_DOUBLE === speed) {
+            m_double.checked = true;
+        } else if (EmulationSpeed.SPEED_FREE === speed) {
+            m_free.checked = true;
         }
     }
 }

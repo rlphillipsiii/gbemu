@@ -92,8 +92,17 @@ void Screen::setLinkType(ScreenTypes::ConsoleLinkType type)
 
 ScreenTypes::ConsoleLinkType Screen::getLinkType() const
 {
-    int value = Configuration::getInt(ConfigKey::LINK_TYPE);
-    return ScreenTypes::ConsoleLinkType(value);
+    return Configuration::getEnum<ScreenTypes::ConsoleLinkType>(ConfigKey::LINK_TYPE);
+}
+
+void Screen::setSpeed(ScreenTypes::EmulationSpeed speed)
+{
+    Configuration::updateInt(ConfigKey::SPEED, speed);
+}
+
+ScreenTypes::EmulationSpeed Screen::getSpeed() const
+{
+    return Configuration::getEnum<ScreenTypes::EmulationSpeed>(ConfigKey::SPEED);
 }
 
 void Screen::setLinkEnable(bool enable)

@@ -109,8 +109,8 @@ bool GameBoy::load(const string & filename)
 
 void GameBoy::start()
 {
-    m_runCpu   = true;
-    m_runTimer = true;
+    m_runCpu.store(true, std::memory_order_release);
+    m_runTimer.store(true, std::memory_order_release);
 
     m_thread = std::thread([&] { run(); });
     m_timer  = std::thread([&] { executeTimer(); });
@@ -122,7 +122,7 @@ void GameBoy::run()
 
     m_cpu.reset();
 
-    while (m_runCpu) {
+    while (m_runCpu.load(std::memory_order_acquire)) {
         step();
     }
 }
@@ -133,7 +133,7 @@ void GameBoy::stop()
     // We won't be able to stop the threads if they are paused.
     resume();
 
-    m_runCpu = false;
+    m_runCpu.store(false, std::memory_order_release);
 
     if (m_link) {
         m_link->stop();
@@ -145,18 +145,22 @@ void GameBoy::stop()
     // the CPU thread is done before we start messing with the timer.
     if (m_thread.joinable()) { m_thread.join(); }
 
-    m_runTimer = false;
-    if (m_timer.joinable())  { m_timer.join();  }
+    m_runTimer.store(false, std::memory_order_release);
+    if (m_timer.joinable()) { m_timer.join();  }
 }
 
 void GameBoy::step()
 {
-    while (m_pauseCpu) {
-        m_cpuPaused = true;
-        std::this_thread::sleep_for(100ms);
+    while (m_pauseCpu.load(std::memory_order_acquire)) {
+        if (!m_cpuPaused.load()) {
+            m_cpuPaused.store(true, std::memory_order_release);
+        }
+        std::this_thread::sleep_for(5ms);
     }
 
-    m_cpuPaused = false;
+    if (m_cpuPaused.load()) {
+        m_cpuPaused.store(false, std::memory_order_release);
+    }
 
     m_cpu.cycle();
 }
@@ -178,10 +182,10 @@ void GameBoy::execute(uint8_t ticks)
     // free run without any syncronization with the timer and skip this
     // check.
     m_ticks += ticks;
-    while ((TICKS_FREE != m_speed) && (m_ticks >= m_speed)) {
+    if ((TICKS_FREE != m_speed) && (m_ticks >= m_speed)) {
         wait();
 
-        m_ticks -= m_speed;
+        m_ticks %= m_speed;
     }
 
     m_cpu.updateTimer(ticks);
@@ -200,29 +204,39 @@ void GameBoy::pause()
     // because the timer thread controls the execution timing of the
     // CPU thread, so we can't mess with the timer until the CPU thread
     // is paused.
-    m_pauseCpu = true;
-    while (!m_cpuPaused) { std::this_thread::sleep_for(100ms); }
+    m_pauseCpu.store(true, std::memory_order_release);
+    while (!m_cpuPaused.load(std::memory_order_acquire)) {
+        std::this_thread::sleep_for(5ms);
+    }
 
     // Block until the timer is paused.
-    m_pauseTimer = true;
-    while (!m_timerPaused) { std::this_thread::sleep_for(100ms); }
+    m_pauseTimer.store(true, std::memory_order_release);
+    while (!m_timerPaused.load(std::memory_order_acquire)) {
+        std::this_thread::sleep_for(5ms);
+    }
 }
 
 void GameBoy::resume()
 {
-    m_pauseCpu   = false;
-    m_pauseTimer = false;
+    m_ticks = 0;
+
+    m_pauseCpu.store(false, std::memory_order_release);
+    m_pauseTimer.store(false, std::memory_order_release);
 }
 
 void GameBoy::executeTimer()
 {
-    while (m_runTimer) {
-        while (m_pauseTimer) {
-            m_cpuPaused = true;
-            std::this_thread::sleep_for(100ms);
+    while (m_runTimer.load(std::memory_order_acquire)) {
+        while (m_pauseTimer.load(std::memory_order_acquire)) {
+            if (!m_timerPaused.load()) {
+                m_timerPaused.store(true, std::memory_order_release);
+            }
+            std::this_thread::sleep_for(5ms);
         }
 
-        m_cpuPaused = false;
+        if (m_timerPaused.load()) {
+            m_timerPaused.store(false, std::memory_order_release);
+        }
 
         // Put this thread to sleep.  When we wake up, then we will
         // notify the CPU thread that it's ok to continue.
@@ -237,6 +251,9 @@ void GameBoy::executeTimer()
 
 void GameBoy::onConfigChange(ConfigKey key)
 {
+    // Config change updates run in the UI thread's context, so we need to make
+    // sure that we pause the execution of these two threads before we make any
+    // changes to the configuration.
     pause();
 
     switch (key) {
