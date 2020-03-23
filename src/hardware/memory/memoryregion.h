@@ -46,6 +46,9 @@ public:
 
     inline std::vector<std::vector<uint8_t>> & memory() { return m_memory; }
 
+    uint8_t & operator[](uint32_t index);
+    size_t length() const;
+
 protected:
     MemoryController & m_parent;
 

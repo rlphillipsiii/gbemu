@@ -27,6 +27,22 @@ MemoryRegion::MemoryRegion(
 {
 }
 
+size_t MemoryRegion::length() const
+{
+    if (m_memory.empty()) { return 0; }
+
+    return (m_memory.size() * m_memory.at(0).size());
+}
+
+uint8_t & MemoryRegion::operator[](uint32_t index)
+{
+    assert(!m_memory.empty());
+
+    size_t bank = index / m_memory.at(0).size();
+    size_t idx  = index % m_memory.at(0).size();
+    return m_memory.at(bank).at(idx);
+}
+
 bool MemoryRegion::isAddressed(uint16_t address) const
 {
     return ((address >= m_offset) && (address < (m_offset + m_size)));

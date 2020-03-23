@@ -129,12 +129,20 @@ void GameBoy::run()
 
 void GameBoy::stop()
 {
+    // Resume the CPU and timer just in case we happened to be paused.
+    // We won't be able to stop the threads if they are paused.
+    resume();
+
     m_runCpu = false;
 
     if (m_link) {
         m_link->stop();
     }
 
+    // Make sure that the CPU thread has stopped and exited before
+    // attempting to stop the timer thread.  The timer thread controls
+    // the execution timing of the CPU, so we need to guarantee that
+    // the CPU thread is done before we start messing with the timer.
     if (m_thread.joinable()) { m_thread.join(); }
 
     m_runTimer = false;
@@ -163,6 +171,12 @@ void GameBoy::wait()
 
 void GameBoy::execute(uint8_t ticks)
 {
+    // Check to see if we have executed the number of ticks corresponding
+    // to the timeout interval of the timer thread.  If so, we need to wait
+    // here until the timer thread signals that we can continue to execute.
+    // The one exception is "free" mode.  In that case, just let the thread
+    // free run without any syncronization with the timer and skip this
+    // check.
     m_ticks += ticks;
     while ((TICKS_FREE != m_speed) && (m_ticks >= m_speed)) {
         wait();
@@ -182,9 +196,14 @@ void GameBoy::execute(uint8_t ticks)
 
 void GameBoy::pause()
 {
+    // Make sure that the CPU is paused before pausing the timer thread
+    // because the timer thread controls the execution timing of the
+    // CPU thread, so we can't mess with the timer until the CPU thread
+    // is paused.
     m_pauseCpu = true;
-    while (!m_cpuPaused)   { std::this_thread::sleep_for(100ms); }
+    while (!m_cpuPaused) { std::this_thread::sleep_for(100ms); }
 
+    // Block until the timer is paused.
     m_pauseTimer = true;
     while (!m_timerPaused) { std::this_thread::sleep_for(100ms); }
 }
@@ -205,6 +224,8 @@ void GameBoy::executeTimer()
 
         m_cpuPaused = false;
 
+        // Put this thread to sleep.  When we wake up, then we will
+        // notify the CPU thread that it's ok to continue.
         std::this_thread::sleep_for(milliseconds(REFRESH_MS));
 
         lock_guard<mutex> guard(m_lock);
@@ -216,12 +237,11 @@ void GameBoy::executeTimer()
 
 void GameBoy::onConfigChange(ConfigKey key)
 {
+    pause();
+
     switch (key) {
     case ConfigKey::SPEED: {
-        pause();
         readSpeed();
-        resume();
-
         break;
     }
 
@@ -254,4 +274,6 @@ void GameBoy::onConfigChange(ConfigKey key)
 
     default: break;
     }
+
+    resume();
 }
