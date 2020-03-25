@@ -34,8 +34,8 @@ const unordered_map<int, GameBoyInterface::JoyPadButton> Screen::BUTTON_MAP = {
 
 Screen::Screen(QQuickItem *parent)
     : QQuickPaintedItem(parent),
-      m_width(LCD_SCREEN_WIDTH),
-      m_height(LCD_SCREEN_HEIGHT),
+      m_width(GameBoyInterface::WIDTH),
+      m_height(GameBoyInterface::HEIGHT),
       m_canvas(m_width, m_height, QImage::Format_RGBA8888),
       m_console(GameBoyInterface::Instance()),
       m_stopped(false)

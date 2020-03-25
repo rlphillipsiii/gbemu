@@ -26,4 +26,3 @@ HEADERS += $$PUBLIC_HEADERS
 SOURCES += configuration.cpp
 
 publishHeaders($$PUBLIC_HEADERS)
-publishTarget()

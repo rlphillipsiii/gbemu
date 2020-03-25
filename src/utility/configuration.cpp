@@ -64,16 +64,27 @@ const Configuration::ConfigMap Configuration::DEFAULT_CONFIG{
 
 Configuration Configuration::s_instance;
 
-vector<string> Configuration::split(const string & str)
+string Configuration::trim(const string & str)
 {
-    const string sep(":");
+    auto lambda = [](int c) -> bool { return std::isspace(c); };
 
-    string s = str;
+    auto f =std::find_if_not(str.begin(), str.end(),  lambda);
+    auto b =std::find_if_not(str.rbegin(),str.rend(), lambda).base();
+
+    return ((b <= f) ? string() : string(f, b));
+}
+
+vector<string> Configuration::split(const string & str, const string & sep)
+{
+    string s = trim(str);
 
     vector<string> tokens;
     for (size_t idx = s.find(sep); idx != string::npos; idx = s.find(sep)) {
-        tokens.push_back(s.substr(0, idx));
+        string token = s.substr(0, idx);
 
+        if (!token.empty()) {
+            tokens.push_back(token);
+        }
         s.erase(0, idx + sep.size());
     }
 

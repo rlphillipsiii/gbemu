@@ -34,22 +34,16 @@ defineTest(createDirectory) {
     }
 }
 
-defineTest(copyFile) {
-    system(cp $$ARGS)
-}
+defineTest(publishFiles) {
+    fileslist = $$ARGS
 
-defineTest(publishFile) {
-    message($$ARGS)
-    system(mv $$ARGS)
-}
-
-defineTest(publishTarget) {
-    destination = $$PUBLIC_BIN
-    contains (TEMPLATE, lib) {
-        destination = $$PUBLIC_LIB
+    for (target, fileslist) {
+        exists($$target) {
+            dest = $$join($$list($$PUBLIC_BIN, $$target), "/")
+            cmd  = $$quote($$CONFIG_CMD -l $$PWD $$target $$dest)
+            system($$cmd)
+        }
     }
-
-    #publishFile($$join($$TARGET_SPEC, $$TARGET, "/"), $$join($$list($$destination, $$TARGET), "/"))
 }
 
 defineTest(publishHeaders) {
@@ -57,7 +51,9 @@ defineTest(publishHeaders) {
 
     for (target, fileslist) {
         exists($$target) {
-            copyFile($$target, $$join($$list($$PUBLIC_INC, $$target), "/"))
+            dest = $$join($$list($$PUBLIC_INC, $$target), "/")
+            cmd  = $$quote($$CONFIG_CMD -l $$PWD $$target $$dest)
+            system($$cmd)
         }
     }
 }
@@ -91,6 +87,10 @@ defineReplace(getBaseDirectory) {
 
 PROJECT_ROOT = $$getBaseDirectory()
 PROJECT_ROOT = $$replace(PROJECT_ROOT, "\\\\", "/")
+
+CONFIG_SCRIPT = $$join($$list($$PROJECT_ROOT, "config.py"), "/")
+
+CONFIG_CMD = $$join($$list("python", $$CONFIG_SCRIPT), " ")
 
 PUBLIC_DIRECTORY = $$join($$list($$PROJECT_ROOT, "public", $$TARGET_SPEC), "/")
 

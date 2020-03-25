@@ -17,6 +17,7 @@ TARGET = gbc
 
 LIBS += -lutility
 LIBS += -lhardware
+LIBS += -lgameserver
 
 RESOURCES += resources.qrc
 
@@ -24,5 +25,3 @@ HEADERS += screen.h
 
 SOURCES += screen.cpp
 SOURCES += main.cpp
-
-publishTarget()
