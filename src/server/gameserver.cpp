@@ -42,6 +42,7 @@ using namespace std::chrono_literals;
 const unordered_map<GameServer::ResponseCode, string> GameServer::RESPONSE_MSG = {
     { GameServer::HTTP_101, "Switching Protocols" },
     { GameServer::HTTP_200, "OK"                  },
+    { GameServer::HTTP_204, "No Content"          },
     { GameServer::HTTP_400, "Bad Request"         },
     { GameServer::HTTP_404, "Not Found"           },
 
@@ -190,11 +191,49 @@ void GameServer::handleRequest(int conn, const vector<string> & request)
     if (("GET" != method) || ("HTTP/1.1" != protocol)) {
         response = getResponse(HTTP_400, "400.html");
     } else {
-        response = getResponse(HTTP_200, file);
+        if (file.find("event") != string::npos) {
+            response = header(HTTP_204, 0).str();
+
+            handleEvent(file);
+        } else {
+            response = getResponse(HTTP_200, file);
+        }
     }
 
     if (INVALID == write(conn, response.data(), response.length())) {
         ERROR("Failed to respond to http request: \"%s\"\n", request.at(0).c_str());
+    }
+}
+
+void GameServer::handleEvent(const string & request)
+{
+    vector<string> parts = Configuration::split(request, "?");
+    if (parts.size() != 2) { return; }
+
+    vector<string> tokens = Configuration::split(parts.at(1), "=");
+    if (tokens.size() < 2) { return; }
+
+    EventType event = EventType(std::stoi(tokens.at(0)));
+    switch (event) {
+    case KEY_UP: {
+        GameBoyInterface::JoyPadButton button =
+            GameBoyInterface::JoyPadButton(std::stoi(tokens.at(1)));
+        m_console->clrButton(button);
+
+        break;
+    }
+
+    case KEY_DOWN: {
+        GameBoyInterface::JoyPadButton button =
+            GameBoyInterface::JoyPadButton(std::stoi(tokens.at(1)));
+        m_console->setButton(button);
+
+        break;
+    }
+
+    default:
+        WARN("Unrecognized event: %d\n", event);
+        break;
     }
 }
 
@@ -228,9 +267,11 @@ stringstream GameServer::header(ResponseCode code, int length) const
     stream << "HTTP/1.1 " << code << " " << iterator->second << CRLF;
     stream << "Date: Mon, 27 Jul 2009 12:28:53 GMT" << CRLF;
     stream << "Server: GameBoy Trilogy" << CRLF;
-    stream << "Last-Modified: Wed, 22 Jul 2019 19:15:56 GMT" << CRLF;
-    stream << "Content-Length: " << length << CRLF;
-    stream << "Content-Type: text/html" << CRLF;
+    if (0 != length) {
+        stream << "Last-Modified: Wed, 22 Jul 2019 19:15:56 GMT" << CRLF;
+        stream << "Content-Length: " << length << CRLF;
+        stream << "Content-Type: text/html" << CRLF;
+    }
     stream << "Connection: Closed" << CRLF;
     stream << CRLF;
 

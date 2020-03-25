@@ -2,9 +2,7 @@
   <head>
     <script type="text/javascript" src="gamescreen.js"></script>
   <body>
-    <h1>Hello World</h1>
-
-    <canvas id="screen" width="160" height="144"></canvas>
+    <canvas id="screen"></canvas>
   </body>
 
   <script type="text/javascript">
@@ -12,6 +10,14 @@
         if (event.target.readyState === "complete") {
             screen = new GameScreen("screen");
         }
+    });
+
+    document.addEventListener("keyup", event => {
+        screen.onKeyUp(event);
+    });
+
+    document.addEventListener("keydown", event => {
+        screen.onKeyDown(event);
     });
 
   </script>

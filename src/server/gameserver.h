@@ -46,8 +46,14 @@ private:
     enum ResponseCode {
         HTTP_101 = 101,
         HTTP_200 = 200,
+        HTTP_204 = 204,
         HTTP_400 = 400,
         HTTP_404 = 404,
+    };
+
+    enum EventType {
+        KEY_UP   = 0,
+        KEY_DOWN = 1,
     };
 
     static const std::unordered_map<ResponseCode, std::string> RESPONSE_MSG;
@@ -72,6 +78,8 @@ private:
     std::vector<uint8_t> sha1(const std::string & key) const;
     bool handshake(int conn);
     bool send(int conn, const std::vector<GB::RGB> & packet);
+
+    void handleEvent(const std::string & request);
 
     int connect(int socket);
     std::optional<std::vector<std::string>> wait(int conn);
