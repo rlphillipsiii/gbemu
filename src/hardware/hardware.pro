@@ -83,6 +83,4 @@ win32: {
     SOURCES += serial/socketlink_windows.cpp
 }
 
-
 publishHeaders($$PUBLIC_HEADERS)
-publishTarget()

@@ -1,0 +1,18 @@
+<html>
+  <head>
+    <script type="text/javascript" src="gamescreen.js"></script>
+  <body>
+    <h1>Hello World</h1>
+
+    <canvas id="screen" width="160" height="144"></canvas>
+  </body>
+
+  <script type="text/javascript">
+    document.addEventListener("readystatechange", event => {
+        if (event.target.readyState === "complete") {
+            screen = new GameScreen("screen");
+        }
+    });
+
+  </script>
+</html>

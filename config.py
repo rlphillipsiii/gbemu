@@ -5,6 +5,7 @@ import os
 import argparse
 import subprocess
 import platform
+import glob
 
 def get_base():
     for i in range(10):
@@ -23,6 +24,12 @@ def cmd(command):
 
     return p.returncode
 
+def symlink(path, src, dest):
+    if os.path.exists(dest):
+        return
+
+    os.symlink(os.path.join(path, src), dest)
+
 def qmake():
     sys.exit(cmd('qmake -r CONFIG+=debug_and_release'))
 
@@ -37,7 +44,12 @@ def make(dbg):
 
 def test(spec):
     os.chdir(os.path.join('public', spec, 'bin'))
-    sys.exit(cmd('./unittest'))
+    for f in glob.glob('*test'):
+        retcode = cmd('./{0}'.format(f))
+        if 0 != retcode:
+            sys.exit(retcode)
+
+    sys.exit(0)
 
 def gdb():
     os.chdir(os.path.join('public', 'debug', 'bin'))
@@ -69,6 +81,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', dest='valgrind', nargs=1)
     parser.add_argument('-r', dest='run', nargs='*')
     parser.add_argument('-a', dest='asan', action='store_true')
+    parser.add_argument('-l', dest='link', nargs=3)
 
     base = get_base()
     os.chdir(base)
@@ -90,6 +103,8 @@ if __name__ == '__main__':
         init()
     elif args.debug:
         gdb()
+    elif not args.link is None:
+        symlink(*args.link);
     elif not args.valgrind is None:
         valgrind(args.valgrind[0])
     elif not args.test is None:
