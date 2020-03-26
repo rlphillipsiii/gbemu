@@ -22,7 +22,6 @@ public:
     static constexpr int WIDTH  = 160;
     static constexpr int HEIGHT = 144;
 
-
     enum ConsoleType {
         GAMEBOY_EMU,
     };

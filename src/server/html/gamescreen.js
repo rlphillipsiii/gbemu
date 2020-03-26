@@ -22,31 +22,54 @@ const SCREEN_WIDTH  = 160;
 class GameScreen {
     constructor(id)
     {
-        this.canvas = document.getElementById(id);
+        this._connected = false;
+
+        this._canvas = document.getElementById(id);
 
         var addr = self.location.host.split(":")[0];
 
-        this.socket = new WebSocket("ws://" + addr + ":1148/");
-        this.socket.binaryType = "arraybuffer";
+        this._socket = new WebSocket("ws://" + addr + ":1148/");
+        this._socket.binaryType = "arraybuffer";
 
-        this.socket.onopen = (event) => {
+        this._socket.onopen = (event) => {
             this.onOpen(event);
         };
-        this.socket.onmessage = (event) => {
+        this._socket.onclose = (event) => {
+            this.onClose(event);
+        }
+        this._socket.onmessage = (event) => {
             this.onMessage(event);
+
+            this._socket.send("r");
+        };
+
+        this._keypress = {
+            "KeyA"       : EventType.KeyUp,
+            "KeyB"       : EventType.KeyUp,
+            "KeyF"       : EventType.KeyUp,
+            "Space"      : EventType.KeyUp,
+            "ArrowRight" : EventType.KeyUp,
+            "ArrowLeft"  : EventType.KeyUp,
+            "ArrowUp"    : EventType.KeyUp,
+            "ArrowDown"  : EventType.KeyUp,
         };
     }
 
     onOpen(event)
     {
-        console.log("connection established");
+        this._connected = true;
+    }
+
+    onClose(event)
+    {
+        this._connected = false;
     }
 
     onMessage(event)
     {
-        this.canvas.height = SCREEN_HEIGHT;
-        this.canvas.width  = SCREEN_WIDTH;
-        var context = this.canvas.getContext('2d');
+        this._canvas.height = SCREEN_HEIGHT;
+        this._canvas.width  = SCREEN_WIDTH;
+        var context = this._canvas.getContext('2d');
 
         var img = new ImageData(
             new Uint8ClampedArray(event.data),
@@ -54,8 +77,8 @@ class GameScreen {
             SCREEN_HEIGHT
         );
 
-        this.canvas.height *= 4;
-        this.canvas.width  *= 4;
+        this._canvas.height *= 4;
+        this._canvas.width  *= 4;
 
         context.putImageData(img, 0, 0);
 
@@ -65,29 +88,36 @@ class GameScreen {
 
     onKeyUp(event)
     {
-        if (GAME_KEY_MAP[event.code] !== undefined) {
-            this.sendEventMessage(EventType.KeyUp, GAME_KEY_MAP[event.code]);
-        }
+        this.onKeyPress(EventType.KeyUp, event);
     }
 
     onKeyDown(event)
     {
+        this.onKeyPress(EventType.KeyDown, event);
+    }
+
+    onKeyPress(polarity, event)
+    {
+        if (false === this._connected) { return; }
+
         if (GAME_KEY_MAP[event.code] !== undefined) {
-            this.sendEventMessage(EventType.KeyDown, GAME_KEY_MAP[event.code]);
+            if (this._keypress[event.code] === polarity) {
+                return;
+            }
+
+            this._keypress[event.code] = polarity;
+            this.sendEventMessage(polarity, GAME_KEY_MAP[event.code]);
         }
     }
 
     sendEventMessage(event, data)
     {
         var xhr = new XMLHttpRequest();
-        xhr.open("GET", "event?" + event + "=" + data, true);
-
-        xhr.onload = function() {
-            if (204 !== xhr.status) {
-                console.log("Unexpected response: " + xhr.status);
-            }
-        }
-
+        xhr.open("GET", "event?" + event + "=" + data, false);
         xhr.send();
+
+        if (204 !== xhr.status) {
+            console.log("Unexpected response: " + xhr.status);
+        }
     }
 }
