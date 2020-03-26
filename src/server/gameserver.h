@@ -36,6 +36,8 @@ private:
     static constexpr int CANVAS_SIZE =
         GameBoyInterface::HEIGHT * GameBoyInterface::WIDTH * BYTES_PER_PIXEL;
 
+    static constexpr int ACK_LENGTH = 3;
+
     static constexpr const char *CRLF = "\r\n";
 
     static constexpr const char *SECRET_KEY = "Sec-WebSocket-Key";
