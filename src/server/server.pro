@@ -1,6 +1,6 @@
 include(../build.pri)
 
-TEMPLATE = lib
+TEMPLATE = app
 
 CONFIG += shared
 
@@ -13,7 +13,12 @@ CONFIG (asan) {
     QMAKE_LFLAGS   += -fsanitize=address
 }
 
+unix: LIBS += -lpthread
+
 DEFINES += SERVER_EXPORT
+
+LIBS += -lhardware
+LIBS += -lutility
 
 LIBS += -lcrypto
 LIBS += -lssl
@@ -32,6 +37,7 @@ HEADERS += $$PUBLIC_HEADERS
 
 SOURCES += base64.cpp
 SOURCES += gameserver.cpp
+SOURCES += main.cpp
 
 createDirectory($$join($$list($$PUBLIC_BIN, "html"), "/"))
 

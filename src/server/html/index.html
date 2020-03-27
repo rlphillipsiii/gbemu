@@ -1,8 +1,30 @@
+<!DOCTYPE html>
 <html>
   <head>
     <script type="text/javascript" src="gamescreen.js"></script>
+  </head>
   <body>
     <canvas id="screen"></canvas>
+
+    <div id="buttons">
+      <button onmouseup="sendIOEvent(EventType.KeyUp, GAME_KEY_MAP.ArrowLeft);"
+              onmousedown="sendIOEvent(EventType.KeyDown, GAME_KEY_MAP.ArrowLeft);">L</button>
+      <button onmouseup="sendIOEvent(EventType.KeyUp, GAME_KEY_MAP.ArrowUp);"
+              onmousedown="sendIOEvent(EventType.KeyDown, GAME_KEY_MAP.ArrowUp);">U</button>
+      <button onmouseup="sendIOEvent(EventType.KeyUp, GAME_KEY_MAP.ArrowRight);"
+              onmousedown="sendIOEvent(EventType.KeyDown, GAME_KEY_MAP.ArrowRight);">R</button>
+      <button onmouseup="sendIOEvent(EventType.KeyUp, GAME_KEY_MAP.ArrowDown);"
+              onmousedown="sendIOEvent(EventType.KeyDown, GAME_KEY_MAP.ArrowDown);">D</button>
+
+      <button onmouseup="sendIOEvent(EventType.KeyUp, GAME_KEY_MAP.KeyA);"
+              onmousedown="sendIOEvent(EventType.KeyDown, GAME_KEY_MAP.KeyA);">A</button>
+      <button onmouseup="sendIOEvent(EventType.KeyUp, GAME_KEY_MAP.KeyB);"
+              onmousedown="sendIOEvent(EventType.KeyDown, GAME_KEY_MAP.KeyB);">B</button>
+      <button onmouseup="sendIOEvent(EventType.KeyUp, GAME_KEY_MAP.Space);"
+              onmousedown="sendIOEvent(EventType.KeyDown, GAME_KEY_MAP.Space);">Start</button>
+      <button onmouseup="sendIOEvent(EventType.KeyUp, GAME_KEY_MAP.KeyF);"
+              onmousedown="sendIOEvent(EventType.KeyDown, GAME_KEY_MAP.KeyF);">Select</button>
+    </div>
   </body>
 
   <script type="text/javascript">
@@ -19,5 +41,10 @@
     document.addEventListener("keydown", event => {
         screen.onKeyDown(event);
     });
+
+    function sendIOEvent(event, button)
+    {
+        screen.sendEventMessage(event, button);
+    }
   </script>
 </html>
