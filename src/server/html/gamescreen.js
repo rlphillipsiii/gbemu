@@ -1,3 +1,5 @@
+"use strict";
+
 // Make sure that the entries in this dictionary match the
 // entries that are in the gameboyinterface.h enum definition
 const GAME_KEY_MAP  = {
@@ -26,22 +28,7 @@ class GameScreen {
 
         this._canvas = document.getElementById(id);
 
-        var addr = self.location.host.split(":")[0];
-
-        this._socket = new WebSocket("ws://" + addr + ":1148/");
-        this._socket.binaryType = "arraybuffer";
-
-        this._socket.onopen = (event) => {
-            this.onOpen(event);
-        };
-        this._socket.onclose = (event) => {
-            this.onClose(event);
-        }
-        this._socket.onmessage = (event) => {
-            this.onMessage(event);
-
-            this._socket.send("r");
-        };
+        this._init();
 
         this._keypress = {
             "KeyA"       : EventType.KeyUp,
@@ -55,6 +42,22 @@ class GameScreen {
         };
     }
 
+    _init()
+    {
+        this._busy  = false;
+        this._queue = [];
+
+        var addr = self.location.host.split(":")[0];
+
+        this._socket = new WebSocket("ws://" + addr + ":1148/");
+        this._socket.binaryType = "arraybuffer";
+
+        this._socket.onopen    = (e) => { this.onOpen(e);    };
+        this._socket.onclose   = (e) => { this.onClose(e);   };
+        this._socket.onerror   = (e) => { this.onError(e);   };
+        this._socket.onmessage = (e) => { this.onMessage(e); };
+    }
+
     onOpen(event)
     {
         this._connected = true;
@@ -65,8 +68,19 @@ class GameScreen {
         this._connected = false;
     }
 
+    onError(event)
+    {
+        console.log("connection failed");
+
+        this._connected = false;
+
+        window.setTimeout(() => { this._init(); }, 250);
+    }
+
     onMessage(event)
     {
+        this._socket.send("r");
+
         this._canvas.height = SCREEN_HEIGHT;
         this._canvas.width  = SCREEN_WIDTH;
         var context = this._canvas.getContext('2d');
@@ -112,12 +126,36 @@ class GameScreen {
 
     sendEventMessage(event, data)
     {
+        if (false === this._connected) { return null; }
+
+        if (this._busy) {
+            this._queue.push({ "event" : event, "data"  : data, });
+        } else {
+            this._busy = true;
+            return this._send(event, data);
+        }
+        return null;
+    }
+
+    _send(event, data)
+    {
         var xhr = new XMLHttpRequest();
-        xhr.open("GET", "event?" + event + "=" + data, false);
+        xhr.addEventListener('loadend', (evt) => {
+            if (204 !== xhr.status) {
+                console.log("Unexpected response: " + xhr.status);
+            }
+
+            if (0 === this._queue.length) {
+                this._busy = false;
+            } else {
+                var next = this._queue.shift();
+                this._send(next.event, next.data);
+            }
+        });
+
+        xhr.open("GET", "event?" + event + "=" + data);
         xhr.send();
 
-        if (204 !== xhr.status) {
-            console.log("Unexpected response: " + xhr.status);
-        }
+        return xhr;
     }
 }

@@ -15,18 +15,6 @@
 
 int main(int argc, char **argv)
 {
-    (void)argc; (void)argv;
-
-    // Make sure we parse the configuration before trying to load up the screen
-    // the screen is what owns the instance of the gameboy, so the config needs
-    // to be parsed before we try to create the screen
-    Configuration & config = Configuration::instance();
-    config.parse();
-
-    GameServer server;
-    server.start();
-
-#if 0
     constexpr const char *ORGANIZATION = "rlphillipsiii";
 
     QGuiApplication app(argc, argv);
@@ -35,7 +23,7 @@ int main(int argc, char **argv)
 
     // Make sure we parse the configuration before trying to load up the screen
     // the screen is what owns the instance of the gameboy, so the config needs
-    // to be parsed before we try to create the screen
+    // to be parsed before we try to create the screen.
     Configuration & config = Configuration::instance();
     config.parse();
 
@@ -51,5 +39,4 @@ int main(int argc, char **argv)
 #endif
 
     return app.exec();
-#endif
 }
