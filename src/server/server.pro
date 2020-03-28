@@ -15,8 +15,6 @@ CONFIG (asan) {
 
 unix: LIBS += -lpthread
 
-DEFINES += SERVER_EXPORT
-
 LIBS += -lhardware
 LIBS += -lutility
 
