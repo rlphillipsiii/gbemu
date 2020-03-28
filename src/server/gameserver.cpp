@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <errno.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include <openssl/sha.h>
 
@@ -103,6 +104,8 @@ bool GameServer::init(int & fd, int port)
 
 bool GameServer::start()
 {
+    signal(SIGPIPE, SIG_IGN);
+
     // Get the HTTP server and the WebSocket server ready to run.  If
     // initialization of either fails here, then we can't continue, so
     // just bail and let the calling code decide how to proceed.
@@ -218,7 +221,7 @@ void GameServer::handleRequest(int conn, const vector<string> & request)
         response = getResponse(HTTP_400, "400.html");
     } else {
         if (file.find("event") != string::npos) {
-            response = header(HTTP_204, 0).str();
+            response = header(HTTP_204, 0, "text/html").str();
 
             handleEvent(file);
         } else {
@@ -286,7 +289,8 @@ string GameServer::getResponse(ResponseCode code, const string & file) const
     int length = int(input.tellg());
     input.seekg(0, input.beg);
 
-    stringstream stream = header(code, length);
+    string mime = (file.find(".css") != string::npos) ? "text/css" : "text/html";
+    stringstream stream = header(code, length, mime);
 
     string message;
     message.resize(length + 1);
@@ -297,8 +301,10 @@ string GameServer::getResponse(ResponseCode code, const string & file) const
     return stream.str();
 }
 
-stringstream GameServer::header(ResponseCode code, int length) const
+stringstream GameServer::header(ResponseCode code, int length, const string & mime) const
 {
+    // TODO: actually send a real date
+
     auto iterator = RESPONSE_MSG.find(code);
 
     stringstream stream;
@@ -308,7 +314,7 @@ stringstream GameServer::header(ResponseCode code, int length) const
     if (0 != length) {
         stream << "Last-Modified: Wed, 22 Jul 2019 19:15:56 GMT" << CRLF;
         stream << "Content-Length: " << length << CRLF;
-        stream << "Content-Type: text/html" << CRLF;
+        stream << "Content-Type: " << mime << CRLF;
     }
     stream << "Connection: Closed" << CRLF;
     stream << CRLF;

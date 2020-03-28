@@ -27,6 +27,8 @@ PUBLIC_FILES += html/index.html
 PUBLIC_FILES += html/gamescreen.js
 PUBLIC_FILES += html/404.html
 PUBLIC_FILES += html/400.html
+PUBLIC_FILES += html/contextmenu.js
+PUBLIC_FILES += html/contextmenu.css
 
 PUBLIC_HEADERS += gameserver.h
 

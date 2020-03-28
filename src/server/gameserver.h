@@ -89,7 +89,7 @@ private:
     void http();
     void handleRequest(int conn, const std::vector<std::string> & request);
 
-    std::stringstream header(ResponseCode code, int length) const;
+    std::stringstream header(ResponseCode code, int length, const std::string & mime) const;
     std::string getResponse(ResponseCode code, const std::string & file) const;
 };
 
