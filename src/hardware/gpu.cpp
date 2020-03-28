@@ -699,18 +699,17 @@ pair<optional<uint8_t>, const ColorPalette&> GPU::SpriteData::palette() const
 bool GPU::SpriteData::isVisible() const
 {
     // If either coordinates are set to 0 or the sprite is completely off screen
-    // then it isn't visible.
+    // so it isn't visible.
     if ((0 == this->x) || (0 == this->y)) { return false; }
 
     if (this->x >= (PIXELS_PER_ROW + SPRITE_X_OFFSET)) { return false; }
     if (this->y >= (PIXELS_PER_COL + SPRITE_Y_OFFSET)) { return false; }
 
-    // Figure out the y coordinate.  Make sure to clamp the value to 0 if subtracting
-    // the Y offset value for a sprite would cause the value to wrap around.  The
-    // sprite is visible on the scanline if the scanline is between the y coordinate
-    // and the y coordinate plus the height of the sprite.
-    uint8_t y = (this->y < SPRITE_Y_OFFSET) ? 0 : this->y - SPRITE_Y_OFFSET;
-    if ((m_gpu.m_scanline >= y) && (m_gpu.m_scanline < (y + this->height))) {
+    // We need to figure out if the sprite y <= row < sprite y + height.  The y coordinate
+    // of each sprite is offset, so we need to offset our scanline by that same number in
+    // order to figure out what row we are rendering relative to the sprite data.
+    uint8_t row = m_gpu.m_scanline + SPRITE_Y_OFFSET;
+    if ((row >= this->y) && (row < (this->y + this->height))) {
         return true;
     }
 
@@ -758,9 +757,11 @@ string GPU::SpriteData::toString() const
     stringstream stream;
 
     stream << "Sprite: " << std::hex << "0x" << this->address << std::endl;
-    stream << "    Tile:     " << this->tile << std::endl;
-    stream << "    Location: (" << int(this->x) << ", " << int(this->y) << ") " << std::endl;;
-    stream << "    Height:   " << int(this->height) << std::endl;
+    stream << "    Tile:     " << std::to_string(this->tile) << std::endl;
+    stream << "    Location: (" << std::to_string(this->x) << ", "
+                                << std::to_string(this->y) << ") "
+                                << std::endl;;
+    stream << "    Height:   " << std::to_string(this->height) << std::endl;
     stream << "    Flags:    " << int(this->flags);
 
     return stream.str();
