@@ -26,7 +26,6 @@ INCLUDEPATH += serial
 TARGET = hardware
 
 PUBLIC_HEADERS += gameboyinterface.h
-PUBLIC_HEADERS += canvasinterface.h
 
 HEADERS += memory/memoryregion.h
 HEADERS += memory/mappedio.h

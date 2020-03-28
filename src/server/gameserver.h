@@ -8,11 +8,10 @@
 #include <optional>
 #include <vector>
 
-#include "canvasinterface.h"
 #include "gameboyinterface.h"
 #include "gbrgb.h"
 
-class GameServer final : public CanvasInterface {
+class GameServer final {
 public:
     GameServer();
     GameServer(int http, int websock);
@@ -20,9 +19,6 @@ public:
 
     bool start();
     void stop();
-
-    void updateCanvas(uint8_t x, uint8_t y, GB::RGB pixel) override;
-    void renderCanvas() override;
 
 private:
     static constexpr int INVALID = -1;

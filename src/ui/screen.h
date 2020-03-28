@@ -12,7 +12,6 @@
 #include <mutex>
 
 #include "gameboyinterface.h"
-#include "canvasinterface.h"
 
 #define QML_ENUM(name) \
     qmlRegisterUncreatableMetaObject( \
@@ -49,7 +48,7 @@ namespace ScreenTypes {
     Q_ENUM_NS(EmulationMode);
 }
 
-class Screen : public QQuickPaintedItem, public CanvasInterface {
+class Screen : public QQuickPaintedItem {
     Q_OBJECT
 
     Q_PROPERTY(QString rom READ getROM WRITE setROM NOTIFY romChanged)
@@ -64,9 +63,6 @@ public:
     ~Screen();
 
     void paint(QPainter *painter) override;
-
-    void updateCanvas(uint8_t x, uint8_t y, GB::RGB pixel) override;
-    void renderCanvas() override;
 
     QString getROM() const { return m_rom; }
     void setROM(QString rom);
@@ -112,7 +108,7 @@ protected:
     void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
-    static constexpr int REFRESH_TIMEOUT = 20;
+    static constexpr int REFRESH_TIMEOUT = 33;
 
     static const std::unordered_map<int, GameBoyInterface::JoyPadButton> BUTTON_MAP;
 

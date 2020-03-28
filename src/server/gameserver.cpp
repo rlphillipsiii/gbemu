@@ -471,13 +471,3 @@ void GameServer::stop()
 
     if (INVALID != m_websockSock) { close(m_websockSock); }
 }
-
-void GameServer::updateCanvas(uint8_t x, uint8_t y, GB::RGB pixel)
-{
-    (void)x; (void)y; (void)pixel;
-}
-
-void GameServer::renderCanvas()
-{
-
-}
