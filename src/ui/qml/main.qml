@@ -29,6 +29,13 @@ ApplicationWindow {
                 }
             }
 
+            MenuItem {
+                text: qsTr("&Reset")
+                onTriggered: {
+                    m_screen.reset();
+                }
+            }
+
             MenuSeparator { }
             MenuItem {
                 text: qsTr("&Exit")

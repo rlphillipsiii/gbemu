@@ -10,6 +10,7 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+#include <string>
 
 #include "gameboyinterface.h"
 
@@ -81,6 +82,9 @@ public:
 
     void setMode(ScreenTypes::EmulationMode mode);
     ScreenTypes::EmulationMode getMode() const;
+
+    Q_INVOKABLE void reset();
+    void reset(const std::string & filename);
 
     static void registerQML()
     {

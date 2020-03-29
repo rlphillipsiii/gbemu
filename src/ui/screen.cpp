@@ -37,8 +37,7 @@ Screen::Screen(QQuickItem *parent)
       m_width(GameBoyInterface::WIDTH),
       m_height(GameBoyInterface::HEIGHT),
       m_canvas(m_width, m_height, QImage::Format_RGBA8888),
-      m_console(GameBoyInterface::Instance()),
-      m_stopped(false)
+      m_stopped(true)
 {
     assert(m_console);
 
@@ -52,13 +51,7 @@ Screen::Screen(QQuickItem *parent)
         Configuration::getString(ConfigKey::ROM) : args.at(1).toStdString();
 
     m_rom = QString::fromStdString(filename);
-    if (m_console) {
-        m_console->load(filename);
-        m_console->start();
-    }
-
-    m_timer.setInterval(REFRESH_TIMEOUT);
-    m_timer.start();
+    reset(filename);
 }
 
 Screen::~Screen()
@@ -122,19 +115,29 @@ bool Screen::getLinkEnable() const
 
 void Screen::setROM(QString rom)
 {
+    string filename = QUrl(rom).toLocalFile().toStdString();
+    reset(filename);
+}
+
+void Screen::reset()
+{
+    string filename = m_rom.toStdString();
+    reset(filename);
+}
+
+void Screen::reset(const string & filename)
+{
     stop();
 
-    // TODO: probably shouldn't reconstruct the whole object here
     m_console = shared_ptr<GameBoyInterface>(GameBoyInterface::Instance());
-
     assert(m_console);
 
-    string filename = QUrl(rom).toLocalFile().toStdString();
     Configuration::updateString(ConfigKey::ROM, filename);
 
     m_console->load(filename);
     m_console->start();
 
+    m_timer.setInterval(REFRESH_TIMEOUT);
     m_timer.start();
 
     m_stopped = false;

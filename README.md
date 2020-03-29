@@ -9,7 +9,7 @@
 Might also work on a Mac but has never been tested.
 
 ## Requirements
-* QT5.8 or newer
+* QT5.14 or newer
 * g++ (MinGW64 on Windows)
 * GIT Bash (Windows only)
 * Cygwin/MobaXterm (Windows only)
