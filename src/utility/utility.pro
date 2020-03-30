@@ -20,9 +20,11 @@ TARGET = utility
 PUBLIC_HEADERS += configuration.h
 PUBLIC_HEADERS += logging.h
 PUBLIC_HEADERS += gbrgb.h
+PUBLIC_HEADERS += util.h
 
 HEADERS += $$PUBLIC_HEADERS
 
 SOURCES += configuration.cpp
+SOURCES += util.cpp
 
 publishHeaders($$PUBLIC_HEADERS)

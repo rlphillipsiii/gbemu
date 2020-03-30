@@ -7,6 +7,7 @@
 
 #include "configuration.h"
 #include "logging.h"
+#include "util.h"
 
 using std::string;
 using std::list;
@@ -64,34 +65,6 @@ const Configuration::ConfigMap Configuration::DEFAULT_CONFIG{
 
 Configuration Configuration::s_instance;
 
-string Configuration::trim(const string & str)
-{
-    auto lambda = [](int c) -> bool { return std::isspace(c); };
-
-    auto f =std::find_if_not(str.begin(), str.end(),  lambda);
-    auto b =std::find_if_not(str.rbegin(),str.rend(), lambda).base();
-
-    return ((b <= f) ? string() : string(f, b));
-}
-
-vector<string> Configuration::split(const string & str, const string & sep)
-{
-    string s = trim(str);
-
-    vector<string> tokens;
-    for (size_t idx = s.find(sep); idx != string::npos; idx = s.find(sep)) {
-        string token = s.substr(0, idx);
-
-        if (!token.empty()) {
-            tokens.push_back(token);
-        }
-        s.erase(0, idx + sep.size());
-    }
-
-    tokens.push_back(s);
-    return tokens;
-}
-
 void Configuration::parse(const string & file)
 {
     if (file.empty()) { return; }
@@ -106,12 +79,17 @@ void Configuration::parse(const string & file)
     while (std::getline(stream, line)) {
         if (line.empty() || ('#' == line.at(0))) { continue; }
 
-        vector<string> tokens = split(line);
-        if (3 != tokens.size()) { continue; }
+        vector<string> tokens = Util::split(line);
+        if (tokens.size() < 3) { continue; }
 
-        const string & key   = tokens.at(0);
-        const string & type  = tokens.at(1);
-        const string & value = tokens.at(2);
+        const string & key  = tokens.at(0);
+        const string & type = tokens.at(1);
+
+        auto begin = tokens.begin();
+        std::advance(begin, 2);
+
+        vector<string> pieces(begin, tokens.end());
+        string value = Util::join(pieces);
 
         auto iterator = m_settings.find(uint8_t(std::stoi(key)));
         if (m_settings.end() == iterator) { continue; }

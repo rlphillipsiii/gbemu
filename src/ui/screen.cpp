@@ -39,8 +39,6 @@ Screen::Screen(QQuickItem *parent)
       m_canvas(m_width, m_height, QImage::Format_RGBA8888),
       m_stopped(true)
 {
-    assert(m_console);
-
     setFlag(ItemHasContents, true);
 
     QObject::connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
@@ -125,14 +123,27 @@ void Screen::reset()
     reset(filename);
 }
 
-void Screen::reset(const string & filename)
+void Screen::reset(const string & path)
 {
     stop();
 
     m_console = shared_ptr<GameBoyInterface>(GameBoyInterface::Instance());
     assert(m_console);
 
-    Configuration::updateString(ConfigKey::ROM, filename);
+#ifdef WIN32
+    string filename = path;
+
+    size_t index;
+    while ((index = filename.find("/")) != string::npos) {
+        filename.replace(index, 1, "\\");
+    }
+#else
+    const string & filename = path;
+#endif
+
+    if (!filename.empty()) {
+        Configuration::updateString(ConfigKey::ROM, filename);
+    }
 
     m_console->load(filename);
     m_console->start();

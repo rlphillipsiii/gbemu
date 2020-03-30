@@ -27,6 +27,7 @@
 #include "gameserver.h"
 #include "base64.h"
 #include "gameboyinterface.h"
+#include "util.h"
 
 using std::array;
 using std::string;
@@ -207,7 +208,7 @@ void GameServer::http()
 
 void GameServer::handleRequest(int conn, const vector<string> & request)
 {
-    vector<string> tokens = Configuration::split(request.at(0), " ");
+    vector<string> tokens = Util::split(request.at(0), " ");
     if (3 != tokens.size()) { return; }
 
     const auto & method   = tokens.at(0);
@@ -241,7 +242,7 @@ void GameServer::handleEvent(const string & request)
     // straightforward way to do that is to split on the ? and return the
     // second entry.  Well formed requests will only contain 1 question mark
     // so make sure that there are only 2 entries after we split.
-    vector<string> parts = Configuration::split(request, "?");
+    vector<string> parts = Util::split(request, "?");
     if (parts.size() != 2) { return; }
 
     // TODO: not necessary yet, but might want to split on "&" and loop
@@ -249,7 +250,7 @@ void GameServer::handleEvent(const string & request)
 
     // Now that we have isolated the data, split on the "=", which should
     // give use a key and 1 or more entries corresonding to the value.
-    vector<string> tokens = Configuration::split(parts.at(1), "=");
+    vector<string> tokens = Util::split(parts.at(1), "=");
     if (tokens.size() < 2) { return; }
 
     // Well formed requests will contain an integer key corresponding to an
@@ -430,7 +431,7 @@ string GameServer::getKey(const vector<string> & headers) const
     for (auto it = std::next(headers.begin()); it != headers.end(); ++it) {
         // HTTP headers are key value pairs that are separated by a colon, so
         // split on the colon and make sure we have at least two entries.
-        auto kvp = Configuration::split(*it, ":");
+        auto kvp = Util::split(*it, ":");
         if (kvp.size() < 2) { continue; }
 
         const auto & key   = kvp.at(0);
@@ -440,7 +441,7 @@ string GameServer::getKey(const vector<string> & headers) const
         // found it trim the whitespace off of the value and return it back to
         // the caller.
         if (SECRET_KEY == key) {
-            return Configuration::trim(value);
+            return Util::trim(value);
         }
     }
     return "";

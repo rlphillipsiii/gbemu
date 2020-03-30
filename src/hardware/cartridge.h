@@ -22,8 +22,8 @@ public:
 
     inline bool isCGB() const { return m_cgb; }
 
-    inline uint8_t romBank() const { return m_bank->romBank(); }
-    inline uint8_t ramBank() const { return m_bank->ramBank(); }
+    inline uint8_t romBank() const { return (m_bank) ? m_bank->romBank() : 0; }
+    inline uint8_t ramBank() const { return (m_bank) ? m_bank->ramBank() : 0; }
 
 private:
     static constexpr uint32_t ROM_MAX_SIZE = 2097152; // 2MB

@@ -12,8 +12,6 @@ public:
     PipeLink(MemoryController & memory);
     ~PipeLink();
 
-    void transfer(uint8_t value) override;
-
 private:
     static const std::string PIPE_NAME;
 

@@ -80,11 +80,6 @@ public:
     static int getInt(ConfigKey key, int def = 0);
     static bool getBool(ConfigKey key, bool def = false);
 
-    static std::vector<std::string> split(
-        const std::string & str,
-        const std::string & sep = ":");
-    static std::string trim(const std::string & str);
-
     template <typename T>
     static T getEnum(ConfigKey key);
 
