@@ -6,6 +6,7 @@ TEMPLATE = subdirs
 
 SUBDIRS += utility
 SUBDIRS += hardware
+SUBDIRS += ipc
 SUBDIRS += ui
 
 unix: SUBDIRS += server

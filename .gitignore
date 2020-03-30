@@ -9,3 +9,4 @@ moc_*
 qrc_*
 .cproject
 .settings/
+*object_script*
