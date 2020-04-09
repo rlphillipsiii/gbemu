@@ -11,7 +11,6 @@
 
 #include "screen.h"
 #include "configuration.h"
-#include "gameserver.h"
 
 int main(int argc, char **argv)
 {
