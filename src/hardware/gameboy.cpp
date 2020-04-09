@@ -281,7 +281,7 @@ void GameBoy::onConfigChange(ConfigKey key)
     // Config change updates run in the UI thread's context, so we need to make
     // sure that we pause the execution of these two threads before we make any
     // changes to the configuration.
-    pause();
+    Halt halt(*this);
 
     switch (key) {
     case ConfigKey::SPEED: {
@@ -318,6 +318,4 @@ void GameBoy::onConfigChange(ConfigKey key)
 
     default: break;
     }
-
-    resume();
 }

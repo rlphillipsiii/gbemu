@@ -157,7 +157,7 @@ void Screen::reset(const string & path)
 void Screen::keyPressEvent(QKeyEvent *event)
 {
     if (!m_console) { return; }
-    
+
     auto iterator = BUTTON_MAP.find(event->key());
     if (BUTTON_MAP.end() != iterator) {
         m_console->setButton(iterator->second);

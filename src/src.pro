@@ -9,6 +9,9 @@ SUBDIRS += hardware
 SUBDIRS += ipc
 SUBDIRS += ui
 
-unix: SUBDIRS += server
+SERVER=$$(SERVER_BUILD)
+!isEmpty(SERVER) {
+    unix: SUBDIRS += server
+}
 
 #SUBDIRS += test

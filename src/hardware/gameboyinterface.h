@@ -50,6 +50,9 @@ public:
     virtual void clrButton(JoyPadButton button) = 0;
 
     virtual ColorArray && getRGB() = 0;
+
+    virtual void write(uint16_t address, uint8_t value) = 0;
+    virtual uint8_t read(uint16_t address) = 0;
 };
 
 #endif /* GAMEBOYINTERFACE_H_ */

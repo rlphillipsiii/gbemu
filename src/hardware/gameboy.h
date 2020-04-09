@@ -40,6 +40,11 @@ public:
     void pause();
     void resume();
 
+    void write(uint16_t address, uint8_t value) override
+        { Halt h(*this); m_memory.write(address, value); }
+    uint8_t read(uint16_t address) override
+        { Halt h(*this); return m_memory.peek(address); }
+
     void onConfigChange(ConfigKey key) override;
 
     inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
@@ -63,6 +68,14 @@ private:
     static constexpr uint32_t TICKS_DOUBLE = TICKS_NORMAL * 2;
     static constexpr uint32_t TICKS_QUAD   = TICKS_NORMAL * 4;
     static constexpr uint32_t TICKS_FREE   = 0;
+
+    class Halt {
+    public:
+        Halt(GameBoy & gameboy) : m_gameboy(gameboy) { m_gameboy.pause(); }
+        ~Halt() { m_gameboy.resume(); }
+    private:
+        GameBoy & m_gameboy;
+    };
 
     MemoryController m_memory;
     GPU m_gpu;
