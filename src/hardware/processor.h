@@ -22,6 +22,7 @@
 
 class GameBoy;
 class MemoryController;
+class ClockInterface;
 
 class Processor {
 public:
@@ -56,7 +57,7 @@ public:
         std::string abbrev() const;
     };
 
-    explicit Processor(GameBoy & parent);
+    explicit Processor(ClockInterface & clock, MemoryController & memory);
     ~Processor() = default;
 
     void reset();
@@ -92,7 +93,7 @@ private:
 
     std::unordered_set<uint8_t> ILLEGAL_OPCODES;
 
-    GameBoy & m_parent;
+    ClockInterface & m_clock;
     MemoryController & m_memory;
 
     /** Program counter that holds the address of the next instruction to fetch */

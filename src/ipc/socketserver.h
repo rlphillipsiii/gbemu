@@ -19,11 +19,11 @@ class SocketServer {
 public:
     explicit SocketServer(int port);
     ~SocketServer() = default;
-    
+
     inline bool ok() const { return m_ok; }
 
     bool start();
-    
+
 private:
     int m_port;
 
@@ -48,8 +48,8 @@ private:
     class AddrInfo {
     public:
         AddrInfo() : m_result(nullptr) { }
-        ~AddrInfo() { if (m_result) {freeaddrinfo(m_result); } }
-    
+        ~AddrInfo() { if (m_result) { freeaddrinfo(m_result); } }
+
         inline struct addrinfo **get() { return &m_result; }
     private:
         struct addrinfo *m_result;

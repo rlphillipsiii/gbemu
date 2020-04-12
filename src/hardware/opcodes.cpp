@@ -2,14 +2,14 @@
 #include "memmap.h"
 #include "memorycontroller.h"
 #include "logging.h"
-#include "gameboy.h"
+#include "clockinterface.h"
 
-Processor::Processor(GameBoy & parent)
-    : m_parent(parent),
-      m_memory(parent.mmc()),
+Processor::Processor(ClockInterface & clock, MemoryController & memory)
+    : m_clock(clock),
+      m_memory(memory),
       m_interrupts(m_memory.read(INTERRUPT_MASK_ADDRESS), m_memory.read(INTERRUPT_FLAGS_ADDRESS)),
       m_halted(false),
-      m_timer(parent.mmc()),
+      m_timer(memory),
       m_flags(m_gpr.f)
 {
     reset();

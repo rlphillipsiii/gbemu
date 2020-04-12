@@ -24,6 +24,7 @@
 #include "joypad.h"
 #include "consolelink.h"
 #include "configuration.h"
+#include "clockinterface.h"
 
 class GameBoy final : public GameBoyInterface, public ConfigChangeListener {
 public:
@@ -34,8 +35,6 @@ public:
 
     void start() override;
     void stop() override;
-
-    void execute(uint8_t ticks);
 
     void pause();
     void resume();
@@ -69,13 +68,34 @@ private:
     static constexpr uint32_t TICKS_QUAD   = TICKS_NORMAL * 4;
     static constexpr uint32_t TICKS_FREE   = 0;
 
-    class Halt {
+    class Halt final {
     public:
-        Halt(GameBoy & gameboy) : m_gameboy(gameboy) { m_gameboy.pause(); }
+        explicit Halt(GameBoy & gameboy)
+            : m_gameboy(gameboy) { m_gameboy.pause(); }
         ~Halt() { m_gameboy.resume(); }
     private:
         GameBoy & m_gameboy;
     };
+
+    class Clock final : public ClockInterface {
+    public:
+        explicit Clock(GameBoy & gameboy)
+            : m_hardware(gameboy), m_ticks(0) { }
+        ~Clock() = default;
+
+        void tick(uint8_t cycles) override;
+
+        inline void setSpeed(uint32_t speed) { m_speed = speed; }
+        inline void reset() { m_ticks = 0; }
+
+    private:
+        GameBoy & m_hardware;
+
+        uint32_t m_ticks;
+        std::atomic<uint32_t> m_speed;
+    };
+
+    Clock m_clock;
 
     MemoryController m_memory;
     GPU m_gpu;
@@ -101,9 +121,6 @@ private:
     std::thread m_timer;
 
     std::vector<Processor::Command> m_assembly;
-
-    uint32_t m_ticks;
-    std::atomic<uint32_t> m_speed;
 
     void run();
     void step();

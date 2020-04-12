@@ -13,9 +13,9 @@
 
 #include "processor.h"
 #include "memorycontroller.h"
+#include "clockinterface.h"
 #include "memmap.h"
 #include "logging.h"
-#include "gameboy.h"
 
 using std::string;
 using std::stringstream;
@@ -211,7 +211,7 @@ bool Processor::interrupt()
 void Processor::tick(uint8_t ticks)
 {
     uint8_t adjustment = CYCLES_PER_TICK >> uint8_t(m_timer.getSpeed());
-    m_parent.execute(ticks * adjustment);
+    m_clock.tick(ticks * adjustment);
 }
 
 void Processor::execute(bool interrupted)

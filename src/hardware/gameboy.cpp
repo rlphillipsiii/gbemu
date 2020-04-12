@@ -56,9 +56,10 @@ using std::chrono::milliseconds;
 using namespace std::chrono_literals;
 
 GameBoy::GameBoy()
-    : m_memory(*this),
+    : m_clock(*this),
+      m_memory(*this),
       m_gpu(m_memory),
-      m_cpu(*this),
+      m_cpu(m_clock, m_memory),
       m_joypad(m_memory),
       m_ready(false),
       m_runCpu(false),
@@ -66,8 +67,7 @@ GameBoy::GameBoy()
       m_pauseCpu(false),
       m_pauseTimer(false),
       m_timerPaused(true),
-      m_cpuPaused(true),
-      m_ticks(0)
+      m_cpuPaused(true)
 {
     initLink();
     readSpeed();
@@ -88,9 +88,9 @@ void GameBoy::readSpeed()
         assert(0);
         [[fallthrough]];
 
-    case EmuSpeed::NORMAL: m_speed = TICKS_NORMAL; break;
-    case EmuSpeed::_2X:    m_speed = TICKS_DOUBLE; break;
-    case EmuSpeed::FREE:   m_speed = TICKS_FREE;   break;
+    case EmuSpeed::NORMAL: m_clock.setSpeed(TICKS_NORMAL); break;
+    case EmuSpeed::_2X:    m_clock.setSpeed(TICKS_DOUBLE); break;
+    case EmuSpeed::FREE:   m_clock.setSpeed(TICKS_FREE);   break;
     }
 }
 
@@ -99,7 +99,8 @@ void GameBoy::initLink()
     if (m_link) { m_link->stop(); }
 
     if (Configuration::getBool(ConfigKey::LINK_ENABLE)) {
-        m_link = unique_ptr<ConsoleLink>([&]() -> ConsoleLink* {
+        m_link = unique_ptr<ConsoleLink>(
+            [&]() -> ConsoleLink* {
                 LinkType link = Configuration::getEnum<LinkType>(ConfigKey::LINK_TYPE);
                 switch (link) {
                 default:
@@ -198,7 +199,7 @@ void GameBoy::wait()
     m_ready = false;
 }
 
-void GameBoy::execute(uint8_t ticks)
+void GameBoy::Clock::tick(uint8_t ticks)
 {
     // Check to see if we have executed the number of ticks corresponding
     // to the timeout interval of the timer thread.  If so, we need to wait
@@ -208,18 +209,18 @@ void GameBoy::execute(uint8_t ticks)
     // check.
     m_ticks += ticks;
     if ((TICKS_FREE != m_speed) && (m_ticks >= m_speed)) {
-        wait();
+        m_hardware.wait();
 
         m_ticks %= m_speed;
     }
 
-    m_cpu.updateTimer(ticks);
+    m_hardware.m_cpu.updateTimer(ticks);
 
-    m_gpu.cycle(ticks);
-    m_joypad.cycle(ticks);
+    m_hardware.m_gpu.cycle(ticks);
+    m_hardware.m_joypad.cycle(ticks);
 
-    if (m_link) {
-        m_link->cycle(ticks);
+    if (m_hardware.m_link) {
+        m_hardware.m_link->cycle(ticks);
     }
 }
 
@@ -245,7 +246,7 @@ void GameBoy::resume()
 {
     // We are going to resume the two threads that we manage, so we need
     // reset the tick count and let the CPU sync back with the timer.
-    m_ticks = 0;
+    m_clock.reset();
 
     m_pauseCpu.store(false, std::memory_order_release);
     m_pauseTimer.store(false, std::memory_order_release);

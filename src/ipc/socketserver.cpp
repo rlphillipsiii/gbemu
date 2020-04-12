@@ -27,7 +27,7 @@ SocketServer::WsaHelper::~WsaHelper()
 SocketServer::SocketHandle::SocketHandle(AddrInfo & info)
 {
     auto *result = *info.get();
-    
+
     m_socket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
     m_ok = (INVALID_SOCKET == m_socket);
 }
@@ -57,13 +57,13 @@ bool SocketServer::start()
 {
     auto wsa = std::make_unique<WsaHelper>();
     assert(wsa);
-    
+
     if (!wsa->ok()) {
         ERROR("%s\n", "Failed WSAStartup");
         return false;
     }
 
-    struct addrinfo hints;    
+    struct addrinfo hints;
     ZeroMemory(&hints, sizeof(hints));
 
     hints.ai_family   = AF_INET;
@@ -72,7 +72,7 @@ bool SocketServer::start()
     hints.ai_flags    = AI_PASSIVE;
 
     string port = std::to_string(m_port);
-    
+
     AddrInfo info;
     if (getaddrinfo(NULL, port.c_str(), &hints, info.get()) != 0) {
         ERROR("%s\n", "getaddrinfo failed");
@@ -81,7 +81,7 @@ bool SocketServer::start()
 
     auto sock = std::make_unique<SocketHandle>(info);
     assert(sock);
-    
+
     if (!sock->ok()) {
         ERROR("socket failed with error: %d\n", WSAGetLastError());
         return false;
@@ -105,6 +105,7 @@ bool SocketServer::start()
 #else
 bool SocketServer::start()
 {
+    (void)m_port;
     return false;
 }
 #endif
