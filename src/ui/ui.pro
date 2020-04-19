@@ -21,6 +21,12 @@ LIBS += -lhardware
 RESOURCES += resources.qrc
 
 HEADERS += screen.h
+HEADERS += disassembly.h
+HEADERS += console.h
+HEADERS += executiontrace.h
 
+SOURCES += console.cpp
+SOURCES += disassembly.cpp
 SOURCES += screen.cpp
+SOURCES += executiontrace.cpp
 SOURCES += main.cpp

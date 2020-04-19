@@ -64,6 +64,8 @@ public:
     uint8_t & readBgPalette(uint8_t index);
     uint8_t & readSpritePalette(uint8_t index);
 
+    void dma(uint8_t value);
+
 private:
     static const ColorPalette DMG_PALETTE;
 
@@ -112,6 +114,8 @@ private:
     static const uint8_t ALPHA_TRANSPARENT;
 
     static const uint8_t WINDOW_ROW_OFFSET;
+
+    static constexpr uint16_t DMA_CHUNK_SIZE = 16;
 
     using TileRow = std::array<GB::RGB, TILE_PIXELS_PER_ROW>;
 
@@ -215,6 +219,7 @@ private:
     uint8_t & m_winX;
     uint8_t & m_winY;
     uint8_t & m_scanline;
+    uint8_t & m_lyc;
 
     RenderState m_state;
 
@@ -226,6 +231,13 @@ private:
     ColorArray m_screen;
     ColorArray m_buffer;
     ColorArray m_bg;
+
+    struct {
+        uint16_t length;
+
+        uint16_t source;
+        uint16_t destination;
+    } m_dma;
 
     std::array<TileBank, GPU_BANK_COUNT> m_tiles;
     std::array<std::shared_ptr<SpriteData>, GPU_SPRITE_COUNT> m_sprites;
@@ -271,6 +283,7 @@ private:
         { m_status = ((m_status & 0xFC) | uint8_t(state)); }
 
     void updateScreen();
+    void incrementScanline();
 
     bool isWindowSelected(uint8_t x, uint8_t y);
 

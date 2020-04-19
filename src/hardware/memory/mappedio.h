@@ -4,14 +4,21 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+#include <memory>
 
 #include "memoryregion.h"
+#include "consolelink.h"
 
-class GameBoy;
+class GPU;
 
 class MappedIO : public MemoryRegion {
 public:
-    explicit MappedIO(GameBoy & gameboy, uint16_t address, uint16_t offset);
+    explicit MappedIO(
+        MemoryController & memory,
+        GPU & gpu,
+        std::unique_ptr<ConsoleLink> & link,
+        uint16_t address,
+        uint16_t offset);
     ~MappedIO() = default;
 
     void write(uint16_t address, uint8_t value) override;
@@ -31,7 +38,8 @@ public:
     inline void clearRtcReset() { m_rtcReset = false; }
 
 private:
-    GameBoy & m_gameboy;
+    GPU & m_gpu;
+    std::unique_ptr<ConsoleLink> & m_link;
 
     bool m_rtcReset;
 };

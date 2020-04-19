@@ -23,7 +23,7 @@ using std::vector;
 
 const uint8_t Processor::CB_PREFIX = 0xCB;
 
-const uint16_t Processor::HISTORY_SIZE = 1000;
+const uint16_t Processor::HISTORY_SIZE = 100;
 
 const uint16_t Processor::ROM_ENTRY_POINT = 0x0100;
 
@@ -49,68 +49,20 @@ void Processor::reset()
     m_timer.reset();
 }
 
-void Processor::Command::print() const
-{
-    TRACE("%s\n", str().c_str());
-}
-
-string Processor::Command::str() const
-{
-    const int size = 1024;
-    char buffer[size];
-
-    stringstream stream;
-    sprintf(buffer, "PC:0x%04x SP:0x%04x IME:%d IM:0x%02x INT:0x%02x | ",
-        pc, sp, int(ints), iMask, iStatus);
-
-    sprintf(buffer, "%s %s (0x%02x): ", buffer, operation->name.c_str(), opcode);
-    for (int8_t i = operation->length - 2; i >= 0; i--) {
-        sprintf(buffer, "%s %02x", buffer, operands[i]);
-    }
-    sprintf(buffer, "%s\n", buffer);
-
-    stream << buffer;
-
-    stringstream temp;
-    temp << ((flags & ZERO_FLAG_MASK)       ? "Z" : "-");
-    temp << ((flags & NEG_FLAG_MASK)        ? "N" : "-");
-    temp << ((flags & HALF_CARRY_FLAG_MASK) ? "H" : "-");
-    temp << ((flags & CARRY_FLAG_MASK)      ? "C" : "-");
-
-    sprintf(buffer, "    A:0x%02x F:%s BC:0x%04x DE:0x%04x HL:0x%04x ROM:%d RAM:%d SL:%d",
-        a, temp.str().c_str(), bc, de, hl, romBank, ramBank, scanline);
-
-    stream << buffer;
-    return stream.str();
-}
-
-string Processor::Command::abbrev() const
-{
-    const int size = 1024;
-    char buffer[size];
-
-    sprintf(buffer, "%s (0x%02x): ", operation->name.c_str(), opcode);
-    for (int8_t i = operation->length - 2; i >= 0; i--) {
-        sprintf(buffer, "%s %02x", buffer, operands[i]);
-    }
-
-    return string(buffer);
-}
-
 void Processor::history() const
 {
-    for (const Command & cmd : m_executed) {
+    for (const GB::Command & cmd : m_executed) {
         cmd.print();
     }
 }
 
-vector<Processor::Command> Processor::disassemble()
+vector<GB::Command> Processor::disassemble()
 {
-    vector<Command> cmds;
+    vector<GB::Command> cmds;
 
     uint16_t pc = 0x100;
     while (pc < GPU_RAM_OFFSET) {
-        Command cmd;
+        GB::Command cmd;
         cmd.pc     = pc;
         cmd.opcode = m_memory.peek(pc++);
 
@@ -118,7 +70,7 @@ vector<Processor::Command> Processor::disassemble()
             continue;
         }
 
-        Operation *operation = lookup(pc, cmd.opcode);
+        GB::Operation *operation = lookup(pc, cmd.opcode);
         if (!operation) { continue; }
 
         cmd.operation = operation;
@@ -133,7 +85,7 @@ vector<Processor::Command> Processor::disassemble()
     return cmds;
 }
 
-Processor::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
+GB::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
 {
     // Figure out which table we should be looking in for the next opcode.
     auto & table = (CB_PREFIX == opcode) ? CB_OPCODES : OPCODES;
@@ -244,7 +196,7 @@ void Processor::execute(bool interrupted)
     // Look up the handler in our opcode table.  If the length of our command is greater
     // than 1, then we also need to grab the next length - 1 bytes as they are the
     // arguments to the next operation that we are going to execute.
-    Operation *operation = lookup(m_pc, opcode);
+    GB::Operation *operation = lookup(m_pc, opcode);
     if (!operation) { FATAL("Unknown opcode: 0x%02x\n", opcode); }
 
     // If we have any operands, we need to read them in and increment the PC.
@@ -286,8 +238,10 @@ void Processor::cycle()
     execute(interrupt());
 }
 
-void Processor::log(uint8_t opcode, const Operation *operation)
+void Processor::log(uint8_t opcode, const GB::Operation *operation)
 {
+    if (m_memory.inBios()) { return; }
+
     if (m_executed.size() == HISTORY_SIZE) {
         m_executed.pop_front();
     }
@@ -305,6 +259,7 @@ void Processor::log(uint8_t opcode, const Operation *operation)
         m_gpr.de,
         m_gpr.hl,
         m_memory.peek(GPU_SCANLINE_ADDRESS),
+        m_memory.peek(GPU_STATUS_ADDRESS),
         m_memory.romBank(),
         m_memory.ramBank(),
         m_operands,
@@ -314,7 +269,9 @@ void Processor::log(uint8_t opcode, const Operation *operation)
 
 void Processor::logRegisters() const
 {
-    m_executed.back().print();
+    if (!m_memory.inBios()) {
+        m_executed.back().print();
+    }
 }
 
 void Processor::xor8(uint8_t value)
@@ -434,7 +391,7 @@ void Processor::add16(uint16_t & reg, uint16_t value)
     uint32_t result = uint32_t(reg) + uint32_t(value);
     (result > 0xFFFF) ? setCarryFlag() : clrCarryFlag();
 
-    const uint16_t mask = 0xFFF;
+    constexpr const uint16_t mask = 0xFFF;
     if ((reg & mask) + (value & mask) > mask) {
         setHalfCarryFlag();
     } else {
@@ -450,14 +407,14 @@ void Processor::add16(uint16_t & dest, uint16_t reg, uint8_t value)
 
     union { int8_t sVal; uint8_t uVal; } input = { .uVal = value };
 
-    const uint16_t cMask = 0xFF;
+    constexpr const uint16_t cMask = 0xFF;
     if ((reg & cMask) + (input.sVal & cMask) > cMask) {
         setCarryFlag();
     } else {
         clrCarryFlag();
     }
 
-    const uint16_t hMask = 0xF;
+    constexpr const uint16_t hMask = 0xF;
     if ((reg & hMask) + (input.sVal & hMask) > hMask) {
         setHalfCarryFlag();
     } else {

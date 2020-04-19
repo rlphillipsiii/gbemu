@@ -7,10 +7,29 @@
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQuickView>
 #include <QLoggingCategory>
+#include <QObject>
+
+#include <cassert>
 
 #include "screen.h"
+#include "console.h"
 #include "configuration.h"
+#include "disassembly.h"
+#include "gameboyinterface.h"
+#include "executiontrace.h"
+#include "consolesubscriber.h"
+
+namespace {
+    void registerQML()
+    {
+        Console::registerQML();
+        Screen::registerQML();
+        Disassembly::registerQML();
+        ExecutionTrace::registerQML();
+    }
+};
 
 int main(int argc, char **argv)
 {
@@ -26,10 +45,12 @@ int main(int argc, char **argv)
     Configuration & config = Configuration::instance();
     config.parse();
 
-    Screen::registerQML();
+    registerQML();
 
     QQmlApplicationEngine engine;
     engine.load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
+
+    ConsoleSubscriber::init(engine);
 
     QObject::connect(&engine, &QQmlApplicationEngine::quit, &QGuiApplication::quit);
 

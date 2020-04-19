@@ -2,5 +2,7 @@
 <RCC version="1.0">
 	<qresource prefix="/">
 	    <file>qml/main.qml</file>
+        <file>qml/GameMenuBar.qml</file>
+        <file>qml/DisassemblyWindow.qml</file>
 	</qresource>
 </RCC>

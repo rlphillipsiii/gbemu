@@ -44,6 +44,7 @@
 #include "logging.h"
 #include "socketlink.h"
 #include "configuration.h"
+#include "memaccess.h"
 
 using std::string;
 using std::vector;
@@ -57,11 +58,14 @@ using namespace std::chrono_literals;
 
 GameBoy::GameBoy()
     : m_clock(*this),
-      m_memory(*this),
+      m_memListener(*this),
+      m_memory(m_gpu, m_memListener, m_link),
       m_gpu(m_memory),
       m_cpu(m_clock, m_memory),
       m_joypad(m_memory),
+      m_debugger(*this, m_cpu),
       m_ready(false),
+      m_halt(false),
       m_runCpu(false),
       m_runTimer(false),
       m_pauseCpu(false),
@@ -78,6 +82,8 @@ GameBoy::GameBoy()
 GameBoy::~GameBoy()
 {
     Configuration::instance().unregisterListener(*this);
+
+    stop();
 }
 
 void GameBoy::readSpeed()
@@ -123,13 +129,6 @@ bool GameBoy::load(const string & filename)
     NOTE("Loading Rom: %s\n", filename.c_str())
 
     m_memory.setCartridge(filename);
-
-    m_assembly = m_cpu.disassemble();
-#if 0
-    for (size_t i = 0; i < m_assembly.size(); ++i) {
-        printf("0x%04x | %s\n", uint(i + 0x100), m_assembly.at(i).abbrev().c_str());
-    }
-#endif
     return true;
 }
 
@@ -189,6 +188,8 @@ void GameBoy::step()
     }
 
     m_cpu.cycle();
+
+    m_debugger.check();
 }
 
 void GameBoy::wait()
@@ -226,13 +227,18 @@ void GameBoy::Clock::tick(uint8_t ticks)
 
 void GameBoy::pause()
 {
-    // Make sure that the CPU is paused before pausing the timer thread
-    // because the timer thread controls the execution timing of the
-    // CPU thread, so we can't mess with the timer until the CPU thread
-    // is paused.
-    m_pauseCpu.store(true, std::memory_order_release);
-    while (!m_cpuPaused.load(std::memory_order_acquire)) {
-        std::this_thread::sleep_for(5ms);
+    if (std::this_thread::get_id() == m_thread.get_id()) {
+        m_pauseCpu.store(true, std::memory_order_release);
+        m_cpuPaused.store(true, std::memory_order_release);
+    } else {
+        // Make sure that the CPU is paused before pausing the timer thread
+        // because the timer thread controls the execution timing of the
+        // CPU thread, so we can't mess with the timer until the CPU thread
+        // is paused.
+        m_pauseCpu.store(true, std::memory_order_release);
+        while (!m_cpuPaused.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(5ms);
+        }
     }
 
     // Block until the timer is paused.
@@ -319,4 +325,11 @@ void GameBoy::onConfigChange(ConfigKey key)
 
     default: break;
     }
+}
+
+void GameBoy::MemAccess::onMemoryAccess(
+    GB::MemAccessType type,
+    uint16_t address)
+{
+    m_hardware.m_debugger.enqueue(type, address);
 }

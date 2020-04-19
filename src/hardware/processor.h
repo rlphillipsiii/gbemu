@@ -19,6 +19,7 @@
 
 #include "interrupt.h"
 #include "timermodule.h"
+#include "gbproc.h"
 
 class GameBoy;
 class MemoryController;
@@ -26,46 +27,19 @@ class ClockInterface;
 
 class Processor {
 public:
-    struct Operation {
-        std::string name;
-        std::function<void()> handler;
-
-        uint8_t length;
-        uint8_t cycles;
-    };
-
-    struct Command {
-        uint16_t pc;
-        uint16_t sp;
-        uint8_t opcode;
-        uint8_t flags;
-        bool ints;
-        uint8_t iMask;
-        uint8_t iStatus;
-        uint8_t a;
-        uint16_t bc;
-        uint16_t de;
-        uint16_t hl;
-        uint8_t scanline;
-        uint8_t romBank;
-        uint8_t ramBank;
-        std::array<uint8_t, 2> operands;
-        const Operation *operation;
-
-        void print() const;
-        std::string str() const;
-        std::string abbrev() const;
-    };
-
     explicit Processor(ClockInterface & clock, MemoryController & memory);
     ~Processor() = default;
 
     void reset();
     void cycle();
 
+    uint16_t pc() const { return m_pc; }
+
     inline void updateTimer(uint8_t ticks) { m_timer.cycle(ticks); }
 
-    std::vector<Command> disassemble();
+    std::vector<GB::Command> disassemble();
+
+    inline const std::list<GB::Command> & trace() const { return m_executed; }
 
 private:
 #ifdef UNIT_TEST
@@ -81,15 +55,8 @@ private:
 
     static const uint8_t CYCLES_PER_TICK;
 
-    enum FlagMask {
-        ZERO_FLAG_MASK       = 0x80,
-        NEG_FLAG_MASK        = 0x40,
-        HALF_CARRY_FLAG_MASK = 0x20,
-        CARRY_FLAG_MASK      = 0x10,
-    };
-
-    std::array<Operation, 0x100> OPCODES;
-    std::array<Operation, 0x100> CB_OPCODES;
+    std::array<GB::Operation, 0x100> OPCODES;
+    std::array<GB::Operation, 0x100> CB_OPCODES;
 
     std::unordered_set<uint8_t> ILLEGAL_OPCODES;
 
@@ -115,7 +82,7 @@ private:
 
     std::array<uint8_t, 2> m_operands;
 
-    std::list<Command> m_executed;
+    std::list<GB::Command> m_executed;
 
     struct {
         union { struct { uint8_t f, a; }; uint16_t af; };
@@ -129,29 +96,29 @@ private:
     /** 8 bit flags register */
     uint8_t & m_flags;
 
-    Operation *lookup(uint16_t & pc, uint8_t opcode);
+    GB::Operation *lookup(uint16_t & pc, uint8_t opcode);
 
     inline void setVBlankInterrupt() { Interrupts::set(m_memory, InterruptMask::VBLANK); }
     inline void setSerialInterrupt() { Interrupts::set(m_memory, InterruptMask::SERIAL); }
     inline void setLCDInterrupt()    { Interrupts::set(m_memory, InterruptMask::LCD);    }
     inline void setJoypadInterrupt() { Interrupts::set(m_memory, InterruptMask::JOYPAD); }
 
-    inline bool isZeroFlagSet()      const { return (m_flags & ZERO_FLAG_MASK);       }
-    inline bool isNegFlagSet()       const { return (m_flags & NEG_FLAG_MASK);        }
-    inline bool isHalfCarryFlagSet() const { return (m_flags & HALF_CARRY_FLAG_MASK); }
-    inline bool isCarryFlagSet()     const { return (m_flags & CARRY_FLAG_MASK);      }
+    inline bool isZeroFlagSet()      const { return (m_flags & GB::ZERO_FLAG_MASK);       }
+    inline bool isNegFlagSet()       const { return (m_flags & GB::NEG_FLAG_MASK);        }
+    inline bool isHalfCarryFlagSet() const { return (m_flags & GB::HALF_CARRY_FLAG_MASK); }
+    inline bool isCarryFlagSet()     const { return (m_flags & GB::CARRY_FLAG_MASK);      }
 
-    inline void setZeroFlag() { m_flags |= ZERO_FLAG_MASK;    }
-    inline void clrZeroFlag() { m_flags &= (~ZERO_FLAG_MASK); }
+    inline void setZeroFlag() { m_flags |= GB::ZERO_FLAG_MASK;    }
+    inline void clrZeroFlag() { m_flags &= (~GB::ZERO_FLAG_MASK); }
 
-    inline void setNegFlag() { m_flags |= NEG_FLAG_MASK;    }
-    inline void clrNegFlag() { m_flags &= (~NEG_FLAG_MASK); }
+    inline void setNegFlag() { m_flags |= GB::NEG_FLAG_MASK;    }
+    inline void clrNegFlag() { m_flags &= (~GB::NEG_FLAG_MASK); }
 
-    inline void setHalfCarryFlag() { m_flags |= HALF_CARRY_FLAG_MASK;    }
-    inline void clrHalfCarryFlag() { m_flags &= (~HALF_CARRY_FLAG_MASK); }
+    inline void setHalfCarryFlag() { m_flags |= GB::HALF_CARRY_FLAG_MASK;    }
+    inline void clrHalfCarryFlag() { m_flags &= (~GB::HALF_CARRY_FLAG_MASK); }
 
-    inline void setCarryFlag() { m_flags |= CARRY_FLAG_MASK;    }
-    inline void clrCarryFlag() { m_flags &= (~CARRY_FLAG_MASK); }
+    inline void setCarryFlag() { m_flags |= GB::CARRY_FLAG_MASK;    }
+    inline void clrCarryFlag() { m_flags &= (~GB::CARRY_FLAG_MASK); }
 
     inline void inc(uint16_t & reg) { reg++; }
     inline void dec(uint16_t & reg) { reg--; }
@@ -217,7 +184,7 @@ private:
 
     void history() const;
 
-    void log(uint8_t opcode, const Operation *operation);
+    void log(uint8_t opcode, const GB::Operation *operation);
     void logRegisters() const;
 
     void tick(uint8_t ticks);

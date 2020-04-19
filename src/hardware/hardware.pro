@@ -25,6 +25,7 @@ INCLUDEPATH += serial
 
 TARGET = hardware
 
+PUBLIC_HEADERS += gbproc.h
 PUBLIC_HEADERS += gameboyinterface.h
 
 HEADERS += memory/memoryregion.h
@@ -54,6 +55,8 @@ HEADERS += cartridge.h
 HEADERS += consolelink.h
 HEADERS += pipelink.h
 HEADERS += socketlink.h
+HEADERS += debugger.h
+HEADERS += memaccess.h
 HEADERS += $$PUBLIC_HEADERS
 
 SOURCES += gpu.cpp
@@ -65,6 +68,8 @@ SOURCES += gameboy.cpp
 SOURCES += joypad.cpp
 SOURCES += cartridge.cpp
 SOURCES += consolelink.cpp
+SOURCES += debugger.cpp
+SOURCES += gbproc.cpp
 SOURCES += gameboyinterface.cpp
 
 unix: {

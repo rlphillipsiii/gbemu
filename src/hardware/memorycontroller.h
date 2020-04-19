@@ -17,6 +17,7 @@
 #include <memory>
 #include <functional>
 #include <optional>
+#include <unordered_map>
 
 #include "memoryregion.h"
 #include "mappedio.h"
@@ -24,10 +25,19 @@
 #include "removable.h"
 #include "unusable.h"
 #include "workingram.h"
+#include "consolelink.h"
+#include "gbproc.h"
+
+class GPU;
+class MemAccessListener;
 
 class MemoryController {
 public:
-    MemoryController(GameBoy & parent);
+    MemoryController(
+        GPU & gpu,
+        MemAccessListener & listener,
+        std::unique_ptr<ConsoleLink> & link);
+
     ~MemoryController() = default;
 
     MemoryController(const MemoryController &) = delete;
@@ -85,7 +95,9 @@ private:
         BankMode mode;
     } m_mbc;
 
-    GameBoy & m_parent;
+    GPU & m_gpu;
+
+    MemAccessListener & m_listener;
 
     std::list<std::reference_wrapper<MemoryRegion>> m_memory;
 
@@ -93,6 +105,7 @@ private:
 
     void init();
     void initMemoryBank();
+    void logAccess(GB::MemAccessType type, uint16_t address);
 };
 
 #endif /* SRC_MEMORYCONTROLLER_H_ */

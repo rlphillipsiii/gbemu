@@ -17,9 +17,10 @@
 #include "memorycontroller.h"
 #include "memmap.h"
 #include "logging.h"
-#include "gameboy.h"
+#include "gpu.h"
 #include "dmgbios.h"
 #include "cgbbios.h"
+#include "memaccess.h"
 
 using std::vector;
 using std::string;
@@ -27,20 +28,25 @@ using std::ofstream;
 using std::optional;
 using std::reference_wrapper;
 using std::ifstream;
+using std::unique_ptr;
 
 uint8_t MemoryController::DUMMY = 0xFF;
 
 const uint16_t MemoryController::MBC_TYPE_ADDRESS = 0x0147;
 
-MemoryController::MemoryController(GameBoy & parent)
+MemoryController::MemoryController(
+    GPU & gpu,
+    MemAccessListener & listener,
+    unique_ptr<ConsoleLink> & link)
     : m_bios(*this, 0, BIOS_OFFSET),
       m_cartridge(*this),
       m_working(*this, WORKING_RAM_SIZE, WORKING_RAM_OFFSET),
       m_oam(*this, GRAPHICS_RAM_SIZE, GRAPHICS_RAM_OFFSET),
-      m_io(parent, IO_SIZE, IO_OFFSET),
+      m_io(*this, gpu, link, IO_SIZE, IO_OFFSET),
       m_zero(*this, ZRAM_SIZE, ZRAM_OFFSET),
       m_unusable(*this, UNUSABLE_MEM_SIZE, UNUSABLE_MEM_OFFSET),
-      m_parent(parent)
+      m_gpu(gpu),
+      m_listener(listener)
 {
     init();
 }
@@ -48,7 +54,7 @@ MemoryController::MemoryController(GameBoy & parent)
 void MemoryController::init()
 {
     m_memory = {
-        m_bios, m_cartridge, m_parent.gpu(), m_working, m_oam, m_unusable, m_io, m_zero
+        m_bios, m_cartridge, m_gpu, m_working, m_oam, m_unusable, m_io, m_zero
     };
 }
 
@@ -90,10 +96,19 @@ optional<reference_wrapper<MemoryRegion>> MemoryController::find(uint16_t addres
     return std::nullopt;
 }
 
+void MemoryController::logAccess(GB::MemAccessType type, uint16_t address)
+{
+    if (!inBios()) {
+        m_listener.onMemoryAccess(type, address);
+    }
+}
+
 void MemoryController::initialize(uint16_t address, uint8_t value)
 {
     auto found = find(address);
     if (!found) { return; }
+
+    logAccess(GB::MEM_ACCESS_WRITE, address);
 
     auto & region = found->get();
     region.enableInit();
@@ -109,6 +124,8 @@ void MemoryController::write(uint16_t address, uint8_t value)
         return;
     }
 
+    logAccess(GB::MEM_ACCESS_WRITE, address);
+
     auto & region = found->get();
     if (region.isWritable()) {
         region.write(address, value);
@@ -119,6 +136,8 @@ void MemoryController::write(uint16_t address, uint8_t value)
 
 const uint8_t & MemoryController::peek(uint16_t address)
 {
+    logAccess(GB::MEM_ACCESS_READ, address);
+
     auto region = find(address);
     if (region) {
         return region->get().read(address);
@@ -130,6 +149,8 @@ const uint8_t & MemoryController::peek(uint16_t address)
 
 uint8_t & MemoryController::read(uint16_t address)
 {
+    logAccess(GB::MEM_ACCESS_READ, address);
+
     auto found = find(address);
     if (found) {
         auto & region = found->get();

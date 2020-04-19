@@ -108,6 +108,7 @@ GPU::GPU(MemoryController & memory)
       m_winX(m_mmc.read(GPU_WINDOW_X_ADDRESS)),
       m_winY(m_mmc.read(GPU_WINDOW_Y_ADDRESS)),
       m_scanline(m_mmc.read(GPU_SCANLINE_ADDRESS)),
+      m_lyc(m_mmc.read(GPU_LYC_ADDRESS)),
       m_screen(PIXELS_PER_ROW * PIXELS_PER_COL),
       m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL),
       m_bg(PIXELS_PER_ROW * PIXELS_PER_COL)
@@ -170,7 +171,9 @@ void GPU::reset()
 
     m_state = OAM;
 
-    m_x = m_y = m_scanline = m_ticks = m_vscan = 0;
+    m_dma.length = 0;
+
+    m_x = m_y = m_lyc = m_scanline = m_ticks = m_vscan = 0;
 }
 
 void GPU::write(uint16_t address, uint8_t value)
@@ -199,6 +202,41 @@ uint8_t & GPU::read(GPU::MemoryBank selected, uint16_t index)
     assert(index < m_memory[int(selected)].size());
 
     return m_memory[int(selected)][index];
+}
+
+void GPU::dma(uint8_t value)
+{
+    uint16_t sLower = m_mmc.peek(GPU_DMA_SRC_LOW);
+    uint16_t sUpper = m_mmc.peek(GPU_DMA_SRC_HIGH);
+    uint16_t dLower = m_mmc.peek(GPU_DMA_DEST_LOW);
+    uint16_t dUpper = m_mmc.peek(GPU_DMA_DEST_HIGH);
+
+    // Each address needs to have the lower 4 bits masked out because those bits
+    // are always ignored.  The destination address ignores the upper 3 bits in
+    // order to add the VRAM offset and place the address in the VRAM address
+    // space.
+    m_dma.source      = ((sUpper << 8) | sLower) & 0xFFF0;
+    m_dma.destination = ((dUpper << 8) | dLower) & 0x1FF0;
+
+    m_dma.destination += GPU_RAM_OFFSET;
+    m_dma.length = ((value & 0x7F) + 1) * DMA_CHUNK_SIZE;
+
+    printf("DMA: (0x%02x | %d) 0x%04x => 0x%04x\n",
+        value, m_dma.length, m_dma.source, m_dma.destination);
+
+    uint8_t mode = value & 0x80;
+    if (!mode) {
+        if (0 == m_dma.length) {
+            for (uint16_t i = 0; i < m_dma.length; i++) {
+                m_mmc.write(m_dma.destination + i, m_mmc.peek(m_dma.source + i));
+            }
+        }
+
+        m_dma.length = 0;
+        m_mmc.initialize(GPU_DMA_MODE, 0xFF);
+    } else {
+        m_mmc.initialize(GPU_DMA_MODE, (value & 0x7F));
+    }
 }
 
 GPU::RenderState GPU::next()
@@ -241,7 +279,12 @@ GPU::RenderState GPU::next()
 
 void GPU::cycle(uint8_t ticks)
 {
-    if (!isDisplayEnabled()) { return; }
+    if (!isDisplayEnabled()) {
+        m_state    = HBLANK;
+        m_scanline = 0;
+
+        updateRenderStateStatus(HBLANK);
+    }
 
     m_ticks += ticks;
 
@@ -274,12 +317,27 @@ void GPU::handleHBlank()
             Interrupts::set(m_mmc, InterruptMask::LCD);
         }
         updateRenderStateStatus(HBLANK);
+
+        if (m_mmc.isCGB() && m_dma.length) {
+            for (uint16_t i = 0; i < DMA_CHUNK_SIZE; ++i) {
+                m_mmc.write(m_dma.destination + i, m_mmc.peek(m_dma.source + i));
+            }
+
+            m_dma.destination += DMA_CHUNK_SIZE;
+            m_dma.source      += DMA_CHUNK_SIZE;
+            m_dma.length      -= DMA_CHUNK_SIZE;
+
+            m_mmc.initialize(GPU_DMA_MODE, m_mmc.peek(GPU_DMA_MODE) - 1);
+
+            printf("DMA HBLANK (%d) ==> 0x%02x\n", m_dma.length, m_mmc.peek(GPU_DMA_MODE));
+        }
     }
 
     if (m_ticks < HBLANK_TICKS) { return; }
 
     updateScreen();
-    m_scanline++;
+
+    incrementScanline();
 }
 
 void GPU::handleVBlank(uint8_t ticks)
@@ -307,7 +365,7 @@ void GPU::handleVBlank(uint8_t ticks)
     if (SCANLINE_TICKS <= m_vscan) {
         m_vscan -= SCANLINE_TICKS;
 
-        m_scanline = std::min(uint16_t(m_scanline + 1), SCANLINE_MAX);
+        incrementScanline();
     }
 }
 
@@ -325,6 +383,22 @@ void GPU::handleVRAM()
 {
     if (VRAM != (m_status & RENDER_MODE)) {
         updateRenderStateStatus(VRAM);
+    }
+}
+
+void GPU::incrementScanline()
+{
+    if (m_scanline >= SCANLINE_MAX) { return; }
+
+    m_scanline++;
+    if (m_lyc == m_scanline) {
+        m_status |= COINCIDENCE_FLAG;
+
+        if (isCoincidenceInterruptEnabled()) {
+            Interrupts::set(m_mmc, InterruptMask::LCD);
+        }
+    } else {
+        m_status &= ~COINCIDENCE_FLAG;
     }
 }
 

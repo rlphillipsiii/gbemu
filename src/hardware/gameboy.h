@@ -25,6 +25,9 @@
 #include "consolelink.h"
 #include "configuration.h"
 #include "clockinterface.h"
+#include "debugger.h"
+#include "memaccess.h"
+#include "gbproc.h"
 
 class GameBoy final : public GameBoyInterface, public ConfigChangeListener {
 public:
@@ -36,13 +39,21 @@ public:
     void start() override;
     void stop() override;
 
-    void pause();
-    void resume();
+    void pause() override;
+    void resume() override;
 
-    void write(uint16_t address, uint8_t value) override
+    inline void setBreakpoint(uint16_t address) override
+        { Halt h(*this); m_debugger.setBreakpoint(address); }
+    inline void clrBreakpoint(uint16_t address) override
+        { Halt h(*this); m_debugger.clrBreakpoint(address); }
+
+    inline void write(uint16_t address, uint8_t value) override
         { Halt h(*this); m_memory.write(address, value); }
-    uint8_t read(uint16_t address) override
+    inline uint8_t read(uint16_t address) override
         { Halt h(*this); return m_memory.peek(address); }
+
+    inline const std::list<GB::Command> & trace() const override
+        { return m_cpu.trace(); }
 
     void onConfigChange(ConfigKey key) override;
 
@@ -68,15 +79,6 @@ private:
     static constexpr uint32_t TICKS_QUAD   = TICKS_NORMAL * 4;
     static constexpr uint32_t TICKS_FREE   = 0;
 
-    class Halt final {
-    public:
-        explicit Halt(GameBoy & gameboy)
-            : m_gameboy(gameboy) { m_gameboy.pause(); }
-        ~Halt() { m_gameboy.resume(); }
-    private:
-        GameBoy & m_gameboy;
-    };
-
     class Clock final : public ClockInterface {
     public:
         explicit Clock(GameBoy & gameboy)
@@ -97,16 +99,33 @@ private:
 
     Clock m_clock;
 
+    class MemAccess final : public MemAccessListener {
+    public:
+        explicit MemAccess(GameBoy & gameboy)
+            : m_hardware(gameboy) { }
+        ~MemAccess() = default;
+
+        void onMemoryAccess(
+            GB::MemAccessType type, uint16_t address) override;
+
+    private:
+        GameBoy & m_hardware;
+    };
+
+    MemAccess m_memListener;
+
     MemoryController m_memory;
     GPU m_gpu;
     Processor m_cpu;
     JoyPad m_joypad;
+    Debugger m_debugger;
     std::unique_ptr<ConsoleLink> m_link;
 
     std::condition_variable m_cv;
     std::mutex m_lock;
 
     bool m_ready;
+    bool m_halt;
 
     std::atomic<bool> m_runCpu;
     std::atomic<bool> m_runTimer;
@@ -119,8 +138,6 @@ private:
 
     std::thread m_thread;
     std::thread m_timer;
-
-    std::vector<Processor::Command> m_assembly;
 
     void run();
     void step();

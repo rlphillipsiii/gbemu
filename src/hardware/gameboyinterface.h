@@ -12,15 +12,18 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <sstream>
-#include <iomanip>
+#include <list>
+#include <functional>
 
 #include "gbrgb.h"
+#include "gbproc.h"
 
 class GameBoyInterface {
 public:
-    static constexpr int WIDTH  = 160;
-    static constexpr int HEIGHT = 144;
+    static constexpr const int WIDTH  = 160;
+    static constexpr const int HEIGHT = 144;
+
+    static std::unique_ptr<GameBoyInterface> NULLOPT;
 
     enum ConsoleType {
         GAMEBOY_EMU,
@@ -37,7 +40,7 @@ public:
         JOYPAD_DOWN   = 0x08,
     };
 
-    static std::shared_ptr<GameBoyInterface> Instance(ConsoleType type=GAMEBOY_EMU);
+    static std::unique_ptr<GameBoyInterface> Instance(ConsoleType type=GAMEBOY_EMU);
 
     virtual ~GameBoyInterface() = default;
 
@@ -46,13 +49,32 @@ public:
     virtual void start() = 0;
     virtual void stop() = 0;
 
+    virtual void pause() = 0;
+    virtual void resume() = 0;
+
+    virtual void setBreakpoint(uint16_t address) = 0;
+    virtual void clrBreakpoint(uint16_t address) = 0;
+
     virtual void setButton(JoyPadButton button) = 0;
     virtual void clrButton(JoyPadButton button) = 0;
+
+    virtual const std::list<GB::Command> & trace() const = 0;
 
     virtual ColorArray && getRGB() = 0;
 
     virtual void write(uint16_t address, uint8_t value) = 0;
     virtual uint8_t read(uint16_t address) = 0;
+
+    class Halt final {
+    public:
+        explicit Halt(GameBoyInterface & gameboy)
+            : m_gameboy(gameboy) { m_gameboy.pause(); }
+        ~Halt() { m_gameboy.resume(); }
+    private:
+        GameBoyInterface & m_gameboy;
+    };
 };
+
+using GameBoyReference = std::reference_wrapper<std::unique_ptr<GameBoyInterface>>;
 
 #endif /* GAMEBOYINTERFACE_H_ */

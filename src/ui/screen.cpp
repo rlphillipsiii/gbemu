@@ -17,7 +17,7 @@
 #include "configuration.h"
 
 using std::vector;
-using std::shared_ptr;
+using std::unique_ptr;
 using std::unordered_map;
 using std::string;
 
@@ -34,6 +34,7 @@ const unordered_map<int, GameBoyInterface::JoyPadButton> Screen::BUTTON_MAP = {
 
 Screen::Screen(QQuickItem *parent)
     : QQuickPaintedItem(parent),
+      ConsoleSubscriber(),
       m_width(GameBoyInterface::WIDTH),
       m_height(GameBoyInterface::HEIGHT),
       m_canvas(m_width, m_height, QImage::Format_RGBA8888),
@@ -42,14 +43,6 @@ Screen::Screen(QQuickItem *parent)
     setFlag(ItemHasContents, true);
 
     QObject::connect(&m_timer, SIGNAL(timeout()), this, SLOT(onTimeout()));
-
-    QStringList args = QCoreApplication::arguments();
-
-    string filename = (args.size() < 2) ?
-        Configuration::getString(ConfigKey::ROM) : args.at(1).toStdString();
-
-    m_rom = QString::fromStdString(filename);
-    reset(filename);
 }
 
 Screen::~Screen()
@@ -57,121 +50,48 @@ Screen::~Screen()
     stop();
 }
 
-void Screen::stop()
+void Screen::start()
 {
-    if (m_stopped) { return; }
-
-    m_timer.stop();
-
-    if (m_console) { m_console->stop(); }
-}
-
-void Screen::setLinkMaster(bool master)
-{
-    Configuration::updateBool(ConfigKey::LINK_MASTER, master);
-}
-bool Screen::getLinkMaster() const
-{
-    return Configuration::getBool(ConfigKey::LINK_MASTER);
-}
-
-void Screen::setLinkType(ScreenTypes::ConsoleLinkType type)
-{
-    Configuration::updateInt(ConfigKey::LINK_TYPE, type);
-}
-ScreenTypes::ConsoleLinkType Screen::getLinkType() const
-{
-    return Configuration::getEnum<ScreenTypes::ConsoleLinkType>(ConfigKey::LINK_TYPE);
-}
-
-void Screen::setSpeed(ScreenTypes::EmulationSpeed speed)
-{
-    Configuration::updateInt(ConfigKey::SPEED, speed);
-}
-ScreenTypes::EmulationSpeed Screen::getSpeed() const
-{
-    return Configuration::getEnum<ScreenTypes::EmulationSpeed>(ConfigKey::SPEED);
-}
-
-void Screen::setMode(ScreenTypes::EmulationMode mode)
-{
-    Configuration::updateInt(ConfigKey::EMU_MODE, mode);
-}
-ScreenTypes::EmulationMode Screen::getMode() const
-{
-    return Configuration::getEnum<ScreenTypes::EmulationMode>(ConfigKey::EMU_MODE);
-}
-
-void Screen::setLinkEnable(bool enable)
-{
-    Configuration::updateBool(ConfigKey::LINK_ENABLE, enable);
-}
-bool Screen::getLinkEnable() const
-{
-    return Configuration::getBool(ConfigKey::LINK_ENABLE);
-}
-
-void Screen::setROM(QString rom)
-{
-    string filename = QUrl(rom).toLocalFile().toStdString();
-    reset(filename);
-}
-
-void Screen::reset()
-{
-    string filename = m_rom.toStdString();
-    reset(filename);
-}
-
-void Screen::reset(const string & path)
-{
-    stop();
-
-    m_console = shared_ptr<GameBoyInterface>(GameBoyInterface::Instance());
-    assert(m_console);
-
-#ifdef WIN32
-    string filename = path;
-
-    size_t index;
-    while ((index = filename.find("/")) != string::npos) {
-        filename.replace(index, 1, "\\");
-    }
-#else
-    const string & filename = path;
-#endif
-
-    if (!filename.empty()) {
-        Configuration::updateString(ConfigKey::ROM, filename);
-    }
-
-    m_console->load(filename);
-    m_console->start();
-
     m_timer.setInterval(REFRESH_TIMEOUT);
     m_timer.start();
 
     m_stopped = false;
 }
 
+void Screen::stop()
+{
+    if (m_stopped) { return; }
+
+    m_stopped = true;
+    m_timer.stop();
+}
+
 void Screen::keyPressEvent(QKeyEvent *event)
 {
-    if (!m_console) { return; }
+    auto & console = m_console.get();
+    if (!console) { return; }
 
     auto iterator = BUTTON_MAP.find(event->key());
-    if (BUTTON_MAP.end() != iterator) {
-        m_console->setButton(iterator->second);
+    if (BUTTON_MAP.end() == iterator) {
+        event->ignore();
+        return;
     }
+
+    console->setButton(iterator->second);
 }
 
 void Screen::keyReleaseEvent(QKeyEvent *event)
 {
-    if (!m_console) { return; }
+    auto & console = m_console.get();
+    if (!console) { return; }
 
     auto iterator = BUTTON_MAP.find(event->key());
-    if (BUTTON_MAP.end() != iterator) {
-        m_console->clrButton(iterator->second);
+    if (BUTTON_MAP.end() == iterator) {
+        event->ignore();
+        return;
     }
+
+    console->clrButton(iterator->second);
 }
 
 void Screen::paint(QPainter *painter)
@@ -179,9 +99,22 @@ void Screen::paint(QPainter *painter)
     painter->drawImage(0, 0, m_canvas.scaled(width(), height()));
 }
 
+void Screen::onPause()
+{
+    stop();
+}
+
+void Screen::onResume()
+{
+    start();
+}
+
 void Screen::onTimeout()
 {
-    ColorArray rgb = m_console->getRGB();
+    auto & console = m_console.get();
+    if (!console) { return; }
+
+    ColorArray rgb = console->getRGB();
     if (rgb.empty()) { return; }
 
     for (size_t i = 0; i < rgb.size(); i++) {

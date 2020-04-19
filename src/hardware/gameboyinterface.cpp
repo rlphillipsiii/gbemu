@@ -12,18 +12,23 @@
 #include "gameboy.h"
 #include "logging.h"
 
-using std::shared_ptr;
+using std::unique_ptr;
 
-shared_ptr<GameBoyInterface> GameBoyInterface::Instance(GameBoyInterface::ConsoleType type)
+unique_ptr<GameBoyInterface> GameBoyInterface::NULLOPT = nullptr;
+
+unique_ptr<GameBoyInterface> GameBoyInterface::Instance(GameBoyInterface::ConsoleType type)
 {
+    unique_ptr<GameBoyInterface> ptr;
+
     switch (type) {
     case GAMEBOY_EMU:
-        return shared_ptr<GameBoyInterface>(new GameBoy());
+        ptr = unique_ptr<GameBoyInterface>(new GameBoy());
+        break;
 
     default:
         ERROR("Fatal Error: Unknown console type = %d\n", int(type));
         assert(0);
     }
 
-    return nullptr;
+    return ptr;
 }

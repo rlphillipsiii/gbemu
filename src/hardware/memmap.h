@@ -73,6 +73,7 @@
 #define GPU_SCROLLY_ADDRESS      0xFF42
 #define GPU_SCROLLX_ADDRESS      0xFF43
 #define GPU_SCANLINE_ADDRESS     0xFF44
+#define GPU_LYC_ADDRESS          0xFF45
 #define GPU_DMA_OAM              0xFF46
 #define GPU_PALETTE_ADDRESS      0xFF47
 #define GPU_OBP1_ADDRESS         0xFF48
@@ -107,5 +108,7 @@
 #define SERIAL_CONTROL_ADDRESS 0xFF02
 
 #define CGB_SPEED_SWITCH_ADDRESS 0xFF4D
+
+#define CGB_WRAM_BANK_ADDRESS 0xFF70
 
 #endif /* MEMMAP_H_ */

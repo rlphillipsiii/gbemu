@@ -2,12 +2,13 @@
 
 #include "workingram.h"
 #include "memorycontroller.h"
+#include "memmap.h"
 
 using std::vector;
 
 const uint8_t WorkingRam::BANK_COUNT = 8;
 
-const uint16_t WorkingRam::BANK_SELECT_ADDRESS = 0xFF70;
+const uint16_t WorkingRam::BANK_SELECT_ADDRESS = CGB_WRAM_BANK_ADDRESS;
 
 WorkingRam::WorkingRam(MemoryController & parent, uint16_t size, uint16_t offset)
     : MemoryRegion(parent, size / 2, offset, BANK_COUNT - 1)

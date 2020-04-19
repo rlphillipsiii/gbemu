@@ -96,6 +96,7 @@ Cartridge::Cartridge(const string & path)
     LOG("ROM Size:  0x%x (0x%02x)\n", m_info.size, m_memory.at(ROM_SIZE_OFFSET));
     LOG("ROM RAM Size: %dKB\n", int(m_bank->size() / 1024));
     LOG("Bank Type: %s (0x%02x)\n", m_bank->name().c_str(), uint8_t(m_info.type));
+    LOG("CGB Mode: %s\n", (m_cgb) ? "true" : "false");
     m_valid = true;
 }
 
@@ -344,21 +345,18 @@ uint8_t & Cartridge::MBC3::readRAM(uint16_t address)
         return MemoryBankController::readRAM(address);
     }
 
-    uint8_t & value = [&]() -> uint8_t & {
-        switch (m_ramBank) {
-        default:
-            ERROR("Unknown RAM bank setting: 0x%02x\n", m_ramBank);
-            [[fallthrough]];
+    switch (m_ramBank) {
+    default:
+        ERROR("Unknown RAM bank setting: 0x%02x\n", m_ramBank);
+        [[fallthrough]];
 
-        case RtcSeconds:  return m_rtc.seconds;
-        case RtcMinutes:  return m_rtc.minutes;
-        case RtcHours:    return m_rtc.hours;
-        case RtcDayLower: return m_rtc.day[0];
-        case RtcDayUpper: return m_rtc.day[1];
-        }
-    }();
-
-    return value;
+    case RtcSeconds:  return m_rtc.seconds;
+    case RtcMinutes:  return m_rtc.minutes;
+    case RtcHours:    return m_rtc.hours;
+    case RtcDayLower: return m_rtc.day[0];
+    case RtcDayUpper: return m_rtc.day[1];
+    }
+    return m_rtc.seconds;
 }
 
 void Cartridge::MBC3::writeRAM(uint16_t address, uint8_t value)
