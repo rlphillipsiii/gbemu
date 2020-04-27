@@ -8,13 +8,13 @@
 
 class MemoryController;
 
-class WorkingRam : public MemoryRegion {
+class WorkingRam final : public MemoryRegion {
 public:
     explicit WorkingRam(MemoryController & parent, uint16_t size, uint16_t offset);
     ~WorkingRam() = default;
 
     void write(uint16_t address, uint8_t value) override;
-    uint8_t & read(uint16_t address) override;
+    uint8_t & ref(uint16_t address) override;
 
     bool isAddressed(uint16_t address) const override;
 

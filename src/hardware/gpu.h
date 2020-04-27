@@ -16,6 +16,7 @@
 #include <mutex>
 #include <functional>
 #include <cassert>
+#include <utility>
 
 #include "interrupt.h"
 #include "memmap.h"
@@ -49,14 +50,17 @@ public:
 
     inline uint8_t scanline() const { return m_scanline; }
 
-    inline ColorArray && getColorMap()
+    inline std::pair<int, ColorArray&&> getColorMap()
     {
         std::lock_guard<std::mutex> guard(m_lock);
-        return std::move(m_screen);
+        int frames = m_frames;
+
+        m_frames = 0;
+        return { frames, std::move(m_screen) };
     }
 
     void write(uint16_t address, uint8_t value) override;
-    uint8_t & read(uint16_t address) override;
+    uint8_t & ref(uint16_t address) override;
 
     void writeBgPalette(uint8_t index, uint8_t value);
     void writeSpritePalette(uint8_t index, uint8_t value);
@@ -65,6 +69,8 @@ public:
     uint8_t & readSpritePalette(uint8_t index);
 
     void dma(uint8_t value);
+
+    inline bool display() const { return isDisplayEnabled(); }
 
 private:
     static const ColorPalette DMG_PALETTE;
@@ -228,6 +234,8 @@ private:
 
     std::mutex m_lock;
 
+    int m_frames;
+
     ColorArray m_screen;
     ColorArray m_buffer;
     ColorArray m_bg;
@@ -269,7 +277,7 @@ private:
     RenderState next();
 
     void write(MemoryBank bank, uint16_t index, uint8_t value);
-    uint8_t & read(MemoryBank bank, uint16_t index);
+    uint8_t & ref(MemoryBank bank, uint16_t index);
 
     inline const Tile & getTile(MemoryBank bank, TileSetIndex index, uint16_t tile) const
     {

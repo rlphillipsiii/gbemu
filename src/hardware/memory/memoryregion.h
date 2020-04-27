@@ -30,7 +30,8 @@ public:
     virtual inline bool isReadOnly() const { return false; }
 
     virtual void write(uint16_t address, uint8_t value);
-    virtual uint8_t & read(uint16_t address);
+    virtual uint8_t read(uint16_t address) { return ref(address); }
+    virtual uint8_t & ref(uint16_t address);
 
     virtual inline uint16_t size() const { return m_size; }
     inline uint16_t offset() const { return m_offset; }

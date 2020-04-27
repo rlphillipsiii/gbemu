@@ -71,7 +71,7 @@ void MemoryRegion::write(uint16_t address, uint8_t value)
     m_memory[0][address - m_offset] = value;
 }
 
-uint8_t & MemoryRegion::read(uint16_t address)
+uint8_t & MemoryRegion::ref(uint16_t address)
 {
     assert(!m_memory.empty());
     assert(size_t(address - m_offset) < m_memory[0].size());

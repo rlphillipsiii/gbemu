@@ -43,6 +43,24 @@ void Console::resume()
     }
 }
 
+void Console::step()
+{
+    if (m_console) {
+        m_console->pause();
+        m_console->step();
+
+        printf("%s\n", m_console->trace().back().str().c_str());
+        emit stepped();
+    }
+}
+
+void Console::check()
+{
+    if (m_console && m_console->paused()) {
+        emit paused();
+    }
+}
+
 void Console::setLinkMaster(bool master)
 {
     Configuration::updateBool(ConfigKey::LINK_MASTER, master);

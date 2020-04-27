@@ -26,7 +26,7 @@ void Removable::write(uint16_t address, uint8_t value)
     }
 }
 
-uint8_t & Removable::read(uint16_t address)
+uint8_t & Removable::ref(uint16_t address)
 {
     return (m_cartridge && m_cartridge->isValid())
         ? m_cartridge->read(address) : EMPTY;

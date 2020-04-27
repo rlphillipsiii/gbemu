@@ -4,5 +4,6 @@
 	    <file>qml/main.qml</file>
         <file>qml/GameMenuBar.qml</file>
         <file>qml/DisassemblyWindow.qml</file>
+        <file>qml/ScrollingList.qml</file>
 	</qresource>
 </RCC>

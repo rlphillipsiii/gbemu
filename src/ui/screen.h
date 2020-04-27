@@ -36,6 +36,10 @@ public slots:
     void onPause();
     void onResume();
 
+signals:
+    void notify();
+    void frameRateUpdated(int rate);
+
 protected:
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
@@ -50,6 +54,8 @@ private:
     Screen(Screen &&) = delete;
     Screen & operator=(const Screen &) = delete;
 
+    std::mutex m_lock;
+
     int m_width;
     int m_height;
 
@@ -57,6 +63,7 @@ private:
     QTimer m_timer;
 
     bool m_stopped;
+    bool m_notify;
 };
 
 #endif

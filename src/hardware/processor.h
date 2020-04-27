@@ -16,6 +16,7 @@
 #include <utility>
 #include <string>
 #include <list>
+#include <stack>
 
 #include "interrupt.h"
 #include "timermodule.h"
@@ -34,12 +35,16 @@ public:
     void cycle();
 
     uint16_t pc() const { return m_pc; }
+    InterruptVector checkInterrupts() const;
+    bool interruptsEnabled() const { return m_interrupts.enable; }
 
     inline void updateTimer(uint8_t ticks) { m_timer.cycle(ticks); }
 
     std::vector<GB::Command> disassemble();
 
     inline const std::list<GB::Command> & trace() const { return m_executed; }
+
+    inline std::stack<GB::Command> callstack() const { return m_callstack; }
 
 private:
 #ifdef UNIT_TEST
@@ -83,6 +88,7 @@ private:
     std::array<uint8_t, 2> m_operands;
 
     std::list<GB::Command> m_executed;
+    std::stack<GB::Command> m_callstack;
 
     struct {
         union { struct { uint8_t f, a; }; uint16_t af; };

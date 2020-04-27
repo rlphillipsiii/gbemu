@@ -148,6 +148,17 @@ void GameBoy::run()
     m_cpu.reset();
 
     while (m_runCpu.load(std::memory_order_acquire)) {
+        while (m_pauseCpu.load(std::memory_order_acquire)) {
+            if (!m_cpuPaused.load()) {
+                m_cpuPaused.store(true, std::memory_order_release);
+            }
+            std::this_thread::sleep_for(5ms);
+        }
+
+        if (m_cpuPaused.load()) {
+            m_cpuPaused.store(false, std::memory_order_release);
+        }
+
         step();
     }
 }
@@ -176,20 +187,13 @@ void GameBoy::stop()
 
 void GameBoy::step()
 {
-    while (m_pauseCpu.load(std::memory_order_acquire)) {
-        if (!m_cpuPaused.load()) {
-            m_cpuPaused.store(true, std::memory_order_release);
-        }
-        std::this_thread::sleep_for(5ms);
-    }
 
-    if (m_cpuPaused.load()) {
-        m_cpuPaused.store(false, std::memory_order_release);
-    }
 
     m_cpu.cycle();
 
-    m_debugger.check();
+    if (!m_memory.inBios()) {
+        m_debugger.check();
+    }
 }
 
 void GameBoy::wait()

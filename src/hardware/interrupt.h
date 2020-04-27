@@ -46,13 +46,13 @@ struct Interrupts {
 
     static void set(MemoryController & memory, InterruptMask interrupt)
     {
-        uint8_t & current = memory.read(INTERRUPT_FLAGS_ADDRESS);
+        uint8_t & current = memory.ref(INTERRUPT_FLAGS_ADDRESS);
         current |= uint8_t(interrupt);
     }
 
     static void clear(MemoryController & memory, InterruptMask interrupt)
     {
-        uint8_t & current = memory.read(INTERRUPT_FLAGS_ADDRESS);
+        uint8_t & current = memory.ref(INTERRUPT_FLAGS_ADDRESS);
         current &= ~uint8_t(interrupt);
     }
 

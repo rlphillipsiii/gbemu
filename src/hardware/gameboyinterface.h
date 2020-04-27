@@ -14,6 +14,8 @@
 #include <vector>
 #include <list>
 #include <functional>
+#include <stack>
+#include <utility>
 
 #include "gbrgb.h"
 #include "gbproc.h"
@@ -48,9 +50,12 @@ public:
 
     virtual void start() = 0;
     virtual void stop() = 0;
+    virtual void step() = 0;
 
     virtual void pause() = 0;
     virtual void resume() = 0;
+
+    virtual bool paused() const = 0;
 
     virtual void setBreakpoint(uint16_t address) = 0;
     virtual void clrBreakpoint(uint16_t address) = 0;
@@ -60,7 +65,9 @@ public:
 
     virtual const std::list<GB::Command> & trace() const = 0;
 
-    virtual ColorArray && getRGB() = 0;
+    virtual std::stack<GB::Command> callstack() const = 0;
+
+    virtual std::pair<int, ColorArray&&> getRGB() = 0;
 
     virtual void write(uint16_t address, uint8_t value) = 0;
     virtual uint8_t read(uint16_t address) = 0;

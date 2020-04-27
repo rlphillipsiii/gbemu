@@ -11,12 +11,16 @@ ApplicationWindow {
     id: m_root
     visible: true
     width:  1040
-    height: 620
+    height: 650
     title: qsTr("GameBoy Trilogy")
 
     GameboyConsole {
         id: m_console
         objectName: "console"
+
+        onPaused: {
+            updateFrameRate(0);
+        }
     }
 
     menuBar : GameMenuBar {
@@ -29,6 +33,7 @@ ApplicationWindow {
             switch (event.key) {
             case Qt.Key_P: m_console.pause();  break;
             case Qt.Key_R: m_console.resume(); break;
+            case Qt.Key_S: m_console.step();   break;
 
             default: break;
             }
@@ -38,11 +43,17 @@ ApplicationWindow {
 
         focus: true
 
-        Screen {
-            id: m_screen
+        ColumnLayout {
+            Screen {
+                id: m_screen
 
-            width:  640
-            height: 576
+                width:  640
+                height: 576
+
+                onNotify: { m_console.pause(); }
+                onFrameRateUpdated: { updateFrameRate(rate); }
+            }
+            Text { id: m_rate }
         }
 
         DisassemblyWindow {
@@ -62,5 +73,9 @@ ApplicationWindow {
 
         m_console.start();
         m_screen.start();
+    }
+
+    function updateFrameRate(rate) {
+        m_rate.text = "<b>Frames Per Second:</b> " + rate;
     }
 }

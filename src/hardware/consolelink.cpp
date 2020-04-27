@@ -84,7 +84,7 @@ void ConsoleLink::finishTransfer(uint8_t data)
 {
     m_memory.write(SERIAL_DATA_ADDRESS, data);
 
-    uint8_t & current = m_memory.read(SERIAL_CONTROL_ADDRESS);
+    uint8_t & current = m_memory.ref(SERIAL_CONTROL_ADDRESS);
     current &= ~ConsoleLink::LINK_TRANSFER;
 
     Interrupts::set(m_memory, InterruptMask::SERIAL);

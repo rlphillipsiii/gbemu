@@ -19,6 +19,7 @@
 #include "disassembly.h"
 #include "gameboyinterface.h"
 #include "executiontrace.h"
+#include "callstack.h"
 #include "consolesubscriber.h"
 
 namespace {
@@ -28,6 +29,7 @@ namespace {
         Screen::registerQML();
         Disassembly::registerQML();
         ExecutionTrace::registerQML();
+        CallStack::registerQML();
     }
 };
 

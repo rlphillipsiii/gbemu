@@ -31,7 +31,7 @@
 class GPU;
 class MemAccessListener;
 
-class MemoryController {
+class MemoryController final {
 public:
     MemoryController(
         GPU & gpu,
@@ -48,8 +48,8 @@ public:
     void initialize(uint16_t address, uint8_t value);
 
     void write(uint16_t address, uint8_t value);
-    uint8_t & read(uint16_t address);
-    const uint8_t & peek(uint16_t address);
+    uint8_t read(uint16_t address);
+    uint8_t & ref(uint16_t address);
 
     void reset();
     void setCartridge(const std::string & filename);

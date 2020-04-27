@@ -7,14 +7,14 @@
 
 class MemoryController;
 
-class Unusable : public MemoryRegion {
+class Unusable final : public MemoryRegion {
 public:
     explicit Unusable(MemoryController & parent, uint16_t size, uint16_t offset)
         : MemoryRegion(parent, size, offset), m_dummy(0xFF) { m_memory.resize(0); }
     ~Unusable() = default;
 
     void write(uint16_t, uint8_t) override { }
-    uint8_t & read(uint16_t) override { return m_dummy; }
+    uint8_t & ref(uint16_t) override { return m_dummy; }
 
 private:
     uint8_t m_dummy;

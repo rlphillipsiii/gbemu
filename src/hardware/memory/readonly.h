@@ -18,7 +18,7 @@ public:
     void write(uint16_t address, uint8_t value) override;
 };
 
-class Bios : public ReadOnly {
+class Bios final : public ReadOnly {
 public:
     explicit Bios(MemoryController & parent, uint16_t size, uint16_t offset)
         : ReadOnly(parent, size, offset) { }

@@ -22,7 +22,7 @@ MappedIO::MappedIO(
     MemoryRegion::write(JOYPAD_INPUT_ADDRESS, 0xFF);
 }
 
-uint8_t & MappedIO::read(uint16_t address)
+uint8_t & MappedIO::ref(uint16_t address)
 {
     switch (address) {
     case GPU_BG_PALETTE_DATA: {
@@ -39,7 +39,28 @@ uint8_t & MappedIO::read(uint16_t address)
     default:break;
     }
 
-    return MemoryRegion::read(address);
+    return MemoryRegion::ref(address);
+}
+
+uint8_t MappedIO::read(uint16_t address)
+{
+    switch (address) {
+    case GPU_STATUS_ADDRESS: {
+        uint8_t data = ref(address);
+        if (!m_gpu.display()) {
+            data &= 0xFC;
+        }
+        return data;
+    }
+
+    case GPU_SCANLINE_ADDRESS: {
+        return (m_gpu.display()) ? ref(address) : 0x00;
+    }
+
+    default: break;
+    }
+
+    return ref(address);
 }
 
 void MappedIO::write(uint16_t address, uint8_t value)
@@ -90,7 +111,7 @@ void MappedIO::write(uint16_t address, uint8_t value)
     case GPU_DMA_OAM: {
         uint16_t source = uint16_t(value) * 0x0100;
         for (uint16_t i = 0; i < GRAPHICS_RAM_SIZE; i++) {
-            m_parent.write(GRAPHICS_RAM_OFFSET + i, m_parent.peek(source + i));
+            m_parent.write(GRAPHICS_RAM_OFFSET + i, m_parent.read(source + i));
         }
 
         break;

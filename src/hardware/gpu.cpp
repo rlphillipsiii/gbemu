@@ -100,15 +100,16 @@ const uint8_t GPU::WINDOW_ROW_OFFSET = 7;
 GPU::GPU(MemoryController & memory)
     : MemoryRegion(memory, GPU_RAM_SIZE, GPU_RAM_OFFSET, BANK_COUNT - 1),
       m_mmc(memory),
-      m_control(m_mmc.read(GPU_CONTROL_ADDRESS)),
-      m_status(m_mmc.read(GPU_STATUS_ADDRESS)),
-      m_palette(m_mmc.read(GPU_PALETTE_ADDRESS)),
-      m_x(m_mmc.read(GPU_SCROLLX_ADDRESS)),
-      m_y(m_mmc.read(GPU_SCROLLY_ADDRESS)),
-      m_winX(m_mmc.read(GPU_WINDOW_X_ADDRESS)),
-      m_winY(m_mmc.read(GPU_WINDOW_Y_ADDRESS)),
-      m_scanline(m_mmc.read(GPU_SCANLINE_ADDRESS)),
-      m_lyc(m_mmc.read(GPU_LYC_ADDRESS)),
+      m_control(m_mmc.ref(GPU_CONTROL_ADDRESS)),
+      m_status(m_mmc.ref(GPU_STATUS_ADDRESS)),
+      m_palette(m_mmc.ref(GPU_PALETTE_ADDRESS)),
+      m_x(m_mmc.ref(GPU_SCROLLX_ADDRESS)),
+      m_y(m_mmc.ref(GPU_SCROLLY_ADDRESS)),
+      m_winX(m_mmc.ref(GPU_WINDOW_X_ADDRESS)),
+      m_winY(m_mmc.ref(GPU_WINDOW_Y_ADDRESS)),
+      m_scanline(m_mmc.ref(GPU_SCANLINE_ADDRESS)),
+      m_lyc(m_mmc.ref(GPU_LYC_ADDRESS)),
+      m_frames(0),
       m_screen(PIXELS_PER_ROW * PIXELS_PER_COL),
       m_buffer(PIXELS_PER_ROW * PIXELS_PER_COL),
       m_bg(PIXELS_PER_ROW * PIXELS_PER_COL)
@@ -124,14 +125,14 @@ void GPU::initSpriteCache()
     for (size_t i = 0; i < m_sprites.size(); i++) {
         uint16_t address = SPRITE_ATTRIBUTES_TABLE + (i * SPRITE_BYTES_PER_ATTRIBUTE);
 
-        const uint8_t & y     = m_mmc.read(address);
-        const uint8_t & x     = m_mmc.read(address + 1);
-        const uint8_t & tile  = m_mmc.read(address + 2);
-        const uint8_t & flags = m_mmc.read(address + 3);
+        const uint8_t & y     = m_mmc.ref(address);
+        const uint8_t & x     = m_mmc.ref(address + 1);
+        const uint8_t & tile  = m_mmc.ref(address + 2);
+        const uint8_t & flags = m_mmc.ref(address + 3);
 
         shared_ptr<SpriteData> data = std::make_shared<SpriteData>(*this, x, y, tile, flags);
 
-        data->mono = { &m_mmc.read(GPU_OBP1_ADDRESS), &m_mmc.read(GPU_OBP2_ADDRESS) };
+        data->mono = { &m_mmc.ref(GPU_OBP1_ADDRESS), &m_mmc.ref(GPU_OBP2_ADDRESS) };
 
         data->address = address;
         data->height  = SPRITE_HEIGHT_NORMAL;
@@ -151,11 +152,11 @@ void GPU::initTileCache()
             - m_offset;
 
         for (uint8_t j = 0; j < TILE_SIZE; j++) {
-            m_tiles[BANK_0][TILESET_0][i].push_back(&read(BANK_0, i0 + j));
-            m_tiles[BANK_1][TILESET_0][i].push_back(&read(BANK_1, i0 + j));
+            m_tiles[BANK_0][TILESET_0][i].push_back(&ref(BANK_0, i0 + j));
+            m_tiles[BANK_1][TILESET_0][i].push_back(&ref(BANK_1, i0 + j));
 
-            m_tiles[BANK_0][TILESET_1][i].push_back(&read(BANK_0, i1 + j));
-            m_tiles[BANK_1][TILESET_1][i].push_back(&read(BANK_1, i1 + j));
+            m_tiles[BANK_0][TILESET_1][i].push_back(&ref(BANK_0, i1 + j));
+            m_tiles[BANK_1][TILESET_1][i].push_back(&ref(BANK_1, i1 + j));
         }
     }
 }
@@ -190,13 +191,13 @@ void GPU::write(GPU::MemoryBank selected, uint16_t index, uint8_t value)
     m_memory[int(selected)][index] = value;
 }
 
-uint8_t & GPU::read(uint16_t address)
+uint8_t & GPU::ref(uint16_t address)
 {
     MemoryBank selected = (MemoryBank)(m_mmc.read(GPU_BANK_SELECT_ADDRESS) & 0x01);
-    return read(selected, address - m_offset);
+    return ref(selected, address - m_offset);
 }
 
-uint8_t & GPU::read(GPU::MemoryBank selected, uint16_t index)
+uint8_t & GPU::ref(GPU::MemoryBank selected, uint16_t index)
 {
     assert(int(selected) < m_memory.size());
     assert(index < m_memory[int(selected)].size());
@@ -206,10 +207,14 @@ uint8_t & GPU::read(GPU::MemoryBank selected, uint16_t index)
 
 void GPU::dma(uint8_t value)
 {
-    uint16_t sLower = m_mmc.peek(GPU_DMA_SRC_LOW);
-    uint16_t sUpper = m_mmc.peek(GPU_DMA_SRC_HIGH);
-    uint16_t dLower = m_mmc.peek(GPU_DMA_DEST_LOW);
-    uint16_t dUpper = m_mmc.peek(GPU_DMA_DEST_HIGH);
+    (void)value;
+#if 0
+    uint16_t sLower = m_mmc.read(GPU_DMA_SRC_LOW);
+    uint16_t sUpper = m_mmc.read(GPU_DMA_SRC_HIGH);
+    uint16_t dLower = m_mmc.read(GPU_DMA_DEST_LOW);
+    uint16_t dUpper = m_mmc.read(GPU_DMA_DEST_HIGH);
+
+    bool cancel = (m_dma.length != 0);
 
     // Each address needs to have the lower 4 bits masked out because those bits
     // are always ignored.  The destination address ignores the upper 3 bits in
@@ -226,9 +231,9 @@ void GPU::dma(uint8_t value)
 
     uint8_t mode = value & 0x80;
     if (!mode) {
-        if (0 == m_dma.length) {
+        if (!cancel) {
             for (uint16_t i = 0; i < m_dma.length; i++) {
-                m_mmc.write(m_dma.destination + i, m_mmc.peek(m_dma.source + i));
+                m_mmc.write(m_dma.destination + i, m_mmc.read(m_dma.source + i));
             }
         }
 
@@ -237,6 +242,7 @@ void GPU::dma(uint8_t value)
     } else {
         m_mmc.initialize(GPU_DMA_MODE, (value & 0x7F));
     }
+#endif
 }
 
 GPU::RenderState GPU::next()
@@ -279,12 +285,7 @@ GPU::RenderState GPU::next()
 
 void GPU::cycle(uint8_t ticks)
 {
-    if (!isDisplayEnabled()) {
-        m_state    = HBLANK;
-        m_scanline = 0;
-
-        updateRenderStateStatus(HBLANK);
-    }
+    if (!isDisplayEnabled()) { return; }
 
     m_ticks += ticks;
 
@@ -320,16 +321,17 @@ void GPU::handleHBlank()
 
         if (m_mmc.isCGB() && m_dma.length) {
             for (uint16_t i = 0; i < DMA_CHUNK_SIZE; ++i) {
-                m_mmc.write(m_dma.destination + i, m_mmc.peek(m_dma.source + i));
+                m_mmc.write(m_dma.destination + i, m_mmc.read(m_dma.source + i));
             }
+
+            printf("DMA HBLANK (%d)  | (0x%04x => 0x%04x)\n",
+                m_dma.length, m_dma.source, m_dma.destination);
 
             m_dma.destination += DMA_CHUNK_SIZE;
             m_dma.source      += DMA_CHUNK_SIZE;
             m_dma.length      -= DMA_CHUNK_SIZE;
 
-            m_mmc.initialize(GPU_DMA_MODE, m_mmc.peek(GPU_DMA_MODE) - 1);
-
-            printf("DMA HBLANK (%d) ==> 0x%02x\n", m_dma.length, m_mmc.peek(GPU_DMA_MODE));
+            m_mmc.initialize(GPU_DMA_MODE, m_mmc.read(GPU_DMA_MODE) - 1);
         }
     }
 
@@ -357,6 +359,7 @@ void GPU::handleVBlank(uint8_t ticks)
         {
             lock_guard<mutex> guard(m_lock);
             m_screen = std::move(m_buffer);
+            m_frames++;
         }
         m_buffer.resize(PIXELS_PER_ROW * PIXELS_PER_COL);
     }
@@ -429,7 +432,7 @@ pair<const uint8_t&, const Tile&> GPU::lookup(
 
     // The attributes map lives in bank 1, so make sure that we are always reading
     // out of bank 1 for the attributes.
-    const uint8_t & attributes = read(BANK_1, pointer);
+    const uint8_t & attributes = ref(BANK_1, pointer);
 
     // VRAM banking only happens in CGB mode, so hardcode bank 0 and only look up
     // the actual bank if CGB mode is active.
@@ -441,7 +444,7 @@ pair<const uint8_t&, const Tile&> GPU::lookup(
     // The actual background maps, live in bank 0, so make sure that the tile address
     // comes from bank 0.  Look that tile up and return it with its corresponding
     // attributes.
-    return { attributes, getTile(bank, sIndex, read(BANK_0, pointer)) };
+    return { attributes, getTile(bank, sIndex, ref(BANK_0, pointer)) };
 }
 
 void GPU::toRGB(

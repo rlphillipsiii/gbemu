@@ -24,9 +24,11 @@ HEADERS += screen.h
 HEADERS += disassembly.h
 HEADERS += console.h
 HEADERS += executiontrace.h
+HEADERS += callstack.h
 
 SOURCES += console.cpp
 SOURCES += disassembly.cpp
 SOURCES += screen.cpp
 SOURCES += executiontrace.cpp
+SOURCES += callstack.cpp
 SOURCES += main.cpp

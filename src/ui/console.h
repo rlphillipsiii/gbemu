@@ -88,6 +88,9 @@ public:
     Q_INVOKABLE void stop();
     Q_INVOKABLE void pause();
     Q_INVOKABLE void resume();
+    Q_INVOKABLE void step();
+
+    void check();
 
     void reset(const std::string & filename);
 
@@ -103,6 +106,7 @@ signals:
 
     void paused();
     void resumed();
+    void stepped();
 
 private:
     Console(const Console &) = delete;

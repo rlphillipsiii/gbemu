@@ -25,7 +25,7 @@ const unordered_map<GameBoyInterface::JoyPadButton, JoyPad::ShadowSelect> JoyPad
 };
 
 JoyPad::JoyPad(MemoryController & memory)
-    : m_register(memory.read(JOYPAD_INPUT_ADDRESS))
+    : m_register(memory.ref(JOYPAD_INPUT_ADDRESS))
 {
     m_shadow[0] = m_shadow[1] = BUTTONS_IDLE;
 }

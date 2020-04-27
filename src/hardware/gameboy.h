@@ -16,6 +16,7 @@
 #include <memory>
 #include <condition_variable>
 #include <mutex>
+#include <utility>
 
 #include "gameboyinterface.h"
 #include "gpu.h"
@@ -38,6 +39,7 @@ public:
 
     void start() override;
     void stop() override;
+    void step() override;
 
     void pause() override;
     void resume() override;
@@ -50,17 +52,22 @@ public:
     inline void write(uint16_t address, uint8_t value) override
         { Halt h(*this); m_memory.write(address, value); }
     inline uint8_t read(uint16_t address) override
-        { Halt h(*this); return m_memory.peek(address); }
+        { Halt h(*this); return m_memory.read(address); }
 
     inline const std::list<GB::Command> & trace() const override
         { return m_cpu.trace(); }
 
-    void onConfigChange(ConfigKey key) override;
+    inline std::stack<GB::Command> callstack() const override
+       { return m_cpu.callstack(); }
+
+    inline void onConfigChange(ConfigKey key) override;
 
     inline void setButton(JoyPadButton button) override { m_joypad.set(button); }
     inline void clrButton(JoyPadButton button) override { m_joypad.clr(button); }
 
-    inline ColorArray && getRGB() override { return m_gpu.getColorMap(); }
+    inline bool paused() const override { return m_cpuPaused; }
+
+    inline std::pair<int, ColorArray&&> getRGB() override { return m_gpu.getColorMap(); }
 
     inline GPU & gpu() { return m_gpu; }
     inline Processor & cpu() { return m_cpu; }
@@ -140,7 +147,6 @@ private:
     std::thread m_timer;
 
     void run();
-    void step();
     void wait();
 
     void initLink();

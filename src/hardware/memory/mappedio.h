@@ -11,7 +11,7 @@
 
 class GPU;
 
-class MappedIO : public MemoryRegion {
+class MappedIO final : public MemoryRegion {
 public:
     explicit MappedIO(
         MemoryController & memory,
@@ -22,12 +22,13 @@ public:
     ~MappedIO() = default;
 
     void write(uint16_t address, uint8_t value) override;
-    uint8_t & read(uint16_t address) override;
+    uint8_t & ref(uint16_t address) override;
+    uint8_t read(uint16_t address) override;
 
     void reset() override { }
 
     inline void writeBytes(uint16_t ptr, uint8_t value, uint8_t mask)
-        { writeBytes(MemoryRegion::read(ptr), value, mask); }
+        { writeBytes(MemoryRegion::ref(ptr), value, mask); }
     inline void writeBytes(uint8_t & reg, uint8_t value, uint8_t mask)
         { reg = ((reg & ~mask) | (value & mask)); }
 

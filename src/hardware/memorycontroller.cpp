@@ -134,7 +134,7 @@ void MemoryController::write(uint16_t address, uint8_t value)
     }
 }
 
-const uint8_t & MemoryController::peek(uint16_t address)
+uint8_t MemoryController::read(uint16_t address)
 {
     logAccess(GB::MEM_ACCESS_READ, address);
 
@@ -147,7 +147,7 @@ const uint8_t & MemoryController::peek(uint16_t address)
     return DUMMY;
 }
 
-uint8_t & MemoryController::read(uint16_t address)
+uint8_t & MemoryController::ref(uint16_t address)
 {
     logAccess(GB::MEM_ACCESS_READ, address);
 
@@ -155,7 +155,7 @@ uint8_t & MemoryController::read(uint16_t address)
     if (found) {
         auto & region = found->get();
         if (!region.isReadOnly()) {
-            return region.read(address);
+            return region.ref(address);
         }
     }
 

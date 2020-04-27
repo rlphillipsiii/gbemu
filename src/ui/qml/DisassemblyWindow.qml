@@ -18,9 +18,11 @@ ColumnLayout {
         TabButton {
             text: qsTr("Disassembly")
         }
-
         TabButton {
             text: qsTr("Trace")
+        }
+        TabButton {
+            text: qsTr("Call Stack")
         }
     }
 
@@ -29,44 +31,62 @@ ColumnLayout {
 
         currentIndex: m_tabs.currentIndex
 
-        ListView {
-            width:  parent.width
-            height: parent.height
-
+        ScrollingList {
             model: Disassembly {
                 objectName: "disassembly"
             }
             delegate: Text {
                 text: address + ": " + description;
             }
-
-            ScrollBar.vertical: ScrollBar {}
         }
 
-        ListView {
+        ScrollingList {
             id: m_trace
-
-            width:  parent.width
-            height: parent.height
-
-            keyNavigationEnabled: true
 
             model: ExecutionTrace {
                 objectName: "trace"
             }
-            delegate: Column {
-                Text {
-                    text: "<b>" + index + "</b> | " + address + ": " + description;
-                }
-                Text {
-                    text: "    " + status;
-                }
-                Text {
-                    text: "    " + registers;
-                }
-            }
+            delegate: Component { Item {
+                height: 55
+                width: parent.width
 
-            ScrollBar.vertical: ScrollBar {}
+                Column {
+                Text { text: "<b>" + index + "</b> | " + address + ": " + description; }
+                Text { text: "    " + status; }
+                Text { text: "    " + registers; }
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        m_trace.currentIndex = parseInt(index, 10) - 1
+                    }
+                }
+            } }
+        }
+
+        ScrollingList {
+            id: m_callstack
+
+            model: CallStack {
+                objectName: "stack"
+            }
+            delegate: Component { Item {
+                height: 20
+                width: parent.width
+
+                Column {
+                    width: parent.width
+                    Text {
+                        text: "<b>" + index + "</b> | " + address + ": " + description;
+                    }
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        m_callstack.currentIndex = parseInt(index, 10) - 1
+                    }
+                }
+            } }
         }
     }
 }

@@ -64,7 +64,7 @@ vector<GB::Command> Processor::disassemble()
     while (pc < GPU_RAM_OFFSET) {
         GB::Command cmd;
         cmd.pc     = pc;
-        cmd.opcode = m_memory.peek(pc++);
+        cmd.opcode = m_memory.read(pc++);
 
         if (ILLEGAL_OPCODES.find(cmd.opcode) != ILLEGAL_OPCODES.end()) {
             continue;
@@ -76,7 +76,7 @@ vector<GB::Command> Processor::disassemble()
         cmd.operation = operation;
 
         for (uint8_t i = 0; i < operation->length - 1; i++) {
-            cmd.operands[i] = m_memory.peek(pc++);
+            cmd.operands[i] = m_memory.read(pc++);
         }
 
         cmds.push_back(cmd);
@@ -97,7 +97,7 @@ GB::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
     if (CB_PREFIX == opcode) {
         prefix = opcode;
 
-        opcode = m_memory.peek(pc++);
+        opcode = m_memory.read(pc++);
     }
 
     // Lookup the opcode in the table that we just selected.  If we can't find it,
@@ -118,27 +118,33 @@ GB::Operation *Processor::lookup(uint16_t & pc, uint8_t opcode)
     return &entry;
 }
 
-bool Processor::interrupt()
+InterruptVector Processor::checkInterrupts() const
 {
-    if (!m_interrupts.enable && !m_halted) { return false; }
-
     InterruptVector vector = InterruptVector::INVALID;
 
-    uint8_t status = m_interrupts.mask & m_interrupts.status;
+    if (m_interrupts.enable || m_halted) {
+        uint8_t status = m_interrupts.mask & m_interrupts.status;
 
-    // Check our interrupt status to see if any of the interrupt bits are
-    // set.  The if statements are in order of interrput priority.
-    if (status & uint8_t(InterruptMask::VBLANK)) {
-        vector = InterruptVector::VBLANK;
-    } else if (status & uint8_t(InterruptMask::LCD)) {
-        vector = InterruptVector::LCD;
-    } else if (status & uint8_t(InterruptMask::TIMER)) {
-        vector = InterruptVector::TIMER;
-    } else if (status & uint8_t(InterruptMask::SERIAL)) {
-        vector = InterruptVector::SERIAL;
-    } else if (status & uint8_t(InterruptMask::JOYPAD)) {
-        vector = InterruptVector::JOYPAD;
+        // Check our interrupt status to see if any of the interrupt bits are
+        // set.  The if statements are in order of interrput priority.
+        if (status & uint8_t(InterruptMask::VBLANK)) {
+            vector = InterruptVector::VBLANK;
+        } else if (status & uint8_t(InterruptMask::LCD)) {
+            vector = InterruptVector::LCD;
+        } else if (status & uint8_t(InterruptMask::TIMER)) {
+            vector = InterruptVector::TIMER;
+        } else if (status & uint8_t(InterruptMask::SERIAL)) {
+            vector = InterruptVector::SERIAL;
+        } else if (status & uint8_t(InterruptMask::JOYPAD)) {
+            vector = InterruptVector::JOYPAD;
+        }
     }
+    return vector;
+}
+
+bool Processor::interrupt()
+{
+    InterruptVector vector = checkInterrupts();
 
     // If we found an interrupt that needs to be serviced, push the pc
     // on to the stack and then set the pc to the address of the interrupt
@@ -146,6 +152,9 @@ bool Processor::interrupt()
     if (InterruptVector::INVALID != vector) {
         if (m_interrupts.enable) {
             push(m_pc);
+            if (!m_memory.inBios()) {
+                m_callstack.push(m_executed.back());
+            }
 
             m_pc = uint16_t(vector);
 
@@ -183,15 +192,7 @@ void Processor::execute(bool interrupted)
     // The program counter points to our next opcode.
     m_instr = m_pc;
 
-    // If our PC is set to the ROM's entry point, we need to swap out the BIOS memory
-    // with the ROM memory because we would have already executed the BIOS if we've
-    // gotten to this address.  This is a noop of the BIOS region is already disabled.
-    if (ROM_ENTRY_POINT == m_pc) {
-        NOTE("%s\n", "Starting ROM execution");
-        m_memory.unlockBiosRegion();
-    }
-
-    uint8_t opcode = m_memory.peek(m_pc++);
+    uint8_t opcode = m_memory.read(m_pc++);
 
     // Look up the handler in our opcode table.  If the length of our command is greater
     // than 1, then we also need to grab the next length - 1 bytes as they are the
@@ -201,17 +202,24 @@ void Processor::execute(bool interrupted)
 
     // If we have any operands, we need to read them in and increment the PC.
     for (uint8_t i = 0; i < operation->length - 1; i++) {
-        m_operands[i] = m_memory.peek(m_pc++);
+        m_operands[i] = m_memory.read(m_pc++);
     }
 
-#ifdef DEBUG
+    // If our PC is set to the ROM's entry point, we need to swap out the BIOS memory
+    // with the ROM memory because we would have already executed the BIOS if we've
+    // gotten to this address.  This is a noop of the BIOS region is already disabled.
+    bool unlocked = false;
+    if ((ROM_ENTRY_POINT == m_instr) && m_memory.inBios()) {
+        NOTE("%s\n", "Starting ROM execution");
+        m_memory.unlockBiosRegion();
+
+        unlocked = true;
+    }
+
     log(opcode, operation);
-
-    static bool trace = false;
-    if (trace) {
-        logRegisters();
+    if (unlocked) {
+        m_callstack.push(m_executed.back());
     }
-#endif
 
     // Let everything else sync with the clock before the CPU has a chance to modify
     // any memory.
@@ -258,13 +266,18 @@ void Processor::log(uint8_t opcode, const GB::Operation *operation)
         m_gpr.bc,
         m_gpr.de,
         m_gpr.hl,
-        m_memory.peek(GPU_SCANLINE_ADDRESS),
-        m_memory.peek(GPU_STATUS_ADDRESS),
+        m_memory.read(GPU_SCANLINE_ADDRESS),
+        m_memory.read(GPU_STATUS_ADDRESS),
         m_memory.romBank(),
         m_memory.ramBank(),
         m_operands,
         operation
     });
+
+    static bool trace = false;
+    if (trace) {
+        logRegisters();
+    }
 }
 
 void Processor::logRegisters() const
@@ -303,7 +316,7 @@ void Processor::or8(uint8_t value)
 void Processor::incP(uint16_t address)
 {
     tick(2);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -325,7 +338,7 @@ void Processor::inc(uint8_t & reg)
 void Processor::decP(uint16_t address)
 {
     tick(2);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -427,7 +440,7 @@ void Processor::add16(uint16_t & dest, uint16_t reg, uint8_t value)
 void Processor::swap(uint16_t address)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -450,6 +463,9 @@ void Processor::swap(uint8_t & reg)
 void Processor::call()
 {
     push(m_pc);
+    if (!m_memory.inBios()) {
+        m_callstack.push(m_executed.back());
+    }
 
     m_pc = args();
 
@@ -533,7 +549,7 @@ void Processor::bit(uint8_t reg, uint8_t which)
 void Processor::res(uint16_t address, uint8_t which)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -549,7 +565,7 @@ void Processor::res(uint8_t & reg, uint8_t which)
 void Processor::set(uint16_t address, uint8_t which)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -564,8 +580,8 @@ void Processor::set(uint8_t & reg, uint8_t which)
 
 void Processor::pop(uint16_t & reg)
 {
-    uint8_t lower = m_memory.peek(m_sp++);
-    uint8_t upper = m_memory.peek(m_sp++);
+    uint8_t lower = m_memory.read(m_sp++);
+    uint8_t upper = m_memory.read(m_sp++);
 
     reg = (upper << 8) | lower;
 }
@@ -582,6 +598,11 @@ void Processor::push(uint16_t value)
 void Processor::ret(bool enable)
 {
     pop(m_pc);
+    if (!m_memory.inBios()) {
+        if (m_callstack.size() > 1) {
+            m_callstack.pop();
+        }
+    }
 
     if (enable) {
         m_interrupts.enable = true;
@@ -593,7 +614,7 @@ void Processor::ret(bool enable)
 void Processor::rotatel(uint16_t address, bool wrap, bool ignoreZero)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -623,7 +644,7 @@ void Processor::rotatel(uint8_t & reg, bool wrap, bool ignoreZero)
 void Processor::rotater(uint16_t address, bool wrap, bool ignoreZero)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -653,7 +674,7 @@ void Processor::rotater(uint8_t & reg, bool wrap, bool ignoreZero)
 void Processor::rlc(uint16_t address, bool ignoreZero)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -682,7 +703,7 @@ void Processor::rlc(uint8_t & reg, bool ignoreZero)
 void Processor::rrc(uint16_t address, bool ignoreZero)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -711,6 +732,9 @@ void Processor::rrc(uint8_t & reg, bool ignoreZero)
 void Processor::rst(uint8_t address)
 {
     push(m_pc);
+    if (!m_memory.inBios()) {
+        m_callstack.push(m_executed.back());
+    }
 
     m_pc = 0x0000 + address;
 }
@@ -751,7 +775,7 @@ void Processor::load(uint16_t & reg, uint16_t value)
 void Processor::sla(uint16_t address)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -767,7 +791,7 @@ void Processor::sla(uint8_t & reg)
 void Processor::srl(uint16_t address)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -783,7 +807,7 @@ void Processor::srl(uint8_t & reg)
 void Processor::sra(uint16_t address)
 {
     tick(3);
-    uint8_t value = m_memory.peek(address);
+    uint8_t value = m_memory.read(address);
 
     tick(1);
 
@@ -826,7 +850,7 @@ void Processor::stop()
         ? TimerModule::SPEED_DOUBLE : TimerModule::SPEED_NORMAL;
 
     // Update the MSB of the speed switch register and clear the LSB.
-    m_memory.write(CGB_SPEED_SWITCH_ADDRESS, uint8_t(speed) << 7);
+    m_memory.write(CGB_SPEED_SWITCH_ADDRESS, 0x7E | (uint8_t(speed) << 7));
 
     m_timer.setSpeed(speed);
 }

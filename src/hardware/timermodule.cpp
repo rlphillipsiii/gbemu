@@ -23,10 +23,10 @@ const TimeoutMapArray TimerModule::TIMEOUT_MAP = {
 
 TimerModule::TimerModule(MemoryController & memory)
     : m_memory(memory),
-      m_divider(memory.read(CPU_TIMER_DIV_ADDRESS)),
-      m_counter(memory.read(CPU_TIMER_COUNTER_ADDRESS)),
-      m_modulo(memory.read(CPU_TIMER_MODULO_ADDRESS)),
-      m_control(memory.read(CPU_TIMER_CONTROL_ADDRESS)),
+      m_divider(memory.ref(CPU_TIMER_DIV_ADDRESS)),
+      m_counter(memory.ref(CPU_TIMER_COUNTER_ADDRESS)),
+      m_modulo(memory.ref(CPU_TIMER_MODULO_ADDRESS)),
+      m_control(memory.ref(CPU_TIMER_CONTROL_ADDRESS)),
       m_speed(SPEED_NORMAL)
 {
     reset();
